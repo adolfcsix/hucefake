@@ -1,0 +1,6 @@
+.git
+.env*
+config/
+*.dump
+**/node_modules
+**/dist
