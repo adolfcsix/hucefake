@@ -27,3 +27,5 @@ Mốc aa26f83: npm audit xác định Vite 7.2.2 có cảnh báo mức cao trong
 ## Bổ sung sau bàn giao
 
 Bài kiểm thử Chromium mới tại `frontend/e2e/workflow.mjs` chạy qua Vite proxy đến Java trong Docker, bao gồm tạo/sửa/hủy lớp, xung đột phiên bản giữa hai màn hình, phân công, lưu nhóm đối tượng và quản lý đọc dữ liệu sau reload. Chỉ chạy trên demo CI riêng. Chờ kết quả CI của PR bổ sung trước khi gộp main.
+
+Bổ sung `frontend/e2e/scheduling.mjs`: chạy sau workflow CRUD trên database demo CI; xếp một buổi thủ công, chạy và áp dụng GA, trả lại/gửi lại/duyệt công bố, đối chiếu lịch bốn vai trò và kiểm tra CSV/ICS của sinh viên, giảng viên không chứa lớp ngoài phạm vi. Chưa có kết quả CI trên commit bổ sung.
