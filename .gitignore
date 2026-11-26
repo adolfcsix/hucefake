@@ -9,4 +9,7 @@ config/*.json
 *.dump
 frontend/node_modules/
 frontend/dist/
-backend/node_modules/
+
+backend/target/
+
+frontend/e2e-results/

@@ -1,6 +1,5 @@
-name: fm05-private
+name: huce-spring-private
 services:
   app:
     environment:
       DEMO: "false"
-      SESSION_SECRET: ${FM05_SESSION_SECRET:?Set FM05_SESSION_SECRET in .env}

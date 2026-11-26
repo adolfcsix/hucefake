@@ -4,3 +4,5 @@ config/
 *.dump
 **/node_modules
 **/dist
+**/target
+**/e2e-results
