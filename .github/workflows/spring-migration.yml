@@ -42,7 +42,9 @@ jobs:
         with:
           node-version: '22'
       - name: Verify HTTP route inventory
-        run: node backend/tests/api-surface.mjs
+        run: |
+          node backend/tests/api-surface.mjs
+          node backend/tests/source-integrity.mjs
       - name: Compile and verify Java
         working-directory: backend
         run: mvn -B clean verify

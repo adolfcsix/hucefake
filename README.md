@@ -185,13 +185,24 @@ pg_restore -h 127.0.0.1 -p 5432 -U fm05 -d huce_restored --exit-on-error --singl
 ```
 Nếu tài khoản ứng dụng không có quyền tạo database, dùng pgAdmin/tài khoản quản trị để tạo database mới có owner fm05 trước khi restore. Không restore vào database đang chạy hoặc dùng `--clean` để ghi đè dữ liệu cũ. Đặt DB_URL thành `jdbc:postgresql://127.0.0.1:5432/huce_restored`, DEMO=false; giữ nguyên DB_USER/DB_PASSWORD, chạy lại backend. Đăng nhập mới bằng tài khoản riêng, kiểm tra danh mục, lớp và lịch. Hai bảng phiên chỉ sao lưu schema; người dùng phải đăng nhập lại sau khôi phục. Giữ database nguồn và bản dump đến khi kiểm tra xong. Không dùng quy trình này cho dump Node/Express cũ chưa chuyển đổi.
 
-Docker: dùng lệnh `docker compose -f compose.share.yaml -f compose.private.yaml exec postgres pg_dump` với tham số tương ứng hoặc kết nối bằng công cụ PostgreSQL trong container. Không chuyển binary dump qua toán tử chuyển hướng PowerShell cũ; dùng `pg_dump -f /tmp/huce-private.dump` bên trong container, rồi `docker compose ... cp postgres:/tmp/huce-private.dump ./huce-private.dump`. Khi restore, dùng `cp` theo chiều ngược lại, tạo database đích mới, chạy pg_restore trong container và cấu hình FM05_DB_NAME trỏ đúng database đích trước khi khởi động lại app. Không đổi tên volume để thay database.
+Docker (ví dụ database riêng mặc định là huce; nếu dùng FM05_DB_NAME khác, thay đúng tên nguồn). Chạy tại thư mục gốc:
+```powershell
+docker compose -f compose.share.yaml -f compose.private.yaml stop app
+docker compose -f compose.share.yaml -f compose.private.yaml exec postgres pg_dump -U fm05 -d huce -Fc --exclude-table-data=public.spring_session --exclude-table-data=public.spring_session_attributes -f /tmp/huce-private.dump
+docker compose -f compose.share.yaml -f compose.private.yaml cp postgres:/tmp/huce-private.dump ./huce-private.dump
+docker compose -f compose.share.yaml -f compose.private.yaml cp ./huce-private.dump postgres:/tmp/huce-restore.dump
+docker compose -f compose.share.yaml -f compose.private.yaml exec postgres createdb -U fm05 huce_restored
+docker compose -f compose.share.yaml -f compose.private.yaml exec postgres pg_restore -U fm05 -d huce_restored --exit-on-error --single-transaction --no-owner --no-privileges /tmp/huce-restore.dump
+$env:FM05_DB_NAME='huce_restored'
+docker compose -f compose.share.yaml -f compose.private.yaml up -d --wait
+```
+Kiểm tra đăng nhập và dữ liệu, giữ nguyên database nguồn. Nếu cần quay lại nguồn, đặt FM05_DB_NAME về tên database nguồn và chạy lại up. Giữ nguyên project/volume; không dùng down -v. Sau khi kiểm tra, có thể xóa hai tệp tạm trong container bằng `docker compose -f compose.share.yaml -f compose.private.yaml exec postgres rm -f /tmp/huce-private.dump /tmp/huce-restore.dump`. Không chuyển binary dump qua toán tử chuyển hướng PowerShell cũ.
 
 ## 9. Kiểm thử và xử lý lỗi
 
 - Maven: `cd backend`, `mvn clean verify`.
 - Frontend: `cd frontend`, `npm ci`, `npm test`, `npm run build`.
-- Hợp đồng API: từ gốc `node backend/tests/api-surface.mjs`.
+- Hợp đồng API: từ gốc `node backend/tests/api-surface.mjs` và `node backend/tests/source-integrity.mjs` (trong bản clone Git).
 - GitHub Actions chạy kiểm thử tích hợp PostgreSQL, bản trắng, container, Chromium và kiểm thử thao tác ghi qua Vite proxy. Xem trạng thái trên đúng commit trước khi bàn giao. Xem [Actions](https://github.com/adolfcsix/hucefake/actions) và [KIEM_THU.md](KIEM_THU.md).
 - Nếu 8080 không kết nối, kiểm tra backend đã khởi động, DB_URL và mật khẩu; nếu 5432 bận, kiểm tra dịch vụ PostgreSQL đang chạy. Lỗi demo/private nghĩa là đang dùng sai database, không xóa dữ liệu để sửa.
 - Backup trước mọi thay đổi. Database Express cũ không được tự động baseline bởi Flyway; bản hiện tại được thiết kế cho PostgreSQL mới. Không nhập bản dump cũ trực tiếp nếu chưa đối chiếu migration và dữ liệu.

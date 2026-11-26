@@ -18,8 +18,8 @@ export default function Sections({ user, catalog, semester, revision, reload }) 
   const drafts = rows.filter(row=>row.status==='DRAFT').map(row=>draftFromSection(row,semester.code))
   const showActions = staff && rows.some(row => row.status === 'DRAFT')
   function exportDrafts(format) {
-    if (format==='json') downloadFile(encodeDraftJson(drafts),'application/json;charset=utf-8','lop-nhap-fm05.json')
-    else downloadFile(encodeDraftCsv(drafts),'text/csv;charset=utf-8','lop-nhap-fm05.csv')
+    if (format==='json') downloadFile(encodeDraftJson(drafts),'application/json;charset=utf-8','lop-nhap-huce.json')
+    else downloadFile(encodeDraftCsv(drafts),'text/csv;charset=utf-8','lop-nhap-huce.csv')
   }
   return <>
     <Panel title="Danh sách lớp học phần" action={staff && <button onClick={() => setDialog({ type: 'edit' })}>Thêm lớp học phần</button>}>
@@ -74,7 +74,7 @@ function DraftImport({ catalog,semester,close,done }) {
     const sample = { semesterCode:semester.code,subjectCode:catalog.subjects[0]?.code || '',code:'LOP-MAU-01',
       capacity:40,sessionsPerWeek:1,periodsPerSession:3,requiredRoomType:'LECTURE',
       startDate:semester.start_date,endDate:semester.end_date }
-    downloadFile(encodeDraftCsv([sample]),'text/csv;charset=utf-8','mau-nhap-lop-fm05.csv')
+    downloadFile(encodeDraftCsv([sample]),'text/csv;charset=utf-8','mau-nhap-lop-huce.csv')
   }
   return <Editor title="Nhập lớp học phần" submit="Nhập lớp nháp" onClose={close} onSubmit={async () => {
     if (!rows) throw new Error('Hãy chọn tệp hợp lệ trước khi nhập.')
