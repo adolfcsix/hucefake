@@ -1,9 +1,10 @@
 name: Spring Boot migration checks
 on:
+  push:
+    branches: [main]
   pull_request:
     paths:
-      - 'spring-backend/**'
-      - 'backend/database/**'
+      - 'backend/**'
       - 'frontend/**'
       - 'Dockerfile'
       - 'compose*.yaml'
@@ -33,15 +34,17 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
-          cache-dependency-path: spring-backend/pom.xml
+          cache-dependency-path: backend/pom.xml
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Verify HTTP route inventory
+        run: node backend/tests/api-surface.mjs
       - name: Compile and verify Java
-        working-directory: spring-backend
+        working-directory: backend
         run: mvn -B clean verify
       - name: Start Spring and verify authentication
-        working-directory: spring-backend
+        working-directory: backend
         env:
           DEMO: 'true'
           DB_URL: jdbc:postgresql://127.0.0.1:5432/huce_spring
@@ -70,7 +73,7 @@ jobs:
           done
           HUCE_TEST_URL=http://127.0.0.1:8080 node tests/section-contract.mjs
       - name: Private database and Java setup CLI
-        working-directory: spring-backend
+        working-directory: backend
         env:
           DEMO: 'false'
           DB_URL: jdbc:postgresql://127.0.0.1:5432/huce_private_ci
@@ -106,6 +109,22 @@ jobs:
           csrf=$(curl -fsS -c /tmp/huce.cookie "$base/api/csrf" | jq -r .token)
           curl -fsS -b /tmp/huce.cookie -c /tmp/huce.cookie -H "X-CSRF-Token: $csrf" -H 'Content-Type: application/json' -d '{"role":"STAFF"}' "$base/api/auth/demo-login" | jq -e '.role == "STAFF"'
           curl -fsS -b /tmp/huce.cookie "$base/api/me" | jq -e '.role == "STAFF"'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Chromium role navigation and responsive smoke tests
+        working-directory: frontend
+        run: |
+          npm ci
+          npm install --no-save --package-lock=false playwright@1.56.1
+          npx playwright install --with-deps chromium
+          HUCE_TEST_URL=http://127.0.0.1:8081 node e2e/browser.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: huce-chromium-screenshots
+          path: frontend/e2e-results/
+          if-no-files-found: ignore
       - name: Inspect logs
         if: always()
         run: docker compose -f compose.share.yaml logs --tail 150
