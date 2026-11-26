@@ -5,7 +5,7 @@
 - Java 21, Spring Boot 3.5.8, Spring MVC, Spring Security, Spring JDBC, Spring Session JDBC, Flyway, PostgreSQL.
 - Dùng lại SQL migrations của repo và frontend React/Vite hiện tại.
 - Đã chuyển mã nguồn cho health, CSRF, đăng nhập thường/demo, đăng xuất, me và đọc danh mục. Đã chuyển seed demo cho danh mục, tài khoản, lớp nháp, phân công, nhóm đối tượng và đăng ký mẫu. Dùng database demo mới để kiểm thử.
-- Đã chuyển danh sách/phân trang, tạo/sửa/hủy/nhập lớp học phần, đọc lịch định kỳ và nền tảng chống lặp trong transaction. Đã chuyển ghi danh mục, cập nhật phân công/nhóm đối tượng, ghi lịch định kỳ, kiểm tra xung đột. Đã chuyển thêm xếp lịch tự động bằng Java (GA, hàng đợi, tiến trình, áp dụng/bỏ phương án). Phê duyệt, lịch cá nhân, thông báo, HUCEChat/Gemini và script nhập dữ liệu riêng vẫn cần chuyển từ Node.js sang Java. Không chạy chung hai backend trên cùng database.
+- Đã chuyển danh sách/phân trang, tạo/sửa/hủy/nhập lớp học phần, đọc lịch định kỳ và nền tảng chống lặp trong transaction. Đã chuyển ghi danh mục, cập nhật phân công/nhóm đối tượng, ghi lịch định kỳ, kiểm tra xung đột. Đã chuyển thêm xếp lịch tự động bằng Java (GA, hàng đợi, tiến trình, áp dụng/bỏ phương án). Đã chuyển phê duyệt/công bố, lịch cá nhân và các chế độ xem lịch, thống kê và thông báo. Điều chỉnh buổi học, đề nghị đổi lịch, khai báo bận, HUCEChat/Gemini và script nhập dữ liệu riêng vẫn cần chuyển từ Node.js sang Java. Không chạy chung hai backend trên cùng database.
 - Migrations hiện chỉ hỗ trợ database PostgreSQL mới. Không baseline hoặc tự động nâng cấp database Node.js có dữ liệu; cần quy trình sao lưu, kiểm tra lịch sử migration và chuyển dữ liệu riêng.
 
 ## Khởi chạy thử nền tảng
@@ -47,3 +47,5 @@ CI chạy bài kiểm tra hợp đồng API trong `tests/section-contract.mjs` t
 Bổ sung kiểm thử phân công, nhóm đối tượng, xung đột phòng/giảng viên/lớp, khung tiết, phiên bản lịch và rollback sửa phòng đang sử dụng.
 
 Kiểm thử GA trong section-contract.mjs: dữ liệu thiếu, phân quyền, theo dõi tiến độ, 0 vi phạm cứng, từ chối phương án lỗi thời, áp dụng nguyên tử và chống áp dụng trùng. GA Java giữ quy tắc nghiệp vụ và fitness, nhưng chưa chứng minh tương đương hiệu năng/điểm với worker JS trên bộ benchmark lớn.
+
+Bài kiểm thử tiếp tục qua gửi duyệt, trả lại, gửi lại, phê duyệt, công bố, đọc lịch theo quyền và thông báo riêng trên PostgreSQL thật.
