@@ -54,7 +54,7 @@ Mở Docker Desktop và chờ Engine hoạt động. Từ thư mục gốc:
 docker compose -f compose.share.yaml up -d --build --wait
 docker compose -f compose.share.yaml ps
 ```
-Mở http://localhost:8081. Lần đầu cần Internet để tải image và dependency. Nếu Maven Central trả HTTP 429, chờ giới hạn phía máy chủ hết rồi chạy lại lệnh build; không xóa database hoặc volume. Trong CI, repository Maven từ job smoke được dùng để đóng gói Java offline, tránh tải lặp dependency. PostgreSQL nằm trong volume demo, React được Spring Boot phục vụ trong cùng container ứng dụng.
+Mở http://localhost:8081. Lần đầu cần Internet để tải image và dependency. Nếu Maven Central trả HTTP 429, chờ giới hạn phía máy chủ hết rồi chạy lại lệnh build; không xóa database hoặc volume. Trong CI, Java và React được đóng gói trên cùng runner đã kiểm thử; image dùng JAR có checksum từ cùng workflow để tránh tải lại Maven. Người dùng local không cần artifact CI; Compose mặc định dùng target local để build từ source. PostgreSQL nằm trong volume demo, React được Spring Boot phục vụ trong cùng container ứng dụng.
 
 | Vai trò | Tên đăng nhập | Mật khẩu mẫu |
 | --- | --- | --- |

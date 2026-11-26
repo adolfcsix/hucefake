@@ -7,7 +7,8 @@ on:
       - 'backend/**'
       - 'frontend/**'
       - 'Dockerfile'
-      - '.ci-maven-cache/**'
+      - 'README.md'
+      - 'KIEM_THU.md'
       - 'compose*.yaml'
       - 'config/**'
       - '.github/workflows/spring-migration.yml'
@@ -103,39 +104,57 @@ jobs:
           npm test
           npm run build
 
-      - name: Export verified Maven repository for offline Docker build
+      - name: Package React and Java from the verified checkout
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/huce-maven-seed"
-          tar --exclude='*.lastUpdated' -C "$HOME/.m2/repository" -czf "$RUNNER_TEMP/huce-maven-seed/repository.tar.gz" .
-          cd "$RUNNER_TEMP/huce-maven-seed"
-          sha256sum repository.tar.gz > repository.sha256
+          mkdir -p "$RUNNER_TEMP/huce-ci-package"
+          cp backend/target/huce-backend-1.0.0.jar "$RUNNER_TEMP/huce-tested-backend.jar"
+          mkdir -p backend/src/main/resources/static
+          cp -a frontend/dist/. backend/src/main/resources/static/
+          mvn -B -o -f backend/pom.xml clean package -DskipTests
+          cp backend/target/huce-backend-1.0.0.jar "$RUNNER_TEMP/huce-ci-package/huce.jar"
+          python3 backend/tests/verify-package.py "$RUNNER_TEMP/huce-tested-backend.jar" "$RUNNER_TEMP/huce-ci-package/huce.jar" frontend/dist
+          git rev-parse HEAD > "$RUNNER_TEMP/huce-ci-package/source.sha"
+          cd "$RUNNER_TEMP/huce-ci-package"
+          sha256sum huce.jar > package.sha256
       - uses: actions/upload-artifact@v4
         with:
-          name: huce-ci-maven-repository
-          path: ${{ runner.temp }}/huce-maven-seed/
+          name: huce-ci-package
+          path: ${{ runner.temp }}/huce-ci-package/
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
-          overwrite: true
 
   container:
     needs: smoke
     runs-on: ubuntu-24.04
+    env:
+      HUCE_BUILD_TARGET: ci
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: huce-ci-maven-repository
-          path: .ci-maven-cache
-      - name: Verify same-run dependency artifact
+          name: huce-ci-package
+          path: .ci-package
+      - name: Verify artifact SHA and Compose targets
         run: |
-          cd .ci-maven-cache
-          sha256sum -c repository.sha256
-      - name: Build full stack
+          set -euo pipefail
+          test "$(cat .ci-package/source.sha)" = "$(git rev-parse HEAD)"
+          (cd .ci-package && sha256sum -c package.sha256)
+          docker compose -f compose.share.yaml config --format json | jq -e '.services.app.build.target == "ci"'
+          docker compose -f compose.share.yaml -f compose.private.yaml config --format json | jq -e '.services.app.build.target == "ci"'
+          HUCE_BUILD_TARGET=local docker compose -f compose.share.yaml config --format json | jq -e '.services.app.build.target == "local"'
+      - name: Build full stack from verified package
         run: docker compose -f compose.share.yaml build
       - name: Start full stack
         run: docker compose -f compose.share.yaml up -d --no-build --wait --wait-timeout 180
+      - name: Verify exact packaged JAR in running container
+        run: |
+          set -euo pipefail
+          expected=$(cut -d' ' -f1 .ci-package/package.sha256)
+          actual=$(docker compose -f compose.share.yaml exec -T app sha256sum /app/huce.jar | cut -d' ' -f1)
+          test "$expected" = "$actual"
+          echo "PASS: Docker runs exact same-run JAR"
       - name: Verify React served by Java and demo login
         run: |
           set -euo pipefail

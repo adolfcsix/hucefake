@@ -14,7 +14,9 @@ services:
       timeout: 3s
       retries: 12
   app:
-    build: .
+    build:
+      context: .
+      target: ${HUCE_BUILD_TARGET:-local}
     environment:
       DEMO: "true"
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
