@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
 const base=process.env.HUCE_TEST_URL
 async function account(role){
   let cookie='',csrf=''
@@ -32,6 +33,18 @@ assert.equal((await manager.call('/course-sections'+term))[0].id,created.id)
 assert.deepEqual(await student.call('/schedule'+term),[])
 assert.deepEqual(await lecturer.call('/schedule'+term),[])
 
+// CI-only profile revocation on the isolated private database.
+assert.ok(process.env.PG_CONTAINER)
+const setProfile=status=>execFileSync('docker',['exec',process.env.PG_CONTAINER,'psql','-U','fm05','-d','huce_private_ci','-v','ON_ERROR_STOP=1','-c',"UPDATE staff_profiles SET status='"+status+"' WHERE user_id=(SELECT id FROM users WHERE username='private_staff')"])
+setProfile('INACTIVE')
+try{
+  await staff.call('/me','GET',undefined,401)
+  await staff.call('/auth/login','POST',{username:'private_staff',password:process.env.FM05_SETUP_PASSWORD},401)
+  await staff.call('/course-sections'+term,'GET',undefined,401)
+}finally{setProfile('ACTIVE')}
+await staff.call('/me','GET',undefined,401)
+await staff.call('/auth/login','POST',{username:'private_staff',password:process.env.FM05_SETUP_PASSWORD})
+await staff.call('/me')
 const unauth=await fetch(base+'/api/me')
 assert.equal(unauth.status,401)
 const noCsrf=await fetch(base+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:'private_staff',password:process.env.FM05_SETUP_PASSWORD})})
@@ -42,11 +55,11 @@ const cookie=csrfRes.headers.getSetCookie()[0].split(';')[0]
 const token=(await csrfRes.json()).token
 const headers={Cookie:cookie,'X-CSRF-Token':token,'Content-Type':'application/json'}
 const bad=JSON.stringify({username:'private_staff',password:'invalid-password'})
-for(let i=0;i<8;i++){
+for(let i=0;i<10;i++){
  const response=await fetch(base+'/api/auth/login',{method:'POST',headers,body:bad})
  assert.equal(response.status,401)
 }
 const blocked=await fetch(base+'/api/auth/login',{method:'POST',headers,body:bad})
 assert.equal(blocked.status,429)
 assert.equal((await blocked.json()).code,'RATE_LIMIT')
-console.log('PASS: CSRF enforcement and login throttling on private database')
+console.log('PASS: profile revocation, CSRF enforcement and login throttling on private database')

@@ -34,7 +34,7 @@ test "$(sql 'SELECT count(*) FROM staff_campuses')" = 1
 test "$(sql "SELECT count(*) FROM users WHERE password_hash='PrivateTest@2026'")" = 0
 if DEMO=true java -jar "$jar" setup catalog "$temp/catalog.json"; then exit 1; fi
 if DB_URL=jdbc:postgresql://127.0.0.1:5432/huce_spring java -jar "$jar" setup catalog "$temp/catalog.json"; then exit 1; fi
-HUCE_LOGIN_ATTEMPTS_PER_MINUTE=12 java -jar "$jar" > "$temp/server.log" 2>&1 &
+HUCE_LOGIN_ATTEMPTS_PER_MINUTE=16 java -jar "$jar" > "$temp/server.log" 2>&1 &
 pid=$!
 for i in $(seq 1 60); do
   if curl -fsS http://127.0.0.1:8080/health; then break; fi
