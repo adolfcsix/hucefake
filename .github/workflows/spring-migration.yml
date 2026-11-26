@@ -10,6 +10,9 @@ on:
       - 'compose*.yaml'
       - 'config/**'
       - '.github/workflows/spring-migration.yml'
+concurrency:
+  group: huce-acceptance-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -98,11 +101,14 @@ jobs:
           npm run build
 
   container:
+    needs: smoke
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Build and start full stack
-        run: docker compose -f compose.share.yaml up -d --build --wait --wait-timeout 180
+      - name: Build full stack
+        run: docker compose -f compose.share.yaml build
+      - name: Start full stack
+        run: docker compose -f compose.share.yaml up -d --no-build --wait --wait-timeout 180
       - name: Verify React served by Java and demo login
         run: |
           set -euo pipefail
@@ -139,3 +145,44 @@ jobs:
       - name: Cleanup CI database
         if: always()
         run: docker compose -f compose.share.yaml down -v
+
+  dependency-audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Audit all locked frontend dependencies
+        working-directory: frontend
+        run: |
+          mkdir -p audit-results
+          npm audit --json --audit-level=high > audit-results/all.json
+      - name: Audit production frontend dependencies
+        if: always()
+        working-directory: frontend
+        run: |
+          mkdir -p audit-results
+          npm audit --omit=dev --json --audit-level=high > audit-results/runtime.json
+      - name: Summarize findings without hiding failures
+        if: always()
+        working-directory: frontend
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs'
+          for(const name of ['all','runtime']){
+            const file='audit-results/'+name+'.json'
+            if(!fs.existsSync(file)) { console.log(name+': unavailable'); continue }
+            const report=JSON.parse(fs.readFileSync(file,'utf8'))
+            console.log(name,JSON.stringify(report.metadata?.vulnerabilities??report.error??{}))
+            for(const [pkg,v] of Object.entries(report.vulnerabilities??{})){
+              if(['high','critical'].includes(v.severity))console.log(JSON.stringify({pkg,severity:v.severity,range:v.range,via:v.via,fixAvailable:v.fixAvailable}))
+            }
+          }
+          JS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: huce-npm-audit
+          path: frontend/audit-results/
+          if-no-files-found: error
