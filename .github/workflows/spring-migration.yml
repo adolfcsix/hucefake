@@ -29,6 +29,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+          cache: maven
+          cache-dependency-path: spring-backend/pom.xml
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -64,6 +66,16 @@ jobs:
             rm -f "$jar"
           done
           HUCE_TEST_URL=http://127.0.0.1:8080 node tests/section-contract.mjs
+      - name: Private database and Java setup CLI
+        working-directory: spring-backend
+        env:
+          DEMO: 'false'
+          DB_URL: jdbc:postgresql://127.0.0.1:5432/huce_private_ci
+          DB_USER: fm05
+          DB_PASSWORD: fm05_local
+          FM05_SETUP_PASSWORD: PrivateTest@2026
+          PG_CONTAINER: ${{ job.services.postgres.id }}
+        run: bash tests/private-contract.sh
       - name: React build and tests
         working-directory: frontend
         run: |

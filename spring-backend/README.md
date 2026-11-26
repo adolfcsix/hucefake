@@ -5,7 +5,7 @@
 - Java 21, Spring Boot 3.5.8, Spring MVC, Spring Security, Spring JDBC, Spring Session JDBC, Flyway, PostgreSQL.
 - Dùng lại SQL migrations của repo và frontend React/Vite hiện tại.
 - Đã chuyển mã nguồn cho health, CSRF, đăng nhập thường/demo, đăng xuất, me và đọc danh mục. Đã chuyển seed demo cho danh mục, tài khoản, lớp nháp, phân công, nhóm đối tượng và đăng ký mẫu. Dùng database demo mới để kiểm thử.
-- Đã chuyển danh sách/phân trang, tạo/sửa/hủy/nhập lớp học phần, đọc lịch định kỳ và nền tảng chống lặp trong transaction. Đã chuyển ghi danh mục, cập nhật phân công/nhóm đối tượng, ghi lịch định kỳ, kiểm tra xung đột. Đã chuyển thêm xếp lịch tự động bằng Java (GA, hàng đợi, tiến trình, áp dụng/bỏ phương án). Đã chuyển phê duyệt/công bố, lịch cá nhân và các chế độ xem lịch, thống kê và thông báo. Đã chuyển điều chỉnh buổi học, đề nghị đổi lịch, khai báo bận. Đã chuyển HUCEChat/Gemini, bao gồm phân loại ý định, tra cứu theo quyền, hội thoại và xác nhận đề xuất. Script nhập dữ liệu riêng vẫn cần chuyển từ Node.js sang Java. Không chạy chung hai backend trên cùng database.
+- Đã chuyển danh sách/phân trang, tạo/sửa/hủy/nhập lớp học phần, đọc lịch định kỳ và nền tảng chống lặp trong transaction. Đã chuyển ghi danh mục, cập nhật phân công/nhóm đối tượng, ghi lịch định kỳ, kiểm tra xung đột. Đã chuyển thêm xếp lịch tự động bằng Java (GA, hàng đợi, tiến trình, áp dụng/bỏ phương án). Đã chuyển phê duyệt/công bố, lịch cá nhân và các chế độ xem lịch, thống kê và thông báo. Đã chuyển điều chỉnh buổi học, đề nghị đổi lịch, khai báo bận. Đã chuyển HUCEChat/Gemini, bao gồm phân loại ý định, tra cứu theo quyền, hội thoại và xác nhận đề xuất. Đã chuyển công cụ khởi tạo bản trắng và tài khoản riêng sang Java CLI. Không chạy chung hai backend trên cùng database.
 - Migrations hiện chỉ hỗ trợ database PostgreSQL mới. Không baseline hoặc tự động nâng cấp database Node.js có dữ liệu; cần quy trình sao lưu, kiểm tra lịch sử migration và chuyển dữ liệu riêng.
 
 ## Khởi chạy thử nền tảng
@@ -53,3 +53,17 @@ Bài kiểm thử tiếp tục qua gửi duyệt, trả lại, gửi lại, phê
 Kiểm thử bổ sung cho khai báo bận và rollback, đề nghị đổi lịch theo phạm vi khoa, trả lại/duyệt, nghỉ học, đổi phòng, học bù, chống lặp, đồng bộ thông báo và thống kê.
 
 HUCEChat hoạt động với nhận diện cục bộ khi không có Gemini. Đặt GEMINI_API_KEY và GEMINI_MODEL ở môi trường backend để bật phân loại nâng cao. Không đưa key lên frontend hoặc GitHub. CI kiểm thử luồng cục bộ và xác nhận nghiệp vụ; chưa kiểm thử API Gemini thật do không có khóa kiểm thử.
+
+## Khởi tạo dữ liệu riêng bằng Java
+Dùng database PostgreSQL mới, đặt DB_URL trỏ đúng database, DB_USER, DB_PASSWORD và DEMO=false. Sau khi `mvn clean package` trong spring-backend, chạy từ thư mục spring-backend:
+
+```sh
+java -jar target/huce-backend-1.0.0.jar setup catalog ../config/local.template.json
+java -jar target/huce-backend-1.0.0.jar setup catalog ../config/local.json
+java -jar target/huce-backend-1.0.0.jar setup account --username quanly_rieng --email manager@example.test --role MANAGER
+java -jar target/huce-backend-1.0.0.jar setup account --username daotao_rieng --email staff@example.test --role STAFF --unit CNTT --campus CS1
+java -jar target/huce-backend-1.0.0.jar setup account --username giangvien_rieng --email lecturer@example.test --role LECTURER --unit CNTT
+java -jar target/huce-backend-1.0.0.jar setup account --username sinhvien_rieng --email student@example.test --role STUDENT
+```
+
+Sao chép local.template.json thành local.json và điền danh mục của bạn trước khi tạo tài khoản nhân viên/giảng viên. CNTT/CS1 chỉ là ví dụ, phải khớp mã trong tệp. Terminal tương tác sẽ hỏi mật khẩu ẩn hai lần. Có thể đặt FM05_SETUP_PASSWORD cho phiên chạy tự động, không ghi mật khẩu vào file hoặc lịch sử lệnh. Nhập danh mục có transaction; mã đã tồn tại giữ nguyên. Sau khi tạo lớp học phần bằng web, nạp enrollments trong local.json để liên kết sinh viên với lớp. Không dùng chung database demo và riêng.
