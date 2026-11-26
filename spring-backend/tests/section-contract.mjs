@@ -98,6 +98,18 @@ await staff.call('/schedule-patterns/'+p,'PATCH',{...slot,periodFrom:2,version:0
 await staff.call('/schedule-patterns/'+p,'PATCH',{...slot,periodFrom:3,version:0},409)
 const current=(await manager.call('/schedule-patterns'+term)).find(x=>x.id===p)
 assert.equal(current.period_from,2);assert.equal(current.version,1)
+const availabilityPath='/me/availability'+term
+const avoid={dayOfWeek:7,periodFrom:14,periodTo:15,kind:'AVOID',reason:'Kiểm thử giờ không ưu tiên'}
+await student.call(availabilityPath,'GET',undefined,403)
+await lecturer.call('/me/availability','PUT',{semesterId:sem.id,entries:[avoid]},204)
+const savedAvailability=await lecturer.call(availabilityPath)
+await lecturer.call('/me/availability','PUT',{semesterId:sem.id,entries:[{...avoid,dayOfWeek:1,periodFrom:2,periodTo:3,kind:'BUSY'}]},409)
+assert.deepEqual(await lecturer.call(availabilityPath),savedAvailability)
+await lecturer.call('/me/availability','PUT',{semesterId:sem.id,entries:[{...avoid,periodFrom:16}]},400)
+assert.deepEqual(await lecturer.call(availabilityPath),savedAvailability)
+await lecturer.call('/me/availability','PUT',{semesterId:sem.id,entries:[]},204)
+assert.deepEqual(await lecturer.call(availabilityPath),[])
+
 const room={campusId:lab.campus_id,code:lab.code,name:lab.name,capacity:1,type:lab.type,status:lab.status}
 await staff.call('/catalog/rooms/'+lab.id,'PUT',room,409)
 assert.equal((await staff.call('/catalog')).rooms.find(x=>x.id===lab.id).capacity,lab.capacity)
@@ -237,3 +249,73 @@ assert.ok((await student.call('/notifications')).find(x=>x.id===notifications.it
 await student.call('/notifications/read-all','POST',{})
 assert.ok((await student.call('/notifications')).every(x=>x.read_at))
 console.log('PASS: approval readiness, return/resubmit, transaction lock, publish replay, four-role schedule visibility, statistics and private notifications')
+
+const requestsPath='/session-change-requests'
+const otherLecturer=await account('LECTURER','giangvien2')
+const originalSessions=studentRows.filter(x=>x.section_code==='CSDL.01'&&x.status==='PLANNED')
+assert.ok(originalSessions.length>=5)
+const requestTarget=originalSessions[0]
+const requestBody={action:'CANCEL',reason:'Kiểm thử đề nghị nghỉ'}
+await otherLecturer.call('/class-sessions/'+requestTarget.id+'/requests','POST',requestBody,403)
+await student.call('/class-sessions/'+requestTarget.id+'/requests','POST',requestBody,403)
+const requestKey=randomUUID()
+const r1=await lecturer.call('/class-sessions/'+requestTarget.id+'/requests','POST',requestBody,201,requestKey)
+assert.deepEqual(await lecturer.call('/class-sessions/'+requestTarget.id+'/requests','POST',requestBody,201,requestKey),r1)
+await lecturer.call('/class-sessions/'+requestTarget.id+'/requests','POST',requestBody,409)
+assert.ok((await staff.call(requestsPath+term+'&page=1&pageSize=10')).items.some(x=>x.id===r1.id))
+assert.ok(!(await other.call(requestsPath+term)).some(x=>x.id===r1.id))
+assert.ok(!(await otherLecturer.call(requestsPath+term)).some(x=>x.id===r1.id))
+await other.call(requestsPath+'/'+r1.id+'/decide','POST',{action:'CANCEL',reason:'Sai khoa'},403)
+await staff.call(requestsPath+'/'+r1.id+'/decide','POST',{action:'RESCHEDULE',reason:'Sai loại'},400)
+await staff.call(requestsPath+'/'+r1.id+'/decide','POST',{action:'RETURNED',reason:'Chưa đủ căn cứ'},204)
+assert.equal((await lecturer.call(requestsPath+term)).find(x=>x.id===r1.id).status,'RETURNED')
+assert.equal((await student.call(personal)).find(x=>x.id===requestTarget.id).status,'PLANNED')
+const r2=await lecturer.call('/class-sessions/'+requestTarget.id+'/requests','POST',requestBody,201)
+await staff.call(requestsPath+'/'+r2.id+'/decide','POST',{action:'CANCEL',reason:'Duyệt nghỉ'},204)
+assert.equal((await lecturer.call(requestsPath+term)).find(x=>x.id===r2.id).status,'APPROVED')
+for(const client of [student,lecturer]) {
+ const s=(await client.call(personal)).find(x=>x.id===requestTarget.id)
+ assert.equal(s.status,'CANCELLED');assert.equal(s.exception_reason,'Duyệt nghỉ')
+}
+await staff.call(requestsPath+'/'+r2.id+'/decide','POST',{action:'CANCEL',reason:'Trùng'},409)
+const roomTarget=originalSessions[1]
+const alternativeRoom=catalog.rooms.find(r=>r.type==='COMPUTER_LAB'&&r.id!==roomTarget.room_id&&r.capacity>=40)
+assert.ok(alternativeRoom)
+await staff.call('/class-sessions/'+roomTarget.id,'PATCH',{action:'ROOM_CHANGE',roomId:roomTarget.room_id,reason:'Không đổi'},400)
+const directRequest=await lecturer.call('/class-sessions/'+roomTarget.id+'/requests','POST',requestBody,201)
+const changeKey=randomUUID()
+const changeBody={action:'ROOM_CHANGE',roomId:alternativeRoom.id,reason:'Đổi phòng kiểm thử'}
+const moved=await staff.call('/class-sessions/'+roomTarget.id,'PATCH',changeBody,200,changeKey)
+assert.deepEqual(await staff.call('/class-sessions/'+roomTarget.id,'PATCH',changeBody,200,changeKey),moved)
+assert.equal((await lecturer.call(requestsPath+term)).find(x=>x.id===directRequest.id).status,'RETURNED')
+for(const client of [student,lecturer]){
+ const rows=await client.call(personal)
+ assert.equal(rows.find(x=>x.id===roomTarget.id).status,'CANCELLED')
+ const replacement=rows.find(x=>x.id===moved.replacementId)
+ assert.equal(replacement.room_id,alternativeRoom.id)
+ assert.equal(replacement.source_session_id,roomTarget.id)
+ assert.equal(replacement.start_at,roomTarget.start_at)
+}
+const makeup=originalSessions[2]
+await staff.call('/class-sessions','POST',{sourceSessionId:makeup.id,date:'2027-01-01',periodFrom:1,roomId:makeup.room_id,reason:'Ngoài kỳ'},400)
+const date='2026-09-06'
+const makeupBody={sourceSessionId:makeup.id,date,periodFrom:1,roomId:makeup.room_id,reason:'Học bù kiểm thử'}
+const rescheduled=await staff.call('/class-sessions','POST',makeupBody,201)
+for(const client of [student,lecturer]){
+ const rows=await client.call(personal)
+ assert.equal(rows.find(x=>x.id===makeup.id).status,'CANCELLED')
+ const replacement=rows.find(x=>x.id===rescheduled.replacementId)
+ assert.ok(replacement.start_at.startsWith(date));assert.equal(replacement.source_session_id,makeup.id)
+}
+await staff.call('/class-sessions/'+makeup.id+'/exceptions','POST',{action:'CANCEL',reason:'Trùng ngoại lệ'},409)
+const cancelDirect=originalSessions[3]
+const pendingDirect=await lecturer.call('/class-sessions/'+cancelDirect.id+'/requests','POST',requestBody,201)
+const direct=await staff.call('/class-sessions/'+cancelDirect.id+'/exceptions','POST',{action:'CANCEL',reason:'Nghỉ trực tiếp'})
+assert.equal(direct.replacementId,null)
+assert.equal((await lecturer.call(requestsPath+term)).find(x=>x.id===pendingDirect.id).status,'APPROVED')
+assert.ok((await student.call('/notifications')).some(x=>x.message.includes('Học bù kiểm thử')))
+assert.ok((await lecturer.call('/notifications')).some(x=>x.message.includes('Duyệt nghỉ')))
+const afterSchedule=await manager.call('/schedule'+term+'&view=all')
+const afterStats=await manager.call('/schedule/statistics'+term)
+assert.equal(afterStats.rooms.reduce((sum,x)=>sum+x.sessions,0),afterSchedule.filter(x=>x.status!=='CANCELLED').length)
+console.log('PASS: lecturer availability rollback, change request scope, return/approve, cancellation, room change, makeup, replay and synchronized schedules')
