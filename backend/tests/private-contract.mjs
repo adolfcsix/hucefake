@@ -31,3 +31,22 @@ const created=await staff.call('/course-sections','POST',{semesterId:sem.id,subj
 assert.equal((await manager.call('/course-sections'+term))[0].id,created.id)
 assert.deepEqual(await student.call('/schedule'+term),[])
 assert.deepEqual(await lecturer.call('/schedule'+term),[])
+
+const unauth=await fetch(base+'/api/me')
+assert.equal(unauth.status,401)
+const noCsrf=await fetch(base+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:'private_staff',password:process.env.FM05_SETUP_PASSWORD})})
+assert.equal(noCsrf.status,403)
+assert.equal((await noCsrf.json()).code,'CSRF_INVALID')
+const csrfRes=await fetch(base+'/api/csrf')
+const cookie=csrfRes.headers.getSetCookie()[0].split(';')[0]
+const token=(await csrfRes.json()).token
+const headers={Cookie:cookie,'X-CSRF-Token':token,'Content-Type':'application/json'}
+const bad=JSON.stringify({username:'private_staff',password:'invalid-password'})
+for(let i=0;i<8;i++){
+ const response=await fetch(base+'/api/auth/login',{method:'POST',headers,body:bad})
+ assert.equal(response.status,401)
+}
+const blocked=await fetch(base+'/api/auth/login',{method:'POST',headers,body:bad})
+assert.equal(blocked.status,429)
+assert.equal((await blocked.json()).code,'RATE_LIMIT')
+console.log('PASS: CSRF enforcement and login throttling on private database')

@@ -28,3 +28,4 @@ server:
         secure: ${COOKIE_SECURE:false}
 huce:
   demo: ${DEMO:false}
+  login-attempts-per-minute: ${HUCE_LOGIN_ATTEMPTS_PER_MINUTE:40}

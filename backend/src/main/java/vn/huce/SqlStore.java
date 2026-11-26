@@ -42,7 +42,7 @@ class Inputs {
     static ApiFailure invalid(String msg){return new ApiFailure(400,"VALIDATION_ERROR",msg);}
     static ApiFailure state(String msg){return new ApiFailure(409,"INVALID_STATE",msg);}
     static void role(Accounts.Actor a,String... allowed){if(!Arrays.asList(allowed).contains(a.role()))throw new ApiFailure(403,"FORBIDDEN","Bạn không có quyền trong phạm vi này.");}
-    static void unit(Accounts.Actor a,Object id){if("STAFF".equals(a.role())&&!Objects.equals(a.unitId(),((Number)id).longValue()))throw new ApiFailure(403,"FORBIDDEN","Bạn không có quyền trong phạm vi này.");}
+    static void unit(Accounts.Actor a,Object id){if("STAFF".equals(a.role())&&(a.unitId()==null||!(id instanceof Number n)||!Objects.equals(a.unitId(),n.longValue())))throw new ApiFailure(403,"FORBIDDEN","Bạn không có quyền trong phạm vi này.");}
     static long number(Object value,long min,long max){
         try{if(!(value instanceof Number || value instanceof String))throw new NumberFormatException();long n=new java.math.BigDecimal(value.toString().trim()).longValueExact();if(n<min||n>max)throw new NumberFormatException();return n;}catch(ArithmeticException|NumberFormatException e){throw invalid("Số nhập vào nằm ngoài phạm vi cho phép.");}
     }

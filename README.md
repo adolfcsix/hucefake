@@ -180,5 +180,5 @@ HUCEChat dùng nhận diện tiếng Việt cục bộ, lưu hội thoại theo 
 - GitHub Actions chạy kiểm thử tích hợp PostgreSQL, bản trắng, container và Chromium. Xem [Actions](https://github.com/adolfcsix/hucefake/actions) và [KIEM_THU.md](KIEM_THU.md).
 - Nếu 8080 không kết nối, kiểm tra backend đã khởi động, DB_URL và mật khẩu; nếu 5432 bận, kiểm tra dịch vụ PostgreSQL đang chạy. Lỗi demo/private nghĩa là đang dùng sai database, không xóa dữ liệu để sửa.
 - Backup trước mọi thay đổi. Database Express cũ không được tự động baseline bởi Flyway; bản hiện tại được thiết kế cho PostgreSQL mới. Không nhập bản dump cũ trực tiếp nếu chưa đối chiếu migration và dữ liệu.
-- Các tài khoản mẫu và Docker local không phải cấu hình production. Không đưa demo ra Internet; triển khai thật cần HTTPS, bí mật riêng, giới hạn đăng nhập, backup và kiểm toán bảo mật.
+- Các tài khoản mẫu và Docker local không phải cấu hình production. Không đưa demo ra Internet; đã có giới hạn đăng nhập theo IP trong mỗi tiến trình Java (mặc định 40 yêu cầu/phút, tùy chỉnh HUCE_LOGIN_ATTEMPTS_PER_MINUTE). Triển khai thật cần HTTPS, bí mật riêng, giới hạn phân tán tại reverse proxy, backup và kiểm toán bảo mật. Không tin X-Forwarded-For do client tự gửi.
 

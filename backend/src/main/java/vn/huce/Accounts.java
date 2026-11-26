@@ -32,13 +32,18 @@ class Accounts {
         var account=lookup(username);
         String hash=account==null?dummy:account.hash();
         boolean matched=password!=null && password.getBytes(StandardCharsets.UTF_8).length<=72 && bcrypt.matches(password,hash);
-        if (!matched || account==null || !"ACTIVE".equals(account.status()) ||
+        if (!matched || account==null || !usable(account) ||
             (expectedRole!=null && !expectedRole.equals(account.actor().role())))
             throw new ApiFailure(401,"INVALID_CREDENTIALS","Tên đăng nhập hoặc mật khẩu không đúng.");
         return account.actor();
     }
     Actor active(String username) {
         var account=lookup(username);
-        return account!=null && "ACTIVE".equals(account.status())?account.actor():null;
+        return usable(account)?account.actor():null;
+    }
+    private boolean usable(Account account){
+        if(account==null||!"ACTIVE".equals(account.status()))return false;
+        var a=account.actor();
+        return !java.util.Set.of("STAFF","LECTURER").contains(a.role())||(a.staffId()!=null&&a.unitId()!=null);
     }
 }
