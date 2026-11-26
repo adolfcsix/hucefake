@@ -2,7 +2,7 @@
 
 ## Bản chính thức đã nghiệm thu
 
-PR #1 đã merge vào main, commit `d97c622b525e27b42559eb4d389d17302cf0ef06`. [CI main 3/3 PASS](https://github.com/adolfcsix/hucefake/actions/runs/45808094694). Bản bổ sung PR #3 chưa merge tại thời điểm ghi nhận dưới đây.
+PR #1 đã merge vào main, commit `d97c622b525e27b42559eb4d389d17302cf0ef06`. [CI main 3/3 PASS](https://github.com/adolfcsix/hucefake/actions/runs/45808094694). PR #3 đã merge vào main tại commit `7f1c6d92c51c0c578963fc44cd8bc659e857a965`. [CI main sau merge 3/3 PASS](https://github.com/adolfcsix/hucefake/actions/runs/45837993682).
 
 ## Mốc xác minh gần nhất
 
@@ -11,7 +11,8 @@ PR #1 đã merge vào main, commit `d97c622b525e27b42559eb4d389d17302cf0ef06`. [
 | d97c622 | main 3/3 PASS, 63 route, 63 lượt Chromium, GA 3/3, npm audit 0 | [CI](https://github.com/adolfcsix/hucefake/actions/runs/45808094694) |
 | 6bfa4d0 | PR #3 3/3 PASS; CRUD qua Vite, chống ghi đè, xếp lịch, duyệt/công bố, CSV/ICS đúng phạm vi | [CI](https://github.com/adolfcsix/hucefake/actions/runs/45819722170) |
 | bb2ae40 | PR #3 3/3 PASS; sao lưu/khôi phục, checksum, ghi sau restore, phục hồi kết nối và restart PostgreSQL/Java | [CI](https://github.com/adolfcsix/hucefake/actions/runs/45823815464) |
-| 1e5ad45 | smoke và dependency-audit PASS; container đang chạy tại thời điểm rà soát | [CI](https://github.com/adolfcsix/hucefake/actions/runs/45824625719) |
+| d2ded5a | PR #3 3/3 PASS; source integrity, 147 lượt Chromium, mọi nhóm hồi quy | [CI](https://github.com/adolfcsix/hucefake/actions/runs/45825169200) |
+| 7f1c6d9 | main sau merge 3/3 PASS; 63 demo + 84 private, 63 route, 34 import, 49 tham chiếu API tĩnh, backup/restore, recovery, npm audit 0, GA 3/3 | [CI](https://github.com/adolfcsix/hucefake/actions/runs/45837993682) |
 
 Kết quả chỉ áp dụng cho SHA tương ứng; không mặc định kế thừa PASS sang commit mới. Benchmark main: 48 lớp, 96 buổi, 16 giảng viên, 12 nhóm; ba seed mất 4907, 4362, 4295 ms, 0 vi phạm cứng, kiểm tra SQL độc lập PASS. Không phải cam kết hiệu năng toàn trường.
 
@@ -24,7 +25,7 @@ Kết quả chỉ áp dụng cho SHA tương ứng; không mặc định kế th
 | Private | Java CLI, database trắng, bốn tài khoản riêng, rollback, chặn demo, dump/restore vào database khác |
 | Container | React được Java phục vụ, PostgreSQL, health check, phiên đăng nhập |
 | Chromium demo | 63 lượt mở trang ở 1440/390/320 px; đăng nhập, chatbot, CRUD, xung đột phiên bản, công bố, xuất lịch |
-| Chromium private | 84 lượt dự kiến ở 1440/390 px, trước/sau nạp học kỳ; tạo lớp riêng và đọc lại |
+| Chromium private | 84 lượt đã đạt tại 7f1c6d9 ở 1440/390 px, trước/sau nạp học kỳ; tạo lớp riêng và đọc lại |
 | Recovery | Mô phỏng lỗi mạng, restart PostgreSQL và Java, giữ phiên và dữ liệu |
 | Dependency audit | npm audit toàn bộ và production; không bỏ qua mức cao/critical |
 
@@ -40,6 +41,6 @@ Các lệnh: Maven `mvn clean verify` trong backend; từ gốc `node backend/te
 
 ## Giới hạn còn lại
 
-Gemini API thật chưa kiểm thử do thiếu khóa hợp lệ; chuyển dữ liệu từ database Express cũ chưa nghiệm thu; chưa có benchmark quy mô toàn trường, kiểm toán đầy đủ dependency Java hay pentest độc lập. Không khẳng định hệ thống không thể phát sinh lỗi. Sau khi mọi job PASS trên HEAD mới, merge rồi xác minh CI main.
+Gemini API thật chưa kiểm thử do thiếu khóa hợp lệ; chuyển dữ liệu từ database Express cũ chưa nghiệm thu; chưa có benchmark quy mô toàn trường, kiểm toán đầy đủ dependency Java hay pentest độc lập. Không khẳng định hệ thống không thể phát sinh lỗi. CI trên main 7f1c6d9 đã PASS. Bản cập nhật tài liệu Gemini không thay đổi logic; vẫn kiểm tra CI theo SHA mới.
 
 Lịch sử chi tiết các mốc sửa runner Ubuntu, Docker mirror, Maven 429, Vite/esbuild và các bản chuyển đổi có trong Git history và Actions.

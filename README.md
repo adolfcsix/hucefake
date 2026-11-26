@@ -170,7 +170,7 @@ npm run dev
 
 Nhân viên tạo/nhập lớp, phân công, xếp tay hoặc GA và gửi duyệt. Quản lý xem hồ sơ, trả lại hoặc công bố. Giảng viên xem lịch, khai báo bận, đề nghị đổi lịch. Sinh viên xem lịch cá nhân và thông báo. Thời khóa biểu hỗ trợ xuất CSV/ICS; dữ liệu riêng có thể sao lưu/khôi phục PostgreSQL bằng pg_dump/pg_restore.
 
-HUCEChat dùng nhận diện tiếng Việt cục bộ, lưu hội thoại theo tài khoản và phạm vi vai trò. Tác vụ ghi chỉ thực hiện khi xác nhận đề xuất. Tùy chọn Gemini: đặt GEMINI_API_KEY và GEMINI_MODEL hợp lệ ở backend; không đặt key vào frontend. Docker Compose đọc biến môi trường hoặc .env. Mô hình chỉ phân loại ý định, không có quyền gọi SQL. Khi chưa cấu hình, chatbot vẫn tra cứu và thực hiện các nghiệp vụ cục bộ.
+HUCEChat dùng nhận diện tiếng Việt cục bộ, lưu hội thoại theo tài khoản và phạm vi vai trò. Tác vụ ghi chỉ thực hiện khi xác nhận đề xuất. Tùy chọn Gemini: xem hướng dẫn chi tiết tại [mục 10](#10-tích-hợp-gemini-ai-vào-hucechat). Đặt GEMINI_API_KEY và GEMINI_MODEL hợp lệ ở backend; không đặt key vào frontend. Docker Compose đọc biến môi trường hoặc .env. Mô hình chỉ phân loại ý định, không có quyền gọi SQL. Khi chưa cấu hình, chatbot vẫn tra cứu và thực hiện các nghiệp vụ cục bộ.
 
 ## 8. Sao lưu và khôi phục PostgreSQL
 
@@ -208,3 +208,115 @@ Kiểm tra đăng nhập và dữ liệu, giữ nguyên database nguồn. Nếu 
 - Backup trước mọi thay đổi. Database Express cũ không được tự động baseline bởi Flyway; bản hiện tại được thiết kế cho PostgreSQL mới. Không nhập bản dump cũ trực tiếp nếu chưa đối chiếu migration và dữ liệu.
 - Các tài khoản mẫu và Docker local không phải cấu hình production. Không đưa demo ra Internet; đã có giới hạn đăng nhập theo IP trong mỗi tiến trình Java (mặc định 40 yêu cầu/phút, tùy chỉnh HUCE_LOGIN_ATTEMPTS_PER_MINUTE). Triển khai thật cần HTTPS, bí mật riêng, giới hạn phân tán tại reverse proxy, backup và kiểm toán bảo mật. Không tin X-Forwarded-For do client tự gửi.
 
+## 10. Tích hợp Gemini AI vào HUCEChat
+
+Gemini là tùy chọn đã có sẵn trong Spring Boot; không cần cài SDK mới, sửa React hoặc thay đổi PostgreSQL. HUCEChat ưu tiên nhận diện ý định bằng quy tắc tiếng Việt cục bộ. Chỉ câu hỏi chưa nhận diện được mới có thể chuyển đến Gemini để phân loại thành một hành động cho phép theo vai trò. Java thực hiện truy vấn và kiểm tra quyền; thao tác ghi cần người dùng xác nhận. Đây không phải chatbot đa năng trả lời mọi chủ đề. Nếu không cấu hình Gemini hoặc dịch vụ không phản hồi, chức năng học vụ cục bộ vẫn hoạt động.
+
+### 10.1. Lấy API key và chọn model
+
+1. Mở [Google AI Studio — API keys](https://aistudio.google.com/apikey), đăng nhập Google và chọn dự án của bạn.
+2. Chọn Create API key (hoặc sử dụng khóa hợp lệ của dự án). Ưu tiên authorization key mới từ AI Studio theo [hướng dẫn chính thức](https://ai.google.dev/gemini-api/docs/api-key).
+3. Sao chép khóa và giữ riêng; không gửi qua chat, ảnh chụp màn hình, GitHub hoặc mã frontend.
+4. Chọn model văn bản có hỗ trợ `generateContent` và JSON structured output. Ví dụ `gemini-3.6-flash` nếu dự án của bạn được cấp quyền. Model thay đổi theo thời gian; xem [danh sách model](https://ai.google.dev/gemini-api/docs/models), [Models API](https://ai.google.dev/api/models) và [structured outputs](https://ai.google.dev/gemini-api/docs/generate-content/structured-output). Chỉ nhập ID model, không thêm `models/`.
+5. Kiểm tra quota, điều kiện sử dụng và [giá](https://ai.google.dev/gemini-api/docs/pricing) trước khi gọi. Không mặc định API miễn phí hoặc không giới hạn.
+
+### 10.2. Cấu hình trên VS Code (Windows PowerShell)
+
+Mở thư mục gốc HUCE, dừng backend đang chạy bằng Ctrl+C. Trong **chính terminal chạy backend**, giữ cấu hình DB_URL, DB_USER, DB_PASSWORD và DEMO đã thiết lập ở mục 4–5. Nhập khóa bằng lời nhắc ẩn (không chép khóa thật vào lệnh):
+
+```powershell
+$secret = Read-Host 'Gemini API key' -AsSecureString
+$env:GEMINI_API_KEY = [System.Net.NetworkCredential]::new('', $secret).Password
+Remove-Variable secret
+$env:GEMINI_MODEL = 'gemini-3.6-flash'
+```
+
+Có thể thay model bằng ID phù hợp với tài khoản. Để xác minh model/key trước khi khởi động, thực hiện một lần:
+
+```powershell
+$headers = @{ 'x-goog-api-key' = $env:GEMINI_API_KEY }
+$models = Invoke-RestMethod -Uri 'https://generativelanguage.googleapis.com/v1beta/models?pageSize=100' -Headers $headers
+$models.models | Where-Object { $_.supportedGenerationMethods -contains 'generateContent' } | Select-Object name
+```
+
+Nếu có nextPageToken, truy vấn trang tiếp theo theo Models API hoặc kiểm tra trực tiếp model:
+```powershell
+Invoke-RestMethod -Uri "https://generativelanguage.googleapis.com/v1beta/models/$($env:GEMINI_MODEL)" -Headers $headers | Select-Object name,supportedGenerationMethods
+```
+
+Kiểm thử đúng dạng JSON enum HUCEChat đang sử dụng (có thể tính quota/chi phí, không gửi dữ liệu cá nhân):
+
+```powershell
+$body = @{
+  contents = @(@{ parts = @(@{ text = 'Phan loai: xem lich hoc. Chon SCHEDULE hoac UNRELATED.' }) })
+  generationConfig = @{
+    responseMimeType = 'application/json'
+    responseJsonSchema = @{
+      type = 'object'
+      properties = @{ action = @{ type = 'string'; enum = @('SCHEDULE','UNRELATED') } }
+      required = @('action')
+    }
+  }
+} | ConvertTo-Json -Depth 10
+$result = Invoke-RestMethod -Method Post -Uri "https://generativelanguage.googleapis.com/v1beta/models/$($env:GEMINI_MODEL):generateContent" -Headers $headers -ContentType 'application/json' -Body $body
+$result.candidates[0].content.parts | Where-Object { -not $_.thought } | Select-Object -ExpandProperty text
+Remove-Variable headers,body,result,models -ErrorAction SilentlyContinue
+```
+
+Kết quả mong đợi là JSON có action thuộc SCHEDULE hoặc UNRELATED; với câu thử này mong đợi SCHEDULE. Đây là phép thử của nhà cung cấp, không sửa dữ liệu HUCE. Nếu lỗi, xử lý ở mục 10.5.
+
+Sau đó chạy backend, ví dụ từ thư mục gốc:
+```powershell
+cd backend
+mvn spring-boot:run
+```
+Nếu đã ở backend thì không cần cd. Terminal thứ hai chạy `cd frontend`, `npm ci` (lần đầu), `npm run dev`. Mở http://localhost:5173. Mỗi terminal mới cần thiết lập lại biến môi trường nếu chưa được kế thừa. Trên Linux/macOS, nhập khóa bằng `read -rs GEMINI_API_KEY; export GEMINI_API_KEY`, đặt `export GEMINI_MODEL='gemini-3.6-flash'` rồi chạy Maven tương tự. Java không tự đọc .env.
+
+### 10.3. Cấu hình khi chạy Docker
+
+Từ thư mục gốc, dùng biến môi trường trong PowerShell như mục 10.2, hoặc sao chép `.env.example` thành `.env` rồi điền riêng hai biến (chỉ thay giá trị Gemini; giữ đúng mật khẩu, tên database và cổng của bản đang chạy):
+
+```dotenv
+GEMINI_API_KEY=KHOA_RIENG_CUA_BAN
+GEMINI_MODEL=gemini-3.6-flash
+```
+
+Không commit .env; tệp này đã được Git ignore. Biến môi trường của shell có thể ưu tiên hơn .env. Nếu dùng .env, xóa các biến Gemini cũ trong shell bằng `Remove-Item Env:GEMINI_API_KEY,Env:GEMINI_MODEL -ErrorAction SilentlyContinue` trước khi chạy. Chọn đúng project demo hoặc private đang sử dụng, không chạy cả hai lệnh cho cùng cổng.
+
+**Demo:**
+```powershell
+docker compose -f compose.share.yaml up -d --no-deps --force-recreate --wait app
+```
+**Dữ liệu riêng:**
+```powershell
+docker compose -f compose.share.yaml -f compose.private.yaml up -d --no-deps --force-recreate --wait app
+```
+Các lệnh trên dành cho hệ thống đã build và PostgreSQL đang chạy. Lần đầu chạy, dùng lệnh `up -d --build --wait` tương ứng ở mục 3 hoặc 5. Chỉ tạo lại container ứng dụng, giữ database và volume; không dùng down -v. Mở http://localhost:8081 (hoặc cổng FM05_WEB_PORT đã đặt). Không dùng lệnh in cấu hình/container environment để chia sẻ log vì có thể hiện khóa.
+
+### 10.4. Kiểm tra trên giao diện HUCE
+
+1. Đăng nhập bằng một trong bốn vai trò. Chọn học kỳ nếu có.
+2. Mở HUCEChat; kiểm tra xuất hiện thông báo câu hỏi nâng cao có thể được gửi đến Gemini.
+3. Mở DevTools (F12) → Network, tìm GET /api/chat/status. Response `{"gemini":true}` xác nhận đã nạp cả hai biến, **không chứng minh khóa/model gọi thành công**.
+4. Thử câu đơn giản như “Thông báo của tôi” để kiểm tra nghiệp vụ cục bộ. Tiếp theo tạo cuộc trò chuyện mới và thử diễn đạt khác, chẳng hạn “Có điều gì mới cần tôi lưu tâm không?”. Nếu quy tắc cục bộ không nhận ra, backend có thể gọi Gemini phân loại.
+5. Để xác nhận thật sự có request bên ngoài, đối chiếu usage của project Google AI Studio trước/sau câu hỏi nâng cao (số liệu có thể cập nhật trễ). Nếu không có request, câu hỏi có thể đã được quy tắc cục bộ xử lý hoặc quota nội bộ đã hết. Kết quả bước 10.2 kiểm tra độc lập kết nối nhà cung cấp.
+6. Khi dùng đề xuất tạo lớp hoặc chạy GA, kiểm tra nội dung rồi bấm Xác nhận. Không nhập mật khẩu, API key, mã định danh cá nhân hoặc nội dung nhạy cảm vào chat. Câu hỏi chưa nhận diện có thể được gửi đến Google; dữ liệu nghiệp vụ do Java truy vấn trong phạm vi quyền của tài khoản.
+
+### 10.5. Lỗi thường gặp
+
+| Hiện tượng | Xử lý |
+| --- | --- |
+| gemini=false | Kiểm tra đã đặt cả GEMINI_API_KEY và GEMINI_MODEL trong tiến trình Java; khởi động lại backend hoặc recreate app Docker |
+| 400 khi gọi Google | Kiểm tra JSON, model có hỗ trợ structured output theo schema đang dùng |
+| 401 / 403 | Kiểm tra authorization key, dự án, quyền API, hạn chế khóa, điều kiện khu vực; tạo khóa mới nếu cần |
+| 404 model | Chọn ID model khả dụng từ Models API; không dùng tiền tố models/ |
+| 429 | Kiểm tra quota/rate limit/billing trên AI Studio; HUCE cũng giới hạn tối đa 8 lượt phân loại Gemini/phút/tài khoản trong mỗi tiến trình |
+| Timeout / 5xx | Kiểm tra mạng, proxy và trạng thái dịch vụ Google; Java có timeout yêu cầu 12 giây, không tự ghi dữ liệu nếu phân loại lỗi |
+| “Gemini chưa phản hồi” | Dùng câu gợi ý cục bộ; chạy phép thử ở 10.2 để phân biệt lỗi key, model hoặc mạng |
+| Mất kết nối web | Kiểm tra /health, PostgreSQL và Spring Boot trước; đây không nhất thiết là lỗi Gemini |
+
+### 10.6. Tắt hoặc đổi khóa Gemini
+
+VS Code: dừng backend, dùng `Remove-Item Env:GEMINI_API_KEY,Env:GEMINI_MODEL -ErrorAction SilentlyContinue` rồi chạy lại Maven. Docker: xóa giá trị hai biến khỏi .env và shell, recreate app theo mục 10.3. Không cần xóa dữ liệu hoặc cài lại thư viện. Khi nghi ngờ lộ khóa, thu hồi/đổi khóa trong AI Studio ngay.
+
+**Vị trí mã nguồn:** `backend/src/main/java/vn/huce/GeminiAdvisor.java` (HTTP, schema, timeout và kiểm tra kết quả), `ChatService.java` (phân loại cục bộ, giới hạn vai trò), `ChatController.java` (API), `frontend/src/HuceChat.jsx` (giao diện), `compose.share.yaml` (biến môi trường). Key chỉ ở backend. CI đã nghiệm thu chatbot cục bộ; chưa có khóa thật để nghiệm thu live Gemini từ môi trường phát triển này. Không có cam kết model mẫu hoạt động trên mọi dự án Google.
