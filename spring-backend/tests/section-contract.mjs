@@ -69,3 +69,52 @@ await staff.call('/course-sections/'+created.id+'/cancel?version=1','POST',{},20
 assert.equal((await staff.call(list)).find(x=>x.id===created.id).status,'CANCELLED')
 assert.ok((await staff.call('/schedule-patterns'+term+'&page=1&pageSize=10')).items instanceof Array)
 console.log('PASS: section CRUD, cross-role visibility, scope, pagination, validation, versioning, import rollback and idempotency')
+
+const group=catalog.groups[0], teacher=catalog.lecturers.find(x=>x.code==='GIANGVIEN'), assistant=catalog.lecturers.find(x=>x.code==='GIANGVIEN2')
+const lab=catalog.rooms.find(x=>x.code==='M301'), lab2=catalog.rooms.find(x=>x.code==='M302'), lectureRoom=catalog.rooms.find(x=>x.code==='A101')
+const a=(await staff.call('/course-sections','POST',{...form,code:'QA.SLOT.A',sessionsPerWeek:2},201)).id
+const b=(await staff.call('/course-sections','POST',{...form,code:'QA.SLOT.B'},201)).id
+const assignments='/course-sections/'+a+'/assignments'
+const groups='/course-sections/'+a+'/target-groups'
+await manager.call(assignments,'PUT',{staffId:teacher.id},403)
+await staff.call(assignments,'PUT',{staffId:teacher.id,assistantIds:[teacher.id]},400)
+await staff.call(assignments,'PUT',{staffId:teacher.id,assistantIds:[assistant.id]},204)
+await staff.call(groups,'PUT',{groupIds:[group.id,group.id]},204)
+await staff.call('/course-sections/'+b+'/assignments','PUT',{staffId:teacher.id},204)
+await staff.call('/course-sections/'+b+'/target-groups','PUT',{groupIds:[group.id]},204)
+const slot={sectionId:a,roomId:lab.id,dayOfWeek:1,periodFrom:1}
+const check=async f=>staff.call('/schedule/conflicts/check','POST',f)
+assert.equal((await check(slot)).valid,true)
+assert.ok((await check({...slot,roomId:lectureRoom.id})).issues.some(x=>x.rule==='BR07'))
+assert.ok((await check({...slot,periodFrom:6})).issues.some(x=>x.rule==='BR03'))
+await other.call('/schedule/conflicts/check','POST',slot,403)
+const p=(await staff.call('/schedule-patterns','POST',slot,201)).id
+const clash=await check({...slot,sectionId:b})
+for(const rule of ['BR04','BR05','BR06'])assert.ok(clash.issues.some(x=>x.rule===rule),rule)
+assert.ok(clash.suggestions.length>0)
+await staff.call('/schedule-patterns','POST',{...slot,sectionId:b},409)
+assert.ok((await check({...slot,roomId:lab2.id,periodFrom:3})).issues.some(x=>x.rule==='BR09'))
+await staff.call('/schedule-patterns/'+p,'PATCH',{...slot,periodFrom:2,version:0})
+await staff.call('/schedule-patterns/'+p,'PATCH',{...slot,periodFrom:3,version:0},409)
+const current=(await manager.call('/schedule-patterns'+term)).find(x=>x.id===p)
+assert.equal(current.period_from,2);assert.equal(current.version,1)
+const room={campusId:lab.campus_id,code:lab.code,name:lab.name,capacity:1,type:lab.type,status:lab.status}
+await staff.call('/catalog/rooms/'+lab.id,'PUT',room,409)
+assert.equal((await staff.call('/catalog')).rooms.find(x=>x.id===lab.id).capacity,lab.capacity)
+const newRoom={campusId:lab.campus_id,code:'QA.SPRING.ROOM',name:'Phòng kiểm thử',capacity:40,type:'LECTURE',status:'ACTIVE'}
+await manager.call('/catalog/rooms','POST',newRoom,403)
+const rid=(await staff.call('/catalog/rooms','POST',newRoom,201)).id
+await staff.call('/catalog/rooms/'+rid,'PUT',{...newRoom,capacity:50})
+assert.equal((await manager.call('/catalog')).rooms.find(x=>x.id===rid).capacity,50)
+const holiday={campusId:lab.campus_id,startDate:'2027-01-08',endDate:'2027-01-08',name:'Ngày nghỉ kiểm thử'}
+const hid=(await staff.call('/catalog/holidays','POST',holiday,201)).id
+await staff.call('/catalog/holidays/'+hid,'PUT',{...holiday,name:'Ngày nghỉ cập nhật'})
+assert.equal((await staff.call('/catalog')).holidays.find(x=>x.id===hid).name,'Ngày nghỉ cập nhật')
+const period={campusId:lab.campus_id,periodNo:13,shift:'EVENING',startTime:'18:30',endTime:'19:20',effectiveFrom:'2027-01-01'}
+await staff.call('/catalog/periods','POST',{...period,startTime:'18:00'},400)
+const pid=(await staff.call('/catalog/periods','POST',period,201)).id
+assert.equal((await manager.call('/catalog')).periods.find(x=>x.id===pid).start_time,'18:30')
+await staff.call('/schedule-patterns/'+p+'?version=0','DELETE',undefined,409)
+await staff.call('/schedule-patterns/'+p+'?version=1','DELETE',undefined,204)
+assert.ok(!(await staff.call('/schedule-patterns'+term)).some(x=>x.id===p))
+console.log('PASS: assignment, target groups, room/teacher/group conflicts, scheduling, catalog mutation, rollback and cross-role refresh')
