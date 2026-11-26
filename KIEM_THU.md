@@ -1,6 +1,10 @@
 # Kiểm thử HUCE — Spring Boot
 
-Mốc đã xác minh trước khi dọn backend: commit 482d6de, [CI 2/2 thành công](https://github.com/adolfcsix/hucefake/actions/runs/45795044098). Kết quả đó không tự động áp dụng cho commit mới.
+## Mốc bàn giao đã xác minh
+
+PR #1 đã merge vào main, commit d97c622b525e27b42559eb4d389d17302cf0ef06. [CI main 3/3 PASS](https://github.com/adolfcsix/hucefake/actions/runs/45808094694); [CI PR 3/3 PASS](https://github.com/adolfcsix/hucefake/actions/runs/45803267908). Log main xác nhận 63 route, 63 lượt mở trang Chromium trên 3 kích thước, toàn bộ nhóm nghiệp vụ, bản trắng, bảo mật và npm audit 0 cả dev/runtime. Benchmark 48 lớp/96 buổi: 4907, 4362, 4295 ms với 0 vi phạm cứng, SQL độc lập PASS. Kết quả chỉ áp dụng cho SHA đã kiểm thử.
+
+## Phạm vi kiểm thử
 
 | Kiểm thử | Phạm vi |
 | --- | --- |
@@ -19,3 +23,7 @@ Mốc 5066a97: [CI 2/2 PASS và 63 lượt Chromium](https://github.com/adolfcsi
 Mốc 1adeac0: [CI](https://github.com/adolfcsix/hucefake/actions/runs/45802501746) smoke PASS. Benchmark 3/3, 48 lớp, 96 buổi mỗi lần, quần thể 24, 40 thế hệ; seed 2026: 5851 ms, phạt mềm 64; seed 73: 5276 ms, phạt mềm 71; seed 911: 5661 ms, phạt mềm 47; cả ba 0 vi phạm cứng, SQL độc lập PASS. Container FAIL do Maven Central HTTP 429 khi tải parent POM. Bổ sung cache build, retry có giới hạn chỉ cho lỗi mạng, chạy container sau smoke và hủy CI cũ khi HEAD đổi. npm ci ghi nhận 1 cảnh báo mức cao chưa xác định thư viện; job dependency-audit xuất cả báo cáo đầy đủ lẫn runtime và không bỏ qua lỗi mức cao. Chưa được xem là đã xử lý lỗ hổng cho đến khi có báo cáo và kiểm thử lại.
 
 Mốc aa26f83: npm audit xác định Vite 7.2.2 có cảnh báo mức cao trong dev server, production audit 0. Theo fixAvailable từ npm audit, nâng Vite lên 7.3.8 và esbuild lên 0.28.1 (theo range mới). Lockfile cập nhật bằng metadata và integrity chính thức registry.npmjs.org cho toàn bộ binary đa nền tảng. Chờ npm ci, audit, build và Chromium trên HEAD mới; không coi đã khắc phục cho đến khi kiểm thử đạt.
+
+## Bổ sung sau bàn giao
+
+Bài kiểm thử Chromium mới tại `frontend/e2e/workflow.mjs` chạy qua Vite proxy đến Java trong Docker, bao gồm tạo/sửa/hủy lớp, xung đột phiên bản giữa hai màn hình, phân công, lưu nhóm đối tượng và quản lý đọc dữ liệu sau reload. Chỉ chạy trên demo CI riêng. Chờ kết quả CI của PR bổ sung trước khi gộp main.
