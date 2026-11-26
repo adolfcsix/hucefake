@@ -1,0 +1,30 @@
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://127.0.0.1:5432/huce_spring}
+    username: ${DB_USER:fm05}
+    password: ${DB_PASSWORD:fm05_local}
+    hikari:
+      connection-init-sql: SET TIME ZONE 'Asia/Ho_Chi_Minh'
+  flyway:
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+  session:
+    timeout: 8h
+    jdbc:
+      initialize-schema: never
+  jackson:
+    time-zone: Asia/Ho_Chi_Minh
+server:
+  address: ${HOST:127.0.0.1}
+  port: ${PORT:8080}
+  error:
+    include-message: never
+  servlet:
+    session:
+      cookie:
+        name: HUCE_SPRING_SID
+        http-only: true
+        same-site: lax
+        secure: ${COOKIE_SECURE:false}
+huce:
+  demo: ${DEMO:false}
