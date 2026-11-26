@@ -45,7 +45,7 @@ Mở VS Code → File → Open Folder → chọn thư mục chứa trực tiếp
 git clone https://github.com/adolfcsix/hucefake.git
 cd hucefake
 ```
-Trong thời gian PR #1 chưa được gộp, chọn nhánh migration/spring-boot hoặc chạy `git switch migration/spring-boot` sau khi clone.
+Sử dụng nhánh `main` để chạy bản bàn giao Spring Boot. Kiểm tra nhánh hiện tại bằng `git branch --show-current`.
 
 ## 3. Dùng thử bằng Docker
 
