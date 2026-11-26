@@ -151,6 +151,11 @@ jobs:
       - name: Browser recovery and actual database restart
         working-directory: frontend
         run: HUCE_BROWSER_CI=true HUCE_TEST_URL=http://127.0.0.1:8081 node e2e/recovery.mjs
+      - name: Private Docker browser acceptance
+        env:
+          HUCE_BROWSER_CI: 'true'
+          FM05_SETUP_PASSWORD: PrivateBrowserCI@2026
+        run: bash frontend/e2e/private-browser.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:

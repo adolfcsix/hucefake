@@ -112,7 +112,7 @@ Mở http://localhost:5173. Vite proxy /api và /health sang 8080. Nếu đổi 
 
 ## 5. Dữ liệu trắng và tài khoản riêng
 
-Không sử dụng chung database demo và database riêng. Bản trắng chỉ có schema và bốn vai trò; không có tài khoản hoặc lớp mẫu. Không bật DEMO=true trên database riêng.
+Không sử dụng chung database demo và database riêng. Bản trắng chỉ có schema và bốn vai trò; không có tài khoản hoặc lớp mẫu. Nếu chưa nạp học kỳ, giao diện hiển thị hướng dẫn theo vai trò; sau khi nạp bằng Java CLI, bấm Tải lại dữ liệu để tiếp tục. Thông báo và HUCEChat vẫn sử dụng được khi chưa có học kỳ. Không bật DEMO=true trên database riêng.
 
 Từ thư mục gốc, sao chép `config/local.template.json` thành `config/local.json`. Ví dụ dữ liệu (thay theo trường của bạn):
 ```json
