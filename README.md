@@ -172,7 +172,22 @@ Nhân viên tạo/nhập lớp, phân công, xếp tay hoặc GA và gửi duy�
 
 HUCEChat dùng nhận diện tiếng Việt cục bộ, lưu hội thoại theo tài khoản và phạm vi vai trò. Tác vụ ghi chỉ thực hiện khi xác nhận đề xuất. Tùy chọn Gemini: đặt GEMINI_API_KEY và GEMINI_MODEL hợp lệ ở backend; không đặt key vào frontend. Docker Compose đọc biến môi trường hoặc .env. Mô hình chỉ phân loại ý định, không có quyền gọi SQL. Khi chưa cấu hình, chatbot vẫn tra cứu và thực hiện các nghiệp vụ cục bộ.
 
-## 8. Kiểm thử và xử lý lỗi
+## 8. Sao lưu và khôi phục PostgreSQL
+
+Dùng PostgreSQL client 16 tương thích server. Dừng ứng dụng trước khi sao lưu nếu muốn một mốc dữ liệu bàn giao không có thao tác đang diễn ra. Chọn đúng database riêng, không dùng database demo. Bản dump có thể chứa hồ sơ, email, mật khẩu đã băm và hội thoại: lưu ngoài repository, hạn chế truy cập và mã hóa nơi lưu.
+
+Ví dụ PowerShell (PostgreSQL local; thay host/user/database theo cấu hình thực tế; nhập mật khẩu khi được hỏi):
+```powershell
+pg_dump -h 127.0.0.1 -p 5432 -U fm05 -d huce_private -Fc --exclude-table-data=public.spring_session --exclude-table-data=public.spring_session_attributes -f huce-private.dump
+pg_restore -l huce-private.dump
+createdb -h 127.0.0.1 -p 5432 -U fm05 huce_restored
+pg_restore -h 127.0.0.1 -p 5432 -U fm05 -d huce_restored --exit-on-error --single-transaction --no-owner --no-privileges huce-private.dump
+```
+Nếu tài khoản ứng dụng không có quyền tạo database, dùng pgAdmin/tài khoản quản trị để tạo database mới có owner fm05 trước khi restore. Không restore vào database đang chạy hoặc dùng `--clean` để ghi đè dữ liệu cũ. Đặt DB_URL thành `jdbc:postgresql://127.0.0.1:5432/huce_restored`, DEMO=false; giữ nguyên DB_USER/DB_PASSWORD, chạy lại backend. Đăng nhập mới bằng tài khoản riêng, kiểm tra danh mục, lớp và lịch. Hai bảng phiên chỉ sao lưu schema; người dùng phải đăng nhập lại sau khôi phục. Giữ database nguồn và bản dump đến khi kiểm tra xong. Không dùng quy trình này cho dump Node/Express cũ chưa chuyển đổi.
+
+Docker: dùng lệnh `docker compose -f compose.share.yaml -f compose.private.yaml exec postgres pg_dump` với tham số tương ứng hoặc kết nối bằng công cụ PostgreSQL trong container. Không chuyển binary dump qua toán tử chuyển hướng PowerShell cũ; dùng `pg_dump -f /tmp/huce-private.dump` bên trong container, rồi `docker compose ... cp postgres:/tmp/huce-private.dump ./huce-private.dump`. Khi restore, dùng `cp` theo chiều ngược lại, tạo database đích mới, chạy pg_restore trong container và cấu hình FM05_DB_NAME trỏ đúng database đích trước khi khởi động lại app. Không đổi tên volume để thay database.
+
+## 9. Kiểm thử và xử lý lỗi
 
 - Maven: `cd backend`, `mvn clean verify`.
 - Frontend: `cd frontend`, `npm ci`, `npm test`, `npm run build`.
