@@ -70,6 +70,12 @@ class SectionController {
         var subject=db.need("SELECT * FROM subjects WHERE id=?",id(f.get("subjectId")));
         unit(a,subject.get("managing_unit_id"));return values(sem,subject,f);
     }
+    Map<String,Object> previewDraft(Accounts.Actor a,Map<String,Object> input){
+        role(a,"STAFF");var f=form(a,input);unlocked(f.sem);
+        if(db.exists("SELECT 1 FROM course_sections WHERE semester_id=? AND code=?",f.sem,f.code))throw new ApiFailure(409,"DUPLICATE_REQUEST","Mã lớp đã có trong học kỳ này.",Map.of("field","code"));
+        return Map.of("semesterId",f.sem,"subjectId",f.subject,"code",f.code,"capacity",f.capacity,"sessionsPerWeek",f.count,"periodsPerSession",f.length,"requiredRoomType",f.type,"startDate",f.from,"endDate",f.to);
+    }
+    Object saveDraft(Accounts.Actor a,Map<String,Object> input){role(a,"STAFF");return create(a,form(a,input));}
     private Object create(Accounts.Actor a,Form f){
         unlocked(f.sem);
         if(db.exists("SELECT 1 FROM course_sections WHERE semester_id=? AND code=?",f.sem,f.code))throw new ApiFailure(409,"DUPLICATE_REQUEST","Mã lớp đã có trong học kỳ này.",Map.of("field","code"));
