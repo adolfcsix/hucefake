@@ -28,6 +28,8 @@ const term='?semesterId='+sem.id
 const list='/course-sections'+term
 const form={semesterId:sem.id,subjectId:subject.id,code:'QA.SPRING',capacity:30,sessionsPerWeek:1,periodsPerSession:2,requiredRoomType:'COMPUTER_LAB',startDate:sem.start_date,endDate:sem.end_date}
 const before=await staff.call(list)
+assert.equal(before.length,3,'Fresh demo must have original three draft sections')
+assert.ok(before.every(x=>x.status==='DRAFT' && x.staff_id && x.group_ids.length===1))
 await lecturer.call(list,'GET',undefined,403)
 await student.call(list,'GET',undefined,403)
 await manager.call('/course-sections','POST',form,403)
