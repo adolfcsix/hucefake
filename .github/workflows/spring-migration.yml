@@ -63,6 +63,7 @@ jobs:
             test "$(curl -sS -o /dev/null -w '%{http_code}' -b "$jar" http://127.0.0.1:8080/api/me)" = 401
             rm -f "$jar"
           done
+          HUCE_TEST_URL=http://127.0.0.1:8080 node tests/section-contract.mjs
       - name: React build and tests
         working-directory: frontend
         run: |
