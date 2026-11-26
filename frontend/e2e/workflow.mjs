@@ -94,7 +94,9 @@ try{
  const check=dialog(staff).getByRole('checkbox').first()
  await check.check()
  await save(staff)
- // Reopen to check the persisted selection, not only optimistic UI state.
+ // Reload to check the persisted selection, not only optimistic UI state.
+ await refresh(staff)
+ await row(staff).waitFor()
  await button(row(staff),'Lớp đối tượng').click()
  assert.equal(await dialog(staff).getByRole('checkbox').first().isChecked(),true)
  await button(dialog(staff),'Đóng').last().click()
