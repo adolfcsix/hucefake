@@ -13,3 +13,5 @@ Mốc đã xác minh trước khi dọn backend: commit 482d6de, [CI 2/2 thành 
 Kiểm tra kết quả CI trên đúng SHA mới nhất trước khi bàn giao. Gemini API thật chưa kiểm thử do không có key; GA benchmark lớn và chuyển dữ liệu từ database Express cũ chưa nghiệm thu. Chromium smoke test không thay thế toàn bộ kiểm thử thao tác UI và kiểm toán bảo mật.
 
 Các lệnh: Maven `mvn clean verify` trong backend; `node backend/tests/api-surface.mjs` tại gốc; `npm test` và `npm run build` trong frontend. Các test tích hợp ghi dữ liệu, chỉ chạy trên database demo/CI mới.
+
+Mốc 5066a97: [CI 2/2 PASS và 63 lượt Chromium](https://github.com/adolfcsix/hucefake/actions/runs/45801085137). Mốc 8987d4b: [smoke PASS, container FAIL do Ubuntu mirror lệch kích thước gói](https://github.com/adolfcsix/hucefake/actions/runs/45801264899); smoke gồm thu hồi phiên, CSRF, giới hạn đăng nhập. Đã thay curl trong container bằng health probe Java; chờ CI HEAD. Bổ sung benchmark tích hợp 48 lớp/96 buổi, 3 seed, lưu thời gian và fitness, xác minh SQL độc lập; chưa có số đo trước khi CI chạy. Đây là tải kiểm thử trung bình, không phải cam kết hiệu năng quy mô toàn trường.

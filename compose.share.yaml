@@ -30,9 +30,10 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
+      test: ["CMD", "java", "-jar", "/app/huce.jar", "healthcheck"]
       interval: 5s
-      timeout: 3s
+      timeout: 5s
+      start_period: 20s
       retries: 24
 volumes:
   data:

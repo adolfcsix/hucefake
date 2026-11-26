@@ -50,6 +50,7 @@ jobs:
           DB_URL: jdbc:postgresql://127.0.0.1:5432/huce_spring
           DB_USER: fm05
           DB_PASSWORD: fm05_local
+          PG_CONTAINER: ${{ job.services.postgres.id }}
         run: |
           set -euo pipefail
           java -jar target/huce-backend-1.0.0.jar > /tmp/huce.log 2>&1 &
@@ -72,6 +73,13 @@ jobs:
             rm -f "$jar"
           done
           HUCE_TEST_URL=http://127.0.0.1:8080 node tests/section-contract.mjs
+          HUCE_BENCH_CI=true HUCE_TEST_URL=http://127.0.0.1:8080 node tests/ga-benchmark.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: huce-ga-benchmark
+          path: backend/target/ga-benchmark.json
+          if-no-files-found: ignore
       - name: Private database and Java setup CLI
         working-directory: backend
         env:

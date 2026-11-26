@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.*;
 class CatalogController {
     private final SqlStore store;
     CatalogController(SqlStore store){this.store=store;}
-    @GetMapping("/health") Map<String,String> health(){store.db.queryForObject("SELECT 1",Integer.class);return Map.of("status","ok");}
+    @GetMapping("/health") Map<String,String> health(){if(!store.exists("SELECT 1 FROM fm05_runtime_mode WHERE singleton=true"))throw new ApiFailure(503,"NOT_READY","Hệ thống đang khởi tạo.");return Map.of("status","ok");}
     @GetMapping("/api/catalog") Map<String,Object> catalog(Authentication authentication){
         var actor=(Accounts.Actor)authentication.getPrincipal();
         var out=new LinkedHashMap<String,Object>();

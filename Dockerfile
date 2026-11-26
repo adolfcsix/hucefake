@@ -13,8 +13,7 @@ COPY --from=frontend /workspace/frontend/dist ./backend/src/main/resources/stati
 RUN mvn -B -f backend/pom.xml clean package -DskipTests
 
 FROM eclipse-temurin:21-jre-jammy
-RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/* \
-    && groupadd --system huce && useradd --system --gid huce --home-dir /app huce
+RUN groupadd --system huce && useradd --system --gid huce --home-dir /app huce
 WORKDIR /app
 ENV HOST=0.0.0.0
 COPY --from=backend /workspace/backend/target/huce-backend-1.0.0.jar /app/huce.jar
