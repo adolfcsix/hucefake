@@ -8,6 +8,7 @@ import org.springframework.boot.autoconfigure.security.servlet.UserDetailsServic
 @SpringBootApplication(exclude = UserDetailsServiceAutoConfiguration.class)
 public class HuceApplication {
     public static void main(String[] args) {
+        if(args.length>0&&"setup".equals(args[0])){System.exit(SetupCommand.run(args));return;}
         SpringApplication.run(HuceApplication.class, args);
     }
 }
