@@ -23,7 +23,7 @@ function fold(line) {
 }
 
 export function makeCalendar(rows, generatedAt = Date.now()) {
-  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//FM05//Thoi khoa bieu//VI', 'CALSCALE:GREGORIAN']
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//HUCE//Thoi khoa bieu//VI', 'CALSCALE:GREGORIAN']
   const stamp = utcStamp(generatedAt)
   let events = 0
   for (const row of rows) {

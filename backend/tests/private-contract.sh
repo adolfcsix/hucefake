@@ -47,3 +47,31 @@ kill "$pid"
 wait "$pid" || true
 pid=''
 echo 'PASS: private CLI, empty database, four real accounts, rollback, no demo leakage, private API'
+
+# Back up only the disposable private database; do not restore authenticated sessions.
+test "$(sql 'SELECT demo FROM fm05_runtime_mode')" = f
+docker exec "$PG_CONTAINER" pg_dump -U fm05 -d huce_private_ci -Fc --exclude-table-data=public.spring_session --exclude-table-data=public.spring_session_attributes > "$temp/private.dump"
+test -s "$temp/private.dump"
+docker exec "$PG_CONTAINER" createdb -U fm05 huce_restore_ci
+docker exec -i "$PG_CONTAINER" pg_restore -U fm05 -d huce_restore_ci --exit-on-error --single-transaction --no-owner --no-privileges < "$temp/private.dump"
+restored() { docker exec "$PG_CONTAINER" psql -U fm05 -d huce_restore_ci -Atqc "$1"; }
+test "$(restored 'SELECT count(*) FROM spring_session')" = 0
+test "$(restored 'SELECT count(*) FROM spring_session_attributes')" = 0
+test "$(restored 'SELECT demo FROM fm05_runtime_mode')" = f
+for table in users roles organizational_units staff_profiles staff_campuses campuses semesters subjects academic_groups course_sections section_assignments section_target_groups section_enrollments; do
+  query="SELECT md5(COALESCE(string_agg(to_jsonb(t)::text,E'\\n' ORDER BY to_jsonb(t)::text),'')) FROM $table t"
+  test "$(sql "$query")" = "$(restored "$query")"
+done
+DB_URL=jdbc:postgresql://127.0.0.1:5432/huce_restore_ci java -jar "$jar" > "$temp/server.log" 2>&1 &
+pid=$!
+for i in $(seq 1 60); do
+  if curl -fsS http://127.0.0.1:8080/health; then break; fi
+  kill -0 "$pid"
+  sleep 2
+done
+curl -fsS http://127.0.0.1:8080/health
+HUCE_TEST_URL=http://127.0.0.1:8080 node tests/restore-contract.mjs
+kill "$pid"
+wait "$pid" || true
+pid=''
+echo 'PASS: private PostgreSQL dump, transactional restore, data checksums, fresh authentication and post-restore API writes'

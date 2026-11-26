@@ -6,3 +6,6 @@ config/
 **/dist
 **/target
 **/e2e-results
+**/audit-results
+*.backup
+*.sql.gz

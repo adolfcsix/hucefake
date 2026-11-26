@@ -14,6 +14,7 @@ test('lịch dùng giờ Việt Nam, định danh ổn định và ngắt dòng 
   const lines=calendar.split('\r\n')
   assert.ok(lines.every(line=>Buffer.byteLength(line)<=75))
   assert.equal(lines.filter(line=>line==='BEGIN:VEVENT').length,1)
+  assert.ok(lines.includes('PRODID:-//HUCE//Thoi khoa bieu//VI'))
   assert.ok(lines.includes('UID:fm05-session-13@campus.local'))
   assert.ok(lines.includes('DTSTART:20261126T000000Z'))
   assert.ok(lines.includes('DTEND:20261126T014500Z'))

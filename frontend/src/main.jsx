@@ -67,8 +67,20 @@ function Brand() {
 
 function App() {
   const [user, setUser] = useState(undefined)
-  useEffect(() => { api('/me').then(setUser).catch(() => setUser(null)) }, [])
-  if (user === undefined) return <main className="centered">Đang tải…</main>
+  const [startupError, setStartupError] = useState(null)
+  const [attempt, retry] = useState(0)
+  useEffect(() => {
+    let active = true
+    setStartupError(null)
+    api('/me').then(value => { if (active) setUser(value) }).catch(error => {
+      if (!active) return
+      if (error.status === 401) setUser(null)
+      else setStartupError(error)
+    })
+    return () => { active = false }
+  }, [attempt])
+  if (user === undefined) return <main className="centered">{startupError ?
+    <div className="stack"><ErrorBox error={startupError} /><button onClick={() => retry(n => n+1)}>Thử lại kết nối</button></div> : 'Đang tải…'}</main>
   if (!user) return <Login onLogin={setUser} />
   return <Workspace key={user.id} user={user} onLogout={() => setUser(null)} />
 }
@@ -198,9 +210,16 @@ function Workspace({ user, onLogout }) {
       </header>
       <div className="content">
         <ErrorBox error={error || catalog.error} />
+        {catalog.error && <button className="quiet" onClick={() => { if (catalog.error.status === 401) { location.hash = ''; onLogout() } else { setError(null); reload() } }}>{catalog.error.status === 401 ? 'Đăng nhập lại' : 'Thử tải lại dữ liệu'}</button>}
         {catalog.data && (semester || ['catalog','notifications'].includes(page)) ?
           <Screen key={page + ':' + semester?.id} {...{ user, catalog:catalog.data, semester, revision, reload, setSchedulingContext }} /> :
-          !catalog.error && <div className="empty">{catalog.data ? 'Chưa có học kỳ.' : 'Đang tải dữ liệu…'}</div>}
+          !catalog.error && <div className="empty" role="status">{catalog.data ? <>
+            <strong>Chưa có học kỳ.</strong>
+            <p>{user.role === 'STAFF' || user.role === 'MANAGER' ?
+              'Nạp học kỳ và danh mục bằng công cụ thiết lập Java theo README, sau đó tải lại dữ liệu.' :
+              'Hãy liên hệ bộ phận đào tạo để được cập nhật học kỳ.'}</p>
+            <button type="button" className="quiet" onClick={reload}>Tải lại dữ liệu</button>
+          </> : 'Đang tải dữ liệu…'}</div>}
       </div>
     </main>
     <HuceChat role={user.role} semester={semester} page={page} reload={reload}

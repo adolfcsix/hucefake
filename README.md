@@ -45,7 +45,7 @@ Mở VS Code → File → Open Folder → chọn thư mục chứa trực tiếp
 git clone https://github.com/adolfcsix/hucefake.git
 cd hucefake
 ```
-Trong thời gian PR #1 chưa được gộp, chọn nhánh migration/spring-boot hoặc chạy `git switch migration/spring-boot` sau khi clone.
+Nhánh `main` hiện chứa bản Spring Boot đã được nghiệm thu. Nếu tải ZIP, dùng Code → Download ZIP ở nhánh `main`; giải nén rồi mở thư mục chứa `backend/` và `frontend/`. Không cần chuyển sang nhánh migration.
 
 ## 3. Dùng thử bằng Docker
 
@@ -112,7 +112,7 @@ Mở http://localhost:5173. Vite proxy /api và /health sang 8080. Nếu đổi 
 
 ## 5. Dữ liệu trắng và tài khoản riêng
 
-Không sử dụng chung database demo và database riêng. Bản trắng chỉ có schema và bốn vai trò; không có tài khoản hoặc lớp mẫu. Không bật DEMO=true trên database riêng.
+Không sử dụng chung database demo và database riêng. Bản trắng chỉ có schema và bốn vai trò; không có tài khoản hoặc lớp mẫu. Nếu chưa nạp học kỳ, giao diện hiển thị hướng dẫn theo vai trò; sau khi nạp bằng Java CLI, bấm Tải lại dữ liệu để tiếp tục. Thông báo và HUCEChat vẫn sử dụng được khi chưa có học kỳ. Không bật DEMO=true trên database riêng.
 
 Từ thư mục gốc, sao chép `config/local.template.json` thành `config/local.json`. Ví dụ dữ liệu (thay theo trường của bạn):
 ```json
@@ -172,12 +172,38 @@ Nhân viên tạo/nhập lớp, phân công, xếp tay hoặc GA và gửi duy�
 
 HUCEChat dùng nhận diện tiếng Việt cục bộ, lưu hội thoại theo tài khoản và phạm vi vai trò. Tác vụ ghi chỉ thực hiện khi xác nhận đề xuất. Tùy chọn Gemini: đặt GEMINI_API_KEY và GEMINI_MODEL hợp lệ ở backend; không đặt key vào frontend. Docker Compose đọc biến môi trường hoặc .env. Mô hình chỉ phân loại ý định, không có quyền gọi SQL. Khi chưa cấu hình, chatbot vẫn tra cứu và thực hiện các nghiệp vụ cục bộ.
 
-## 8. Kiểm thử và xử lý lỗi
+## 8. Sao lưu và khôi phục PostgreSQL
+
+Dùng PostgreSQL client 16 tương thích server. Dừng ứng dụng trước khi sao lưu nếu muốn một mốc dữ liệu bàn giao không có thao tác đang diễn ra. Chọn đúng database riêng, không dùng database demo. Bản dump có thể chứa hồ sơ, email, mật khẩu đã băm và hội thoại: lưu ngoài repository, hạn chế truy cập và mã hóa nơi lưu.
+
+Ví dụ PowerShell (PostgreSQL local; thay host/user/database theo cấu hình thực tế; nhập mật khẩu khi được hỏi):
+```powershell
+pg_dump -h 127.0.0.1 -p 5432 -U fm05 -d huce_private -Fc --exclude-table-data=public.spring_session --exclude-table-data=public.spring_session_attributes -f huce-private.dump
+pg_restore -l huce-private.dump
+createdb -h 127.0.0.1 -p 5432 -U fm05 huce_restored
+pg_restore -h 127.0.0.1 -p 5432 -U fm05 -d huce_restored --exit-on-error --single-transaction --no-owner --no-privileges huce-private.dump
+```
+Nếu tài khoản ứng dụng không có quyền tạo database, dùng pgAdmin/tài khoản quản trị để tạo database mới có owner fm05 trước khi restore. Không restore vào database đang chạy hoặc dùng `--clean` để ghi đè dữ liệu cũ. Đặt DB_URL thành `jdbc:postgresql://127.0.0.1:5432/huce_restored`, DEMO=false; giữ nguyên DB_USER/DB_PASSWORD, chạy lại backend. Đăng nhập mới bằng tài khoản riêng, kiểm tra danh mục, lớp và lịch. Hai bảng phiên chỉ sao lưu schema; người dùng phải đăng nhập lại sau khôi phục. Giữ database nguồn và bản dump đến khi kiểm tra xong. Không dùng quy trình này cho dump Node/Express cũ chưa chuyển đổi.
+
+Docker (ví dụ database riêng mặc định là huce; nếu dùng FM05_DB_NAME khác, thay đúng tên nguồn). Chạy tại thư mục gốc:
+```powershell
+docker compose -f compose.share.yaml -f compose.private.yaml stop app
+docker compose -f compose.share.yaml -f compose.private.yaml exec postgres pg_dump -U fm05 -d huce -Fc --exclude-table-data=public.spring_session --exclude-table-data=public.spring_session_attributes -f /tmp/huce-private.dump
+docker compose -f compose.share.yaml -f compose.private.yaml cp postgres:/tmp/huce-private.dump ./huce-private.dump
+docker compose -f compose.share.yaml -f compose.private.yaml cp ./huce-private.dump postgres:/tmp/huce-restore.dump
+docker compose -f compose.share.yaml -f compose.private.yaml exec postgres createdb -U fm05 huce_restored
+docker compose -f compose.share.yaml -f compose.private.yaml exec postgres pg_restore -U fm05 -d huce_restored --exit-on-error --single-transaction --no-owner --no-privileges /tmp/huce-restore.dump
+$env:FM05_DB_NAME='huce_restored'
+docker compose -f compose.share.yaml -f compose.private.yaml up -d --wait
+```
+Kiểm tra đăng nhập và dữ liệu, giữ nguyên database nguồn. Nếu cần quay lại nguồn, đặt FM05_DB_NAME về tên database nguồn và chạy lại up. Giữ nguyên project/volume; không dùng down -v. Sau khi kiểm tra, có thể xóa hai tệp tạm trong container bằng `docker compose -f compose.share.yaml -f compose.private.yaml exec postgres rm -f /tmp/huce-private.dump /tmp/huce-restore.dump`. Không chuyển binary dump qua toán tử chuyển hướng PowerShell cũ.
+
+## 9. Kiểm thử và xử lý lỗi
 
 - Maven: `cd backend`, `mvn clean verify`.
 - Frontend: `cd frontend`, `npm ci`, `npm test`, `npm run build`.
-- Hợp đồng API: từ gốc `node backend/tests/api-surface.mjs`.
-- GitHub Actions chạy kiểm thử tích hợp PostgreSQL, bản trắng, container và Chromium. Xem [Actions](https://github.com/adolfcsix/hucefake/actions) và [KIEM_THU.md](KIEM_THU.md).
+- Hợp đồng API: từ gốc `node backend/tests/api-surface.mjs` và `node backend/tests/source-integrity.mjs` (trong bản clone Git).
+- GitHub Actions chạy kiểm thử tích hợp PostgreSQL, bản trắng, container, Chromium và kiểm thử thao tác ghi qua Vite proxy. Xem trạng thái trên đúng commit trước khi bàn giao. Xem [Actions](https://github.com/adolfcsix/hucefake/actions) và [KIEM_THU.md](KIEM_THU.md).
 - Nếu 8080 không kết nối, kiểm tra backend đã khởi động, DB_URL và mật khẩu; nếu 5432 bận, kiểm tra dịch vụ PostgreSQL đang chạy. Lỗi demo/private nghĩa là đang dùng sai database, không xóa dữ liệu để sửa.
 - Backup trước mọi thay đổi. Database Express cũ không được tự động baseline bởi Flyway; bản hiện tại được thiết kế cho PostgreSQL mới. Không nhập bản dump cũ trực tiếp nếu chưa đối chiếu migration và dữ liệu.
 - Các tài khoản mẫu và Docker local không phải cấu hình production. Không đưa demo ra Internet; đã có giới hạn đăng nhập theo IP trong mỗi tiến trình Java (mặc định 40 yêu cầu/phút, tùy chỉnh HUCE_LOGIN_ATTEMPTS_PER_MINUTE). Triển khai thật cần HTTPS, bí mật riêng, giới hạn phân tán tại reverse proxy, backup và kiểm toán bảo mật. Không tin X-Forwarded-For do client tự gửi.

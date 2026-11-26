@@ -42,7 +42,9 @@ jobs:
         with:
           node-version: '22'
       - name: Verify HTTP route inventory
-        run: node backend/tests/api-surface.mjs
+        run: |
+          node backend/tests/api-surface.mjs
+          node backend/tests/source-integrity.mjs
       - name: Compile and verify Java
         working-directory: backend
         run: mvn -B clean verify
@@ -133,6 +135,29 @@ jobs:
           npm install --no-save --package-lock=false playwright@1.56.1
           npx playwright install --with-deps chromium
           HUCE_TEST_URL=http://127.0.0.1:8081 node e2e/browser.mjs
+      - name: Vite development proxy and real browser write workflows
+        working-directory: frontend
+        run: |
+          set -euo pipefail
+          BACKEND_URL=http://127.0.0.1:8081 npm run dev -- --host 127.0.0.1 --port 5173 --strictPort > /tmp/huce-vite.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true; cat /tmp/huce-vite.log' EXIT
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:5173/health; then break; fi
+            kill -0 "$pid"
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:5173/health
+          HUCE_BROWSER_CI=true HUCE_TEST_URL=http://127.0.0.1:5173 node e2e/workflow.mjs
+          HUCE_BROWSER_CI=true HUCE_TEST_URL=http://127.0.0.1:5173 node e2e/scheduling.mjs
+      - name: Browser recovery and actual database restart
+        working-directory: frontend
+        run: HUCE_BROWSER_CI=true HUCE_TEST_URL=http://127.0.0.1:8081 node e2e/recovery.mjs
+      - name: Private Docker browser acceptance
+        env:
+          HUCE_BROWSER_CI: 'true'
+          FM05_SETUP_PASSWORD: PrivateBrowserCI@2026
+        run: bash frontend/e2e/private-browser.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:

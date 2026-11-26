@@ -13,3 +13,6 @@ frontend/dist/
 backend/target/
 
 frontend/e2e-results/
+frontend/audit-results/
+*.backup
+*.sql.gz
