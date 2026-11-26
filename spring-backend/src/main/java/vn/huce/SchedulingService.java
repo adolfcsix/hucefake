@@ -127,12 +127,13 @@ class SchedulingService {
         for(var other:ctx.patterns)if(slot.id==0||slot.id!=other.id)out.addAll(pair(ctx,slot,other));
         return out;
     }
-    List<Map<String,Object>> actual(Context ctx,Slot slot){
-        long campus=n(ctx.rooms.get(slot.room),"campus_id");boolean teaching=false;
+    boolean busy(Context ctx,Slot slot,String kind){
+        var section=ctx.sections.get(slot.section);var members=staff(ctx,slot);
+        return ctx.availability.stream().anyMatch(r->members.contains(n(r,"staff_id"))&&n(r,"semester_id")==n(section,"semester_id")&&n(r,"day_of_week")==slot.day&&kind.equals(r.get("kind"))&&n(r,"period_from")<=slot.last()&&n(r,"period_to")>=slot.first);
+    }
+    List<Map<String,Object>> actualConflicts(Context ctx,Slot slot,Span span,long exclude){
         String staffArray="{"+String.join(",",staff(ctx,slot).stream().map(String::valueOf).toList())+"}";
-        for(var date:occurrences(slot)){
-            if(holiday(ctx,campus,date))continue;teaching=true;var span=interval(ctx,slot,date);
-            var rows=db.rows("""
+        return db.rows("""
               SELECT x.id,c.code AS section_code,r.code AS "roomCode",x.period_from AS "periodFrom",x.period_count AS "periodCount",
                 to_char(x.start_at,'YYYY-MM-DD"T"HH24:MI:SS') AS start_at,
                 ARRAY(SELECT g.code FROM section_target_groups a JOIN section_target_groups b USING(group_id) JOIN academic_groups g ON g.id=a.group_id
@@ -140,11 +141,17 @@ class SchedulingService {
                 CASE WHEN x.room_id=? THEN 'BR04'
                   WHEN (ARRAY[x.staff_id] || ARRAY(SELECT a.staff_id FROM section_assignments a WHERE a.section_id=x.section_id AND a.role='ASSISTANT' AND a.valid_to IS NULL)) && ?::bigint[] THEN 'BR05' ELSE 'BR06' END AS rule
               FROM class_sessions x JOIN course_sections c ON c.id=x.section_id LEFT JOIN teaching_rooms r ON r.id=x.room_id
-              WHERE x.status<>'CANCELLED' AND x.start_at<? AND x.end_at>?
+              WHERE x.id<>? AND x.status<>'CANCELLED' AND x.start_at<? AND x.end_at>?
               AND (x.room_id=? OR (ARRAY[x.staff_id] || ARRAY(SELECT a.staff_id FROM section_assignments a WHERE a.section_id=x.section_id AND a.role='ASSISTANT' AND a.valid_to IS NULL)) && ?::bigint[]
                   OR x.section_id=? OR EXISTS(SELECT 1 FROM section_target_groups a JOIN section_target_groups b USING(group_id) WHERE a.section_id=x.section_id AND b.section_id=?))
               ORDER BY x.id
-              """,slot.section,slot.room,staffArray,Timestamp.valueOf(span.end),Timestamp.valueOf(span.start),slot.room,staffArray,slot.section,slot.section);
+              """,slot.section,slot.room,staffArray,exclude,Timestamp.valueOf(span.end),Timestamp.valueOf(span.start),slot.room,staffArray,slot.section,slot.section);
+    }
+    List<Map<String,Object>> actual(Context ctx,Slot slot){
+        long campus=n(ctx.rooms.get(slot.room),"campus_id");boolean teaching=false;
+        for(var date:occurrences(slot)){
+            if(holiday(ctx,campus,date))continue;teaching=true;
+            var rows=actualConflicts(ctx,slot,interval(ctx,slot,date),0);
             if(!rows.isEmpty())return rows;
         }
         return teaching?List.of():List.of(issue("BR14","Lịch định kỳ không có ngày học vì toàn bộ ngày đều nghỉ.",null));
