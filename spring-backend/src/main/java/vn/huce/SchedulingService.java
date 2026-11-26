@@ -109,8 +109,9 @@ class SchedulingService {
             if(sameStaff)out.add(pairIssue(ctx,b,"BR05","Giảng viên đã có lịch dạy."));
             if(sameGroup){
                 var issue=pairIssue(ctx,b,"BR06","Lớp hành chính đối tượng đã có lịch.");
-                var codes=db.rows("SELECT g.code FROM section_target_groups a JOIN section_target_groups b USING(group_id) JOIN academic_groups g ON g.id=a.group_id WHERE a.section_id=? AND b.section_id=? ORDER BY g.code",a.section,b.section);
-                issue.put("groupCodes",codes.stream().map(r->r.get("code")).toList());out.add(issue);
+                var ids=(Object[])other.get("group_ids");var codes=(Object[])other.get("group_codes");var shared=new ArrayList<Object>();
+                for(int i=0;i<ids.length;i++)if(groups.contains(nullableId(ids[i])))shared.add(codes[i]);
+                issue.put("groupCodes",shared);out.add(issue);
             }
         }return out;
     }
