@@ -7,6 +7,7 @@ on:
       - 'backend/**'
       - 'frontend/**'
       - 'Dockerfile'
+      - '.ci-maven-cache/**'
       - 'compose*.yaml'
       - 'config/**'
       - '.github/workflows/spring-migration.yml'
@@ -102,11 +103,35 @@ jobs:
           npm test
           npm run build
 
+      - name: Export verified Maven repository for offline Docker build
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/huce-maven-seed"
+          tar --exclude='*.lastUpdated' -C "$HOME/.m2/repository" -czf "$RUNNER_TEMP/huce-maven-seed/repository.tar.gz" .
+          cd "$RUNNER_TEMP/huce-maven-seed"
+          sha256sum repository.tar.gz > repository.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: huce-ci-maven-repository
+          path: ${{ runner.temp }}/huce-maven-seed/
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+          overwrite: true
+
   container:
     needs: smoke
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: huce-ci-maven-repository
+          path: .ci-maven-cache
+      - name: Verify same-run dependency artifact
+        run: |
+          cd .ci-maven-cache
+          sha256sum -c repository.sha256
       - name: Build full stack
         run: docker compose -f compose.share.yaml build
       - name: Start full stack

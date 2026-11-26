@@ -44,3 +44,7 @@ Các lệnh: Maven `mvn clean verify` trong backend; từ gốc `node backend/te
 Gemini API thật chưa kiểm thử do thiếu khóa hợp lệ; chuyển dữ liệu từ database Express cũ chưa nghiệm thu; chưa có benchmark quy mô toàn trường, kiểm toán đầy đủ dependency Java hay pentest độc lập. Không khẳng định hệ thống không thể phát sinh lỗi. CI trên main 7f1c6d9 đã PASS. Bản cập nhật tài liệu Gemini không thay đổi logic; vẫn kiểm tra CI theo SHA mới.
 
 Lịch sử chi tiết các mốc sửa runner Ubuntu, Docker mirror, Maven 429, Vite/esbuild và các bản chuyển đổi có trong Git history và Actions.
+
+## Khắc phục phụ thuộc Maven trong CI
+
+Commit fc282f8 chỉ đổi tài liệu. [CI](https://github.com/adolfcsix/hucefake/actions/runs/45865316425): smoke và dependency-audit PASS; container thất bại tại bước build vì Maven Central HTTP 429 sau ba lần thử (chưa khởi động app). Cách sửa: chuyển repository Maven đã tải thành công trong job smoke qua artifact cùng workflow, kiểm tra SHA-256 rồi đóng gói Java trong Docker ở chế độ offline; vẫn build React và Java, chạy toàn bộ Chromium và private Docker. Artifact tạm giữ một ngày, không commit vào Git, không đưa vào runtime image. Build local không có artifact vẫn dùng Maven trực tuyến có cache/retry. Chưa xác nhận PASS cho đến khi CI mới kết thúc. PR #2 đã đóng vì nội dung README đã có trên main; giữ lịch sử các nhánh cũ.

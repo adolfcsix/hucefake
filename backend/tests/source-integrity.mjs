@@ -10,6 +10,7 @@ const forbidden=files.filter(p=>
   /(^|\/)(node_modules|dist|target|e2e-results|audit-results)(\/|$)/.test(p)||
   /(^|\/)\.env(?:\.|$)/.test(p)&&p!=='.env.example'||
   /^config\/.*\.json$/i.test(p)&&p!=='config/local.template.json'||
+  /^\.ci-maven-cache\//.test(p)&&p!=='.ci-maven-cache/README.txt'||
   /\.(dump|backup|sql\.gz)$/i.test(p)||
   /^spring-backend\/|^backend\/(?:package(?:-lock)?\.json|scripts\/|src\/server\.js|src\/modules\/)/.test(p))
 assert.deepEqual(forbidden,[],'Do not track private data, build outputs or legacy backend')

@@ -54,7 +54,7 @@ Mở Docker Desktop và chờ Engine hoạt động. Từ thư mục gốc:
 docker compose -f compose.share.yaml up -d --build --wait
 docker compose -f compose.share.yaml ps
 ```
-Mở http://localhost:8081. Lần đầu cần Internet để tải image và dependency. PostgreSQL nằm trong volume demo, React được Spring Boot phục vụ trong cùng container ứng dụng.
+Mở http://localhost:8081. Lần đầu cần Internet để tải image và dependency. Nếu Maven Central trả HTTP 429, chờ giới hạn phía máy chủ hết rồi chạy lại lệnh build; không xóa database hoặc volume. Trong CI, repository Maven từ job smoke được dùng để đóng gói Java offline, tránh tải lặp dependency. PostgreSQL nằm trong volume demo, React được Spring Boot phục vụ trong cùng container ứng dụng.
 
 | Vai trò | Tên đăng nhập | Mật khẩu mẫu |
 | --- | --- | --- |
@@ -274,7 +274,7 @@ Nếu đã ở backend thì không cần cd. Terminal thứ hai chạy `cd front
 
 ### 10.3. Cấu hình khi chạy Docker
 
-Từ thư mục gốc, dùng biến môi trường trong PowerShell như mục 10.2, hoặc sao chép `.env.example` thành `.env` rồi điền riêng hai biến (chỉ thay giá trị Gemini; giữ đúng mật khẩu, tên database và cổng của bản đang chạy):
+Từ thư mục gốc, dùng biến môi trường trong PowerShell như mục 10.2, hoặc mở tệp `.env` ở gốc (nếu chưa có, tạo tệp chỉ chứa hai biến Gemini bên dưới). Giữ nguyên mọi biến database/cổng hiện có. Không sao chép đè `.env.example` vào project Docker đang chạy vì mật khẩu mẫu local có thể khác mật khẩu PostgreSQL của volume Docker:
 
 ```dotenv
 GEMINI_API_KEY=KHOA_RIENG_CUA_BAN

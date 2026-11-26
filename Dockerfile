@@ -12,7 +12,17 @@ COPY backend/pom.xml ./backend/pom.xml
 COPY backend/src ./backend/src
 COPY --from=frontend /workspace/frontend/dist ./backend/src/main/resources/static
 RUN --mount=type=cache,target=/root/.m2/repository,sharing=locked \
+    --mount=type=bind,source=.ci-maven-cache,target=/tmp/huce-maven-seed,readonly \
     set -eu; \
+    if [ -f /tmp/huce-maven-seed/repository.tar.gz ]; then \
+      (cd /tmp/huce-maven-seed && sha256sum -c repository.sha256); \
+      mkdir -p /tmp/huce-maven-repository; \
+      tar -xzf /tmp/huce-maven-seed/repository.tar.gz -C /tmp/huce-maven-repository; \
+      mvn -B -o -Dmaven.repo.local=/tmp/huce-maven-repository -f backend/pom.xml clean package -DskipTests; \
+      rm -rf /tmp/huce-maven-repository; \
+      echo 'PASS: Docker Maven package using verified same-run dependency artifact, offline'; \
+      exit 0; \
+    fi; \
     for attempt in 1 2 3; do \
       if mvn -B -U -f backend/pom.xml clean package -DskipTests >/tmp/maven-build.log 2>&1; then \
         cat /tmp/maven-build.log; rm /tmp/maven-build.log; exit 0; \

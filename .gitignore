@@ -16,3 +16,5 @@ frontend/e2e-results/
 frontend/audit-results/
 *.backup
 *.sql.gz
+/.ci-maven-cache/*
+!/.ci-maven-cache/README.txt
