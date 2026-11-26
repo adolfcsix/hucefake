@@ -5,6 +5,9 @@ on:
       - 'spring-backend/**'
       - 'backend/database/**'
       - 'frontend/**'
+      - 'Dockerfile'
+      - 'compose*.yaml'
+      - 'config/**'
       - '.github/workflows/spring-migration.yml'
 permissions:
   contents: read
@@ -82,3 +85,30 @@ jobs:
           npm ci
           npm test
           npm run build
+
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and start full stack
+        run: docker compose -f compose.share.yaml up -d --build --wait --wait-timeout 180
+      - name: Verify React served by Java and demo login
+        run: |
+          set -euo pipefail
+          base=http://127.0.0.1:8081
+          curl -fsS "$base/health"
+          curl -fsS "$base/" > /tmp/huce.html
+          grep -q 'id="root"' /tmp/huce.html
+          asset=$(grep -oE '/assets/[^" ]+\.js' /tmp/huce.html | head -1)
+          test -n "$asset"
+          curl -fsS "$base$asset" > /dev/null
+          curl -fsS "$base/api/auth/mode" | jq -e '.demo == true'
+          csrf=$(curl -fsS -c /tmp/huce.cookie "$base/api/csrf" | jq -r .token)
+          curl -fsS -b /tmp/huce.cookie -c /tmp/huce.cookie -H "X-CSRF-Token: $csrf" -H 'Content-Type: application/json' -d '{"role":"STAFF"}' "$base/api/auth/demo-login" | jq -e '.role == "STAFF"'
+          curl -fsS -b /tmp/huce.cookie "$base/api/me" | jq -e '.role == "STAFF"'
+      - name: Inspect logs
+        if: always()
+        run: docker compose -f compose.share.yaml logs --tail 150
+      - name: Cleanup CI database
+        if: always()
+        run: docker compose -f compose.share.yaml down -v

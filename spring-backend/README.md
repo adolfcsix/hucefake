@@ -14,7 +14,6 @@ Từ thư mục repo:
 
 ```sh
 docker compose up -d postgres
-docker compose exec postgres createdb -U fm05 huce_spring
 cd spring-backend
 ```
 
@@ -67,3 +66,18 @@ java -jar target/huce-backend-1.0.0.jar setup account --username sinhvien_rieng 
 ```
 
 Sao chép local.template.json thành local.json và điền danh mục của bạn trước khi tạo tài khoản nhân viên/giảng viên. CNTT/CS1 chỉ là ví dụ, phải khớp mã trong tệp. Terminal tương tác sẽ hỏi mật khẩu ẩn hai lần. Có thể đặt FM05_SETUP_PASSWORD cho phiên chạy tự động, không ghi mật khẩu vào file hoặc lịch sử lệnh. Nhập danh mục có transaction; mã đã tồn tại giữ nguyên. Sau khi tạo lớp học phần bằng web, nạp enrollments trong local.json để liên kết sinh viên với lớp. Không dùng chung database demo và riêng.
+
+## Chạy thử Docker (React được đóng gói vào Spring Boot)
+Tại thư mục gốc:
+```sh
+docker compose -f compose.share.yaml up -d --build
+```
+Mở http://localhost:8081. Đây là chế độ demo local, không dùng để công khai Internet.
+
+Để chạy bản trắng dùng tên dự án và volume riêng:
+```sh
+docker compose -f compose.share.yaml -f compose.private.yaml up -d --build
+docker compose -f compose.share.yaml -f compose.private.yaml run --rm -v "${PWD}/config:/config:ro" app setup catalog /config/local.json
+docker compose -f compose.share.yaml -f compose.private.yaml run --rm app setup account --username quanly_rieng --email manager@example.test --role MANAGER
+```
+Dừng demo trước nếu dùng cùng cổng 8081, hoặc đổi FM05_WEB_PORT. Không dùng down -v trên database cần giữ. Java chạy CLI qua ENTRYPOINT; không có Node.js trong container runtime. Node.js chỉ dùng để build frontend.

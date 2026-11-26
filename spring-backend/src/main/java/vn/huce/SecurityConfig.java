@@ -52,7 +52,7 @@ class SecurityConfig {
         return http.securityContext(c->c.securityContextRepository(contexts))
           .csrf(c->c.csrfTokenRepository(csrf).csrfTokenRequestHandler(handler))
           .addFilterAfter(refresh,SecurityContextHolderFilter.class)
-          .authorizeHttpRequests(a->a.requestMatchers("/health","/api/csrf","/api/auth/mode","/api/auth/login","/api/auth/demo-login").permitAll().anyRequest().authenticated())
+          .authorizeHttpRequests(a->a.requestMatchers("/","/index.html","/assets/**","/favicon.ico","/health","/api/csrf","/api/auth/mode","/api/auth/login","/api/auth/demo-login").permitAll().anyRequest().authenticated())
           .exceptionHandling(e->e.authenticationEntryPoint((req,res,x)->write(res,401,"UNAUTHORIZED","Vui lòng đăng nhập."))
              .accessDeniedHandler((req,res,x)->write(res,403,x instanceof CsrfException?"CSRF_INVALID":"FORBIDDEN","Yêu cầu không có quyền hoặc phiên biểu mẫu đã hết hạn.")))
           .logout(l->l.logoutUrl("/api/auth/logout").deleteCookies("HUCE_SPRING_SID","SESSION").logoutSuccessHandler((req,res,auth)->res.setStatus(204)))

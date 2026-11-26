@@ -1,11 +1,11 @@
-name: fm05-share
+name: huce-spring-demo
 services:
   postgres:
     image: postgres:16
     environment:
-      POSTGRES_DB: ${FM05_DB_NAME:-fm05}
+      POSTGRES_DB: ${FM05_DB_NAME:-huce}
       POSTGRES_USER: fm05
-      POSTGRES_PASSWORD: fm05_share_local
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-fm05_share_local}
     volumes:
       - data:/var/lib/postgresql/data
     healthcheck:
@@ -20,16 +20,19 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-}
       PORT: "8080"
-      DATABASE_URL: postgresql://fm05:fm05_share_local@postgres:5432/${FM05_DB_NAME:-fm05}
+      DB_URL: jdbc:postgresql://postgres:5432/${FM05_DB_NAME:-huce}
+      DB_USER: fm05
+      DB_PASSWORD: ${DB_PASSWORD:-fm05_share_local}
+      COOKIE_SECURE: "false"
     ports:
       - "127.0.0.1:${FM05_WEB_PORT:-8081}:8080"
     depends_on:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then(r=>{if(!r.ok)process.exitCode=1}).catch(()=>{process.exitCode=1})"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
       interval: 5s
       timeout: 3s
-      retries: 12
+      retries: 24
 volumes:
   data:
