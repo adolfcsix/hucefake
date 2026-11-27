@@ -80,3 +80,10 @@ for (const name of ['DraftFields','Proposal','ChatIcon','ChatHistory','ChatExcha
   assert.ok(frontendSource.includes(sourceRoot + 'features/chat/' + name + '.jsx'), 'Missing chat component ' + name)
 }
 console.log('PASS: HUCEChat orchestration and presentation components are separate')
+
+const sectionsSource = read('frontend/src/features/sections/Sections.jsx')
+assert.doesNotMatch(sectionsSource, /function\s+(DraftImport|SectionEditor)\s*\(/)
+for (const name of ['DraftImport','SectionEditor']) {
+  assert.ok(frontendSource.includes(sourceRoot + 'features/sections/' + name + '.jsx'), 'Missing section component ' + name)
+}
+console.log('PASS: section list, import and mutation editor are separate')

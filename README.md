@@ -342,3 +342,8 @@ Trong `frontend/src/features/workflow/`, `Automatic.jsx` quản lý tham số GA
 ### Tổ chức HUCEChat ReactJS
 
 HuceChat.jsx điều phối trạng thái hội thoại, gọi API, tìm lịch sử, quản lý đề xuất và focus. ChatHistory.jsx hiển thị lịch sử; ChatExchange.jsx hiển thị câu hỏi, phản hồi, dữ liệu và liên kết nguồn; DraftFields.jsx là biểu mẫu lớp nháp; Proposal.jsx hiển thị đề xuất và nút xác nhận/hủy; ChatIcon.jsx và chatPresentation.js chứa icon, nhãn và gợi ý. Giữ nguyên hợp đồng API, nội dung JSX, CSS, thời hạn, quyền, xác nhận và cơ chế chống thao tác đồng thời. Cần nghiệm thu build và browser trên commit mới.
+
+
+### Tổ chức quản lý lớp học phần ReactJS
+
+Trong `frontend/src/features/sections/`, `Sections.jsx` quản lý danh sách, lọc, phân trang và xuất lớp nháp; `DraftImport.jsx` đọc tệp CSV/JSON, tải mẫu và gửi nhập dữ liệu; `SectionEditor.jsx` xử lý thêm/sửa/hủy lớp, phân công giảng viên và nhóm lớp đối tượng, gồm xử lý lỗi mã lớp và xung đột phiên bản; `SectionTransfer.js` giữ các hàm chuyển đổi tệp. Dùng một editor chung cho các thao tác để tránh lặp form, giữ nguyên JSX, CSS, hợp đồng API và điều kiện quyền. Cần nghiệm thu CI trên commit mới.
