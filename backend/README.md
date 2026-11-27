@@ -104,3 +104,8 @@ Kiểm thử source-integrity rà cả import trong mã frontend, unit test và 
 ### DTO xác thực và làm mới phiên
 
 AuthController sử dụng LoginRequest, DemoLoginRequest, AuthModeResponse và CsrfResponse trong package dto. LoginRequest chỉ nhận mật khẩu khi đọc JSON, không trả mật khẩu khi serialize hoặc gọi toString. Accounts.Actor giữ nguyên tên lớp và các trường để tương thích dữ liệu phiên cũ. SessionPrincipalRefreshFilter phụ trách kiểm tra lại tài khoản và phạm vi quyền từng yêu cầu; được tạo và đăng ký một lần trong SecurityConfig, không đăng ký như filter servlet độc lập. Không thay đổi đường dẫn, mã HTTP, cookie, CSRF hoặc hành vi đăng nhập dùng thử. Kiểm thử mới bao gồm hợp đồng JSON và các trường hợp tài khoản bị khóa, thay thế hoặc thay đổi quyền.
+
+
+### Kiểu dữ liệu và trạng thái phê duyệt
+
+ApprovalStatus và TimetableVersionStatus phản ánh hai vòng đời riêng theo migration PostgreSQL. ApprovalDecisionRequest chuẩn hóa quyết định và lý do trả lại sau kiểm tra quyền/trạng thái; ApprovalSnapshot định kiểu version và tên/mã hiển thị, giữ nguyên JSON đã lưu. ApprovalController dùng tên tham số rõ ràng, bỏ giao dịch đọc trùng lặp với ApprovalService. Các request Map tại biên HTTP vẫn được giữ nguyên cho fingerprint chống lặp và thứ tự kiểm tra hiện có. Chưa chuyển toàn bộ readiness và payload lịch sử thành DTO; cần tiếp tục rà soát tương thích trước khi thay đổi.

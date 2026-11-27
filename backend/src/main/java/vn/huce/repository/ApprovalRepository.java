@@ -21,8 +21,9 @@ public class ApprovalRepository {
                 """, approvalId);
     }
 
-    public Object patternVersion(long patternId) {
-        return store.need("SELECT version FROM section_schedule_patterns WHERE id=?", patternId).get("version");
+    public int patternVersion(long patternId) {
+        return ((Number) store.need("SELECT version FROM section_schedule_patterns WHERE id=?", patternId)
+                .get("version")).intValue();
     }
 
     public void requireSemester(long semesterId) {

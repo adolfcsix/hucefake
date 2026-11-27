@@ -58,4 +58,40 @@ class ApprovalServiceTest {
         verifyNoMoreInteractions(repository);
         verifyNoInteractions(audit, notifications, scheduling);
     }
+
+    @Test
+    void invalidDecisionDoesNotChangeWorkflow() {
+        Map<String, Object> approval = Map.of("id", 7L, "requested_by", 1L,
+                "status", "PENDING", "work_item_id", 8L);
+        assertEquals(400, assertThrows(ApiFailure.class, () -> service.decide(manager, approval,
+                Map.of("decision", "APPLIED"))).status());
+        verifyNoInteractions(repository, notifications, audit, scheduling);
+    }
+
+    @Test
+    void returnedDecisionRequiresNonBlankReason() {
+        Map<String, Object> approval = Map.of("id", 7L, "requested_by", 1L,
+                "status", "PENDING", "work_item_id", 8L);
+        assertEquals(400, assertThrows(ApiFailure.class, () -> service.decide(manager, approval,
+                Map.of("decision", "RETURNED", "reason", "  "))).status());
+        verifyNoInteractions(repository, notifications, audit, scheduling);
+    }
+
+    @Test
+    void appliedApprovalCannotBeDecidedAgain() {
+        Map<String, Object> approval = Map.of("id", 7L, "requested_by", 1L,
+                "status", "APPLIED", "work_item_id", 8L);
+        assertEquals(409, assertThrows(ApiFailure.class, () -> service.decide(manager, approval,
+                Map.of("decision", "APPROVED"))).status());
+        verifyNoInteractions(repository, notifications, audit, scheduling);
+    }
+
+    @Test
+    void managerCannotApproveOwnRequest() {
+        Map<String, Object> approval = Map.of("id", 7L, "requested_by", 9L,
+                "status", "PENDING", "work_item_id", 8L);
+        assertEquals(403, assertThrows(ApiFailure.class, () -> service.decide(manager, approval,
+                Map.of("decision", "APPROVED"))).status());
+        verifyNoInteractions(repository, notifications, audit, scheduling);
+    }
 }

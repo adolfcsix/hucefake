@@ -1,7 +1,6 @@
 package vn.huce.service;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -16,7 +15,10 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
+import vn.huce.dto.ApprovalDecisionRequest;
 import vn.huce.model.ApprovalSnapshot;
+import vn.huce.model.ApprovalStatus;
+import vn.huce.model.TimetableVersionStatus;
 import vn.huce.repository.ApprovalRepository;
 import vn.huce.repository.AuditRepository;
 
@@ -57,10 +59,14 @@ public class ApprovalService {
         }
     }
 
-    private void status(Map<String, Object> row, String... allowed) {
-        if (!Arrays.asList(allowed).contains(row.get("status"))) {
-            throw state("Hồ sơ đang ở trạng thái " + row.get("status") + ".");
+    @SafeVarargs
+    private final <S extends Enum<S>> void status(Map<String, Object> row, S... allowed) {
+        for (S candidate : allowed) {
+            if (candidate.name().equals(row.get("status"))) {
+                return;
+            }
         }
+        throw state("Hồ sơ đang ở trạng thái " + row.get("status") + ".");
     }
 
     private void forbidden() {
@@ -119,8 +125,8 @@ public class ApprovalService {
                 } else {
                     snapshot.add(new ApprovalSnapshot(slot.id(), slot.section(), slot.staff(), slot.room(),
                             slot.day(), slot.first(), slot.count(), slot.from().toString(), slot.to().toString(),
-                            repository.patternVersion(slot.id()), section.get("code"),
-                            section.get("subject_name"), room.get("code")));
+                            repository.patternVersion(slot.id()), (String) section.get("code"),
+                            (String) section.get("subject_name"), (String) room.get("code")));
                 }
             }
             if (!missing.isEmpty() || !conflicts.isEmpty()) {
@@ -166,7 +172,7 @@ public class ApprovalService {
         if (n(version, "created_by") != actor.id()) {
             forbidden();
         }
-        status(version, "DRAFT");
+        status(version, TimetableVersionStatus.DRAFT);
         long semesterId = n(version, "semester_id");
         if (repository.hasSubmittedVersion(semesterId)) {
             throw new ApiFailure(409, "DUPLICATE_REQUEST", "Học kỳ đã có thời khóa biểu chờ duyệt.");
@@ -220,23 +226,24 @@ public class ApprovalService {
         if (n(approval, "requested_by") == actor.id()) {
             forbidden();
         }
-        String decision = choice(body.get("decision"), "APPROVED", "RETURNED");
-        boolean returned = "RETURNED".equals(decision);
+        ApprovalStatus decision = ApprovalDecisionRequest.parseDecision(body);
+        boolean returned = decision == ApprovalStatus.RETURNED;
         if (returned) {
-            status(approval, "PENDING", "APPROVED");
+            status(approval, ApprovalStatus.PENDING, ApprovalStatus.APPROVED);
         } else {
-            status(approval, "PENDING");
+            status(approval, ApprovalStatus.PENDING);
         }
-        String reason = returned ? text(body.get("reason"), 500) : null;
+        ApprovalDecisionRequest request = ApprovalDecisionRequest.from(body, decision);
+        String reason = request.reason();
         long approvalId = n(approval, "id");
-        repository.recordDecision(approvalId, actor.id(), decision, reason);
-        repository.changeWorkStatus(n(approval, "work_item_id"), decision);
+        repository.recordDecision(approvalId, actor.id(), request.decision().name(), reason);
+        repository.changeWorkStatus(n(approval, "work_item_id"), decision.name());
         if (returned) {
             repository.returnVersion(approvalId);
             notifications.notifyUser(n(approval, "requested_by"), "Thời khóa biểu được trả lại. Lý do: " + reason);
         }
-        audit.record(actor, decision, "approval_requests", approvalId);
-        return Map.of("status", decision);
+        audit.record(actor, decision.name(), "approval_requests", approvalId);
+        return Map.of("status", decision.name());
     }
 
     public Object apply(Actor actor, Map<String, Object> approval) {
@@ -249,9 +256,9 @@ public class ApprovalService {
         if (prior != null) {
             return decode(prior.get("result"));
         }
-        status(approval, "APPROVED");
+        status(approval, ApprovalStatus.APPROVED);
         Map<String, Object> version = repository.findVersionForApproval(approvalId);
-        status(version, "SUBMITTED");
+        status(version, TimetableVersionStatus.SUBMITTED);
         long versionId = n(version, "id");
         long semesterId = n(version, "semester_id");
         Context context = scheduling.context();
@@ -308,7 +315,7 @@ public class ApprovalService {
         repository.supersedePublished(semesterId);
         repository.publishVersion(versionId, actor.id());
         repository.markApplied(approvalId);
-        repository.changeWorkStatus(n(approval, "work_item_id"), "APPLIED");
+        repository.changeWorkStatus(n(approval, "work_item_id"), ApprovalStatus.APPLIED.name());
         var result = Map.of("versionId", versionId, "sessions", total, "sections", sections.size());
         repository.saveExecution(approvalId, encode(result));
         audit.record(actor, "PUBLISH", "timetable_versions", versionId);
@@ -326,8 +333,8 @@ public class ApprovalService {
     public Object publish(Actor actor, long approvalId) {
         role(actor, "MANAGER");
         Map<String, Object> approval = approval(approvalId);
-        if ("PENDING".equals(approval.get("status"))) {
-            decide(actor, approval, Map.of("decision", "APPROVED"));
+        if (ApprovalStatus.PENDING.name().equals(approval.get("status"))) {
+            decide(actor, approval, Map.of("decision", ApprovalStatus.APPROVED.name()));
             approval = approval(approvalId);
         }
         return apply(actor, approval);
