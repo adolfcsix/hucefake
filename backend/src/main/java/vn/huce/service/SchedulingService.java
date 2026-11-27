@@ -15,6 +15,8 @@ import vn.huce.exception.ApiFailure;
 import vn.huce.model.SchedulePatternSnapshot;
 import vn.huce.model.TeachingPeriod;
 import vn.huce.model.NonTeachingDay;
+import vn.huce.model.StaffAvailability;
+import vn.huce.model.AvailabilityEntry.Kind;
 import vn.huce.repository.SchedulingRepository;
 
 import static vn.huce.validation.Inputs.date;
@@ -47,7 +49,7 @@ public class SchedulingService {
     }
 
     public record Context(Map<Long, Map<String, Object>> sections, Map<Long, Map<String, Object>> rooms,
-                          List<TeachingPeriod> periods, List<Map<String, Object>> availability,
+                          List<TeachingPeriod> periods, List<StaffAvailability> availability,
                           List<NonTeachingDay> holidays, List<Slot> patterns) {
     }
 
@@ -173,7 +175,7 @@ public class SchedulingService {
         return ScheduleConstraints.problems(context, slot);
     }
 
-    public boolean busy(Context context, Slot slot, String kind) {
+    public boolean busy(Context context, Slot slot, Kind kind) {
         return ScheduleConstraints.busy(context, slot, kind);
     }
 

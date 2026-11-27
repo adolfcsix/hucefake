@@ -18,6 +18,8 @@ import vn.huce.model.SchedulePatternSnapshot;
 import vn.huce.model.PublishedSession;
 import vn.huce.model.TeachingPeriod;
 import vn.huce.model.NonTeachingDay;
+import vn.huce.model.StaffAvailability;
+import vn.huce.model.AvailabilityEntry.Kind;
 
 @Repository
 public class SchedulingRepository {
@@ -49,8 +51,13 @@ public class SchedulingRepository {
                 rs.getObject("effective_to", LocalDate.class)));
     }
 
-    public List<Map<String, Object>> availability() {
-        return store.rows("SELECT * FROM staff_availability ORDER BY id");
+    public List<StaffAvailability> availability() {
+        return store.jdbc().query("""
+                SELECT staff_id,semester_id,day_of_week,period_from,period_to,kind
+                FROM staff_availability ORDER BY id
+                """, (rs, row) -> new StaffAvailability(rs.getLong("staff_id"),
+                rs.getLong("semester_id"), rs.getInt("day_of_week"), rs.getInt("period_from"),
+                rs.getInt("period_to"), Kind.valueOf(rs.getString("kind"))));
     }
 
     public List<NonTeachingDay> holidays() {

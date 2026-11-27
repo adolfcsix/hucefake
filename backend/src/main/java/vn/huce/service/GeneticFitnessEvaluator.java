@@ -8,6 +8,7 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import vn.huce.model.TeachingPeriod;
+import vn.huce.model.AvailabilityEntry.Kind;
 import vn.huce.service.GeneticScheduler.Input;
 import vn.huce.service.GeneticScheduler.Score;
 import static vn.huce.service.SchedulingService.*;
@@ -31,17 +32,17 @@ final class GeneticFitnessEvaluator {
         this.scheduling = scheduling;
     }
 
-    int busy(Slot slot, String kind) {
+    int busy(Slot slot, Kind kind) {
         Context context = input.ctx();
         Map<String, Object> section = context.sections().get(slot.section());
         Set<Long> staff = scheduling.staff(context, slot);
         int count = 0;
         for (int p = slot.first(); p <= slot.last(); p++) {
             final int period = p;
-            if (context.availability().stream().anyMatch(row -> staff.contains(n(row, "staff_id"))
-                    && n(row, "semester_id") == n(section, "semester_id")
-                    && n(row, "day_of_week") == slot.day() && kind.equals(row.get("kind"))
-                    && n(row, "period_from") <= period && n(row, "period_to") >= period)) {
+            if (context.availability().stream().anyMatch(row -> staff.contains(row.staffId())
+                    && row.semesterId() == n(section, "semester_id")
+                    && row.dayOfWeek() == slot.day() && row.kind() == kind
+                    && row.overlaps(period, period))) {
                 count++;
             }
         }
@@ -73,11 +74,11 @@ final class GeneticFitnessEvaluator {
             Context context = input.ctx();
             Map<String, Object> room = context.rooms().get(slot.room());
             Map<String, Object> section = context.sections().get(slot.section());
-            int hard = busy(slot, "BUSY");
+            int hard = busy(slot, Kind.BUSY);
             for (Slot fixed : context.patterns()) {
                 hard += clash(slot, fixed);
             }
-            double soft = 5.0 * busy(slot, "AVOID")
+            double soft = 5.0 * busy(slot, Kind.AVOID)
                     + 10.0 * (n(room, "capacity") - n(section, "capacity")) / n(room, "capacity");
             LocalDate date = firstDay(slot.from(), slot.day());
             String shift = context.periods().stream()

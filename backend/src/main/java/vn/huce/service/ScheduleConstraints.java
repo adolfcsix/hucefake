@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+import vn.huce.model.AvailabilityEntry.Kind;
 import vn.huce.service.SchedulingService.Context;
 import vn.huce.service.SchedulingService.Slot;
 import vn.huce.service.SchedulingService.Span;
@@ -140,7 +141,7 @@ final class ScheduleConstraints {
             return List.of(issue("BR03", "Tiết học phải nằm trọn trong một ca và trong khoảng ngày của lớp.", section));
         }
         List<Map<String, Object>> result = new ArrayList<>();
-        if (busy(context, slot, "BUSY")) {
+        if (busy(context, slot, Kind.BUSY)) {
             result.add(issue("BR08", "Giảng viên đã khai báo bận.", section));
         }
         for (Slot other : context.patterns()) {
@@ -151,12 +152,12 @@ final class ScheduleConstraints {
         return result;
     }
 
-    static boolean busy(Context context, Slot slot, String kind) {
+    static boolean busy(Context context, Slot slot, Kind kind) {
         Map<String, Object> section = context.sections().get(slot.section());
         Set<Long> members = staff(context, slot);
-        return context.availability().stream().anyMatch(row -> members.contains(n(row, "staff_id"))
-                && n(row, "semester_id") == n(section, "semester_id")
-                && n(row, "day_of_week") == slot.day() && kind.equals(row.get("kind"))
-                && n(row, "period_from") <= slot.last() && n(row, "period_to") >= slot.first());
+        return context.availability().stream().anyMatch(row -> members.contains(row.staffId())
+                && row.semesterId() == n(section, "semester_id")
+                && row.dayOfWeek() == slot.day() && row.kind() == kind
+                && row.overlaps(slot.first(), slot.last()));
     }
 }

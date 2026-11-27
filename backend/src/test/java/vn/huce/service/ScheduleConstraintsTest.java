@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import vn.huce.model.NonTeachingDay;
+import vn.huce.model.StaffAvailability;
+import vn.huce.model.AvailabilityEntry.Kind;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static vn.huce.service.SchedulingService.*;
@@ -23,7 +25,7 @@ class ScheduleConstraintsTest {
                 "start_date", monday.toString(), "end_date", monday.toString());
     }
 
-    private Context context(List<NonTeachingDay> holidays, List<Map<String, Object>> availability) {
+    private Context context(List<NonTeachingDay> holidays, List<StaffAvailability> availability) {
         return new Context(Map.of(1L, section("A"), 2L, section("B")),
                 Map.of(4L, Map.of("code", "P1", "campus_id", 5L, "status", "ACTIVE",
                         "capacity", 40, "type", "THEORY")),
@@ -54,11 +56,21 @@ class ScheduleConstraintsTest {
     }
 
     @Test
-    void assistantAvailabilityIsIncludedAndAvoidIsNotBusy() {
-        var rows = List.of(Map.<String, Object>of("staff_id", 8L, "semester_id", 1L,
-                "day_of_week", 1, "period_from", 2, "period_to", 3, "kind", "AVOID"));
+    void availabilityMatchesSemesterDayStaffAndInclusivePeriodBoundaries() {
+        var rows = List.of(new StaffAvailability(8L, 2L, 1, 1, 2, Kind.BUSY),
+                new StaffAvailability(8L, 1L, 2, 1, 2, Kind.BUSY),
+                new StaffAvailability(99L, 1L, 1, 1, 2, Kind.BUSY),
+                new StaffAvailability(8L, 1L, 1, 3, 4, Kind.BUSY));
         var context = context(List.of(), rows);
-        assertTrue(ScheduleConstraints.busy(context, slot(1, 1, 4, 1, 2), "AVOID"));
-        assertFalse(ScheduleConstraints.busy(context, slot(1, 1, 4, 1, 2), "BUSY"));
+        assertFalse(ScheduleConstraints.busy(context, slot(1, 1, 4, 1, 2), Kind.BUSY));
+        assertTrue(ScheduleConstraints.busy(context, slot(1, 1, 4, 2, 2), Kind.BUSY));
+    }
+
+    @Test
+    void assistantAvailabilityIsIncludedAndAvoidIsNotBusy() {
+        var rows = List.of(new StaffAvailability(8L, 1L, 1, 2, 3, Kind.AVOID));
+        var context = context(List.of(), rows);
+        assertTrue(ScheduleConstraints.busy(context, slot(1, 1, 4, 1, 2), Kind.AVOID));
+        assertFalse(ScheduleConstraints.busy(context, slot(1, 1, 4, 1, 2), Kind.BUSY));
     }
 }

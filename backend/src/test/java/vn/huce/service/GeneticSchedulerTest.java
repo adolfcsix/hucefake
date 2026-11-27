@@ -9,6 +9,8 @@ import org.junit.jupiter.api.Test;
 import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
 import vn.huce.model.PublishedSession;
+import vn.huce.model.StaffAvailability;
+import vn.huce.model.AvailabilityEntry.Kind;
 import vn.huce.repository.SchedulingRepository;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -26,7 +28,7 @@ class GeneticSchedulerTest {
         return new Slot(0L, 1L, 2L, 3L, day, first, 2, monday, monday.plusWeeks(2));
     }
 
-    private Context context(List<Map<String, Object>> availability) {
+    private Context context(List<StaffAvailability> availability) {
         return new Context(Map.of(1L, Map.of("id", 1L, "semester_id", 4L, "staff_id", 2L,
                         "capacity", 30, "assistant_ids", new Long[0], "group_ids", new Long[0])),
                 Map.of(3L, Map.of("id", 3L, "campus_id", 5L, "capacity", 60)),
@@ -47,10 +49,8 @@ class GeneticSchedulerTest {
     @Test
     void fitnessKeepsBusyAndAvoidWeightsAndRoomCapacityPenalty() {
         var availability = List.of(
-                Map.<String, Object>of("staff_id", 2L, "semester_id", 4L, "day_of_week", 1,
-                        "period_from", 1, "period_to", 1, "kind", "BUSY"),
-                Map.<String, Object>of("staff_id", 2L, "semester_id", 4L, "day_of_week", 1,
-                        "period_from", 2, "period_to", 2, "kind", "AVOID"));
+                new StaffAvailability(2L, 4L, 1, 1, 1, Kind.BUSY),
+                new StaffAvailability(2L, 4L, 1, 2, 2, Kind.AVOID));
         Slot candidate = slot(1, 1);
         var input = new GeneticScheduler.Input(context(availability), List.of(List.of(candidate)));
         var score = new GeneticFitnessEvaluator(input, scheduling).score(List.of(candidate));
