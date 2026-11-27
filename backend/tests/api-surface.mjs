@@ -149,3 +149,17 @@ console.log('PASS: schedule assistant classification stays in service layer')
 const constraintSource = readFileSync(new URL('service/ScheduleConstraints.java', root), 'utf8')
 assert.doesNotMatch(constraintSource, /\b(?:SqlStore|JdbcTemplate|SELECT|INSERT\s+INTO|DELETE\s+FROM|UPDATE\s+\w+\s+SET)\b/)
 console.log('PASS: in-memory schedule constraints remain independent of persistence')
+
+for (const name of javaFiles) {
+  const relative = name.replaceAll('\\', '/')
+  const source = readFileSync(new URL(relative, root), 'utf8')
+  if (/^@Service\b/m.test(source)) assert.ok(relative.startsWith('service/'), relative + ': misplaced service')
+  if (/^@Repository\b/m.test(source)) assert.ok(relative.startsWith('repository/'), relative + ': misplaced repository')
+  if (/^@Configuration\b/m.test(source)) assert.ok(relative.startsWith('config/'), relative + ': misplaced configuration')
+  if (/^(model|dto)\//.test(relative)) {
+    assert.doesNotMatch(source, /@(Service|Repository|RestController|Component|Configuration)\b/, relative + ': data type is not a Spring component')
+  }
+}
+const runtimeModeSource = readFileSync(new URL('config/RuntimeMode.java', root), 'utf8')
+assert.doesNotMatch(runtimeModeSource, /\b(?:JdbcTemplate|SqlStore|SELECT|INSERT\s+INTO|LOCK\s+TABLE)\b/)
+console.log('PASS: Spring stereotype placement and runtime initialization persistence boundary')

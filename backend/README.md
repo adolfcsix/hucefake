@@ -144,3 +144,8 @@ ScheduleConstraints tập trung kiểm tra phòng, giảng viên và trợ giả
 ### Hoàn thiện điều phối xếp lịch
 
 SchedulingService chuẩn hóa khai báo record, ánh xạ dữ liệu, kiểm tra phạm vi cơ sở, xây dựng Slot và tìm tối đa năm phương án thay thế. Tách effectiveDate và suggestAlternatives, giữ nguyên thứ tự duyệt phòng/ngày/tiết, điều kiện truy vấn lịch công bố và cấu trúc lỗi. Không đổi tên thành phần record công khai để tránh ảnh hưởng GA, các service và dữ liệu JSON. Bổ sung bốn kiểm thử về ngày mặc định, quyền hai cơ sở, không chuyển lớp và BR14 khi toàn bộ ngày nghỉ.
+
+
+### Kiểm toán annotation và khởi tạo chế độ chạy
+
+RuntimeMode giữ trách nhiệm ApplicationRunner và giao dịch khởi tạo, RuntimeModeRepository chịu trách nhiệm khóa bảng, đọc chế độ, kiểm tra dữ liệu, nạp catalog demo và ghi dữ liệu. Không thay đổi thứ tự khởi tạo, migration, tài khoản mẫu hoặc nguyên tắc tách database demo/private. Bổ sung sáu kiểm thử bảo vệ dữ liệu và kiểm tra vị trí stereotype Spring (@Service, @Repository, @Configuration), không gắn stereotype vào model/DTO. CLI setup vẫn trực tiếp dùng JDBC vì chạy độc lập ngoài Spring context.
