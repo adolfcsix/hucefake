@@ -12,8 +12,11 @@ spring:
     timeout: 8h
     jdbc:
       initialize-schema: never
-  jackson:
+  jackson2:
     time-zone: Asia/Ho_Chi_Minh
+  http:
+    converters:
+      preferred-json-mapper: jackson2
 server:
   address: ${HOST:127.0.0.1}
   port: ${PORT:8080}
