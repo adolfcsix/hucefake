@@ -65,4 +65,9 @@ Kiểm thử source-integrity rà cả import trong mã frontend, unit test và 
 
 ### Truy vấn lịch và thông báo
 
-`ScheduleFilter` biểu diễn bộ lọc đã kiểm tra bằng LocalDate và enum View. `SessionReadService` kiểm tra quyền và đầu vào, `SessionReadRepository` xây dựng và thực hiện SQL có tham số theo phạm vi tài khoản. Cả HTTP và HUCEChat dùng chung service cho lịch cá nhân, danh sách lớp và buổi tiếp theo. NotificationRepository phụ trách đọc và đánh dấu thông báo theo tài khoản. Các projection động và hợp đồng JSON cũ được giữ nguyên trong đợt này; phần lưu hội thoại và đề xuất của HUCEChat vẫn cần cải tổ riêng.
+`ScheduleFilter` biểu diễn bộ lọc đã kiểm tra bằng LocalDate và enum View. `SessionReadService` kiểm tra quyền và đầu vào, `SessionReadRepository` xây dựng và thực hiện SQL có tham số theo phạm vi tài khoản. Cả HTTP và HUCEChat dùng chung service cho lịch cá nhân, danh sách lớp và buổi tiếp theo. NotificationRepository phụ trách đọc và đánh dấu thông báo theo tài khoản. Các projection động và hợp đồng JSON cũ được giữ nguyên trong đợt này; phần lưu hội thoại và đề xuất của HUCEChat đã chuyển vào repository; vẫn cần chuẩn hóa lớp phân loại, điều phối phản hồi và DTO.
+
+
+### Lưu hội thoại và đề xuất HUCEChat
+
+`ChatRepository` lưu hội thoại, lịch sử trao đổi và phạm vi người dùng/role/khoa/giảng viên. `ProposalRepository` lưu đề xuất và khóa bản ghi khi xác nhận. `ProposalService` giữ kiểm tra quyền, trạng thái, thời hạn và chống thực thi lặp; `ChatService` điều phối nội dung. Thao tác thông báo sử dụng NotificationRepository. Các hợp đồng JSON và giao dịch MutationService vẫn được giữ; chưa hoàn tất tách lớp điều phối phản hồi và chuẩn hóa DTO.

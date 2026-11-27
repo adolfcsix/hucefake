@@ -69,4 +69,12 @@ public class NotificationRepository {
         jdbc.update("UPDATE notifications SET read_at=COALESCE(read_at,now()) WHERE id=? AND user_id=?",
                 notificationId, userId);
     }
+
+    public Map<String, Object> unreadSummary(long userId) {
+        return store.need("SELECT count(*) AS count,max(id) AS last_id FROM notifications WHERE user_id=? AND read_at IS NULL", userId);
+    }
+
+    public int markThrough(long userId, long lastId) {
+        return jdbc.update("UPDATE notifications SET read_at=now() WHERE user_id=? AND read_at IS NULL AND id<=?", userId, lastId);
+    }
 }

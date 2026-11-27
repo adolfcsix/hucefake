@@ -7,7 +7,8 @@ import vn.huce.service.SessionMutationService;
 
 import vn.huce.Accounts;
 import vn.huce.exception.ApiFailure;
-import vn.huce.repository.SqlStore;
+import vn.huce.repository.ChatRepository;
+import vn.huce.repository.CatalogRepository;
 
 import static vn.huce.validation.Inputs.*;
 import java.util.*;
@@ -17,23 +18,24 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class ChatService {
-    private final SqlStore db;private final ProposalService proposals;private final SectionService sections;private final ApprovalService approvals;private final SessionReadService reads;private final SessionMutationService sessions;private final GeminiAdvisor gemini;
-    ChatService(SqlStore db,ProposalService proposals,SectionService sections,ApprovalService approvals,SessionReadService reads,SessionMutationService sessions,GeminiAdvisor gemini){
-        this.db=db;this.proposals=proposals;this.sections=sections;this.approvals=approvals;this.reads=reads;this.sessions=sessions;this.gemini=gemini;
+    private final ChatRepository repository;
+    private final CatalogRepository catalog;private final ProposalService proposals;private final SectionService sections;private final ApprovalService approvals;private final SessionReadService reads;private final SessionMutationService sessions;private final GeminiAdvisor gemini;
+    ChatService(ChatRepository repository, CatalogRepository catalog, ProposalService proposals, SectionService sections,
+                ApprovalService approvals, SessionReadService reads, SessionMutationService sessions, GeminiAdvisor gemini) {
+        this.repository = repository;
+        this.catalog = catalog;
+        this.proposals=proposals;this.sections=sections;this.approvals=approvals;this.reads=reads;this.sessions=sessions;this.gemini=gemini;
     }
-    static final String OWNER="user_id=? AND role=? AND staff_id IS NOT DISTINCT FROM ?::bigint AND unit_id IS NOT DISTINCT FROM ?::bigint";
-    private Object[] scope(Accounts.Actor a,Object extra){return new Object[]{a.id(),a.role(),a.staffId(),a.unitId(),extra};}
-    public List<Map<String,Object>> conversations(Accounts.Actor a,String q){
-        return db.rows("SELECT id,title,to_char(updated_at AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS updated_at FROM chat_conversations WHERE "+OWNER+" AND strpos(lower(title),lower(?))>0 ORDER BY updated_at DESC,id DESC LIMIT 20",scope(a,q.substring(0,Math.min(80,q.length()))));
+    public List<Map<String, Object>> conversations(Accounts.Actor actor, String search) {
+        return repository.conversations(actor, search.substring(0, Math.min(80, search.length())));
     }
-    public Map<String,Object> owned(Accounts.Actor a,long id){return db.need("SELECT id,title FROM chat_conversations WHERE "+OWNER+" AND id=?",scope(a,id));}
+
+    public Map<String, Object> owned(Accounts.Actor actor, long conversationId) {
+        return repository.findOwned(actor, conversationId);
+    }
     public Map<String,Object> conversation(Accounts.Actor a,long id){
         var result=owned(a,id);
-        var rows=db.rows("""
-          SELECT e.id,e.question,e.reply::text AS reply,to_char(e.created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
-            p.result::text AS result,p.cancelled_at,p.expires_at<=now() AS expired
-          FROM chat_exchanges e LEFT JOIN ai_proposals p ON e.proposal_id=p.id WHERE e.conversation_id=? ORDER BY e.id DESC LIMIT 60
-          """,id);
+        var rows=repository.exchanges(id);
         Collections.reverse(rows);var exchanges=new ArrayList<Map<String,Object>>();
         for(var row:rows){
             var reply=proposals.decode(row.get("reply"));
@@ -49,7 +51,7 @@ public class ChatService {
     public Classification classify(Accounts.Actor a,Map<String,Object> f){
         String q=text(f.get("message"),500);Long cid=f.get("conversationId")==null?null:id(f.get("conversationId"));
         String previous=null;
-        if(cid!=null){owned(a,cid);var row=db.one("SELECT reply->>'intent' AS intent FROM chat_exchanges WHERE conversation_id=? ORDER BY id DESC LIMIT 1",cid);if(row!=null)previous=s(row,"intent");}
+        if(cid!=null){owned(a,cid);var row=repository.previousIntent(cid);if(row!=null)previous=s(row,"intent");}
         var permitted=ChatPermissions.allowed(a.role());
         String action=f.get("draft")!=null?"DRAFT":ChatIntent.recognize(q,previous);boolean unavailable=false;
         if(action==null&&gemini.enabled()&&gemini.take(a.id())){
@@ -130,7 +132,7 @@ public class ChatService {
                 return report(list.isEmpty()?"Chưa có lịch công bố để tổng hợp.":"Mức sử dụng theo lịch công bố · "+code,"statistics",list,rooms.size()+lecturers.size());
             }
             case "DRAFT" -> {
-                if(body.get("draft")==null){var r=report("Điền thông tin lớp để xem trước đề xuất.","sections");r.put("draft",Map.of("semesterId",sem.get("id"),"from",sem.get("start_date"),"to",sem.get("end_date"),"subjects",db.rows("SELECT id,code,name FROM subjects WHERE status='ACTIVE' AND managing_unit_id=? ORDER BY code",a.unitId())));return r;}
+                if(body.get("draft")==null){var r=report("Điền thông tin lớp để xem trước đề xuất.","sections");r.put("draft",Map.of("semesterId",sem.get("id"),"from",sem.get("start_date"),"to",sem.get("end_date"),"subjects",catalog.subjects(false,a.unitId())));return r;}
                 var r=report("Kiểm tra thông tin lớp nháp trước khi tạo.","sections");r.put("proposal",proposals.prepare(a,action,sem,body));return r;
             }
             case "GENERATE","APPLY" -> {
@@ -145,17 +147,14 @@ public class ChatService {
     public Object message(Accounts.Actor a,Map<String,Object> f,Classification classification){
         String question=text(f.get("message"),500);Long cid=f.get("conversationId")==null?null:id(f.get("conversationId"));
         if(cid!=null)owned(a,cid);
-        var sem=f.get("semesterId")==null?null:db.need("SELECT id,code,start_date,end_date FROM semesters WHERE id=?",id(f.get("semesterId")));
+        var sem=f.get("semesterId")==null?null:repository.semester(id(f.get("semesterId")));
         var reply=answer(a,classification.intent,sem,question,f);
-        if(cid==null)cid=n(db.need("INSERT INTO chat_conversations(user_id,role,staff_id,unit_id,title) VALUES (?,?,?,?,?) RETURNING id",a.id(),a.role(),a.staffId(),a.unitId(),question.substring(0,Math.min(80,question.length()))),"id");
+        if(cid==null)cid=repository.createConversation(a,question.substring(0,Math.min(80,question.length())));
         reply.put("intent",classification.intent);reply.put("semesterId",sem==null?null:sem.get("id"));reply.put("sourceAt",Instant.now().toString());reply.put("modelUnavailable",classification.modelUnavailable);
         Object pid=reply.get("proposal") instanceof Map<?,?> p?p.get("id"):null;
-        var exchange=db.need("""
-          INSERT INTO chat_exchanges(conversation_id,question,reply,proposal_id) VALUES (?,?,?::jsonb,?)
-          RETURNING id,to_char(created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at
-          """,cid,question,proposals.encode(reply),pid);
+        var exchange=repository.insertExchange(cid,question,proposals.encode(reply),pid);
         exchange.put("question",question);exchange.put("reply",reply);
-        db.jdbc().update("UPDATE chat_conversations SET updated_at=now() WHERE id=?",cid);
+        repository.touch(cid);
         return Map.of("conversationId",cid,"exchange",exchange);
     }
 }

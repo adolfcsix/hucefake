@@ -93,3 +93,11 @@ assert.ok(existsSync(new URL('model/ScheduleFilter.java', root)))
 const chatService = readFileSync(new URL('service/chat/ChatService.java', root), 'utf8')
 assert.doesNotMatch(chatService, /scheduleQuery\(|scoped\.sql\(|scoped\.args\(/)
 console.log('PASS: typed schedule filters and shared read boundaries')
+
+for (const name of ['ChatService', 'ProposalService']) {
+  const source = readFileSync(new URL('service/chat/' + name + '.java', root), 'utf8')
+  assert.doesNotMatch(source, /\b(?:SqlStore|JdbcTemplate|SELECT|INSERT\s+INTO|DELETE\s+FROM|UPDATE\s+\w+\s+SET)\b/)
+}
+assert.ok(existsSync(new URL('repository/ChatRepository.java', root)))
+assert.ok(existsSync(new URL('repository/ProposalRepository.java', root)))
+console.log('PASS: chat and proposal persistence boundaries')
