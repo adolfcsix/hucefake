@@ -134,3 +134,8 @@ ProposalAction phản ánh bốn hành động lưu trong ai_proposals theo migr
 ### Gemini adapter và hạn mức
 
 GeminiAdvisor giữ cấu hình, gửi yêu cầu HTTP và phân tích phản hồi JSON theo allowlist. GeminiQuota dùng record Bucket và đồng hồ có thể kiểm thử, giữ nguyên giới hạn 8 yêu cầu/60 giây/tài khoản và tối đa 1500 tài khoản đang hoạt động trong một tiến trình. Giữ nguyên timeout, endpoint, header, cấu trúc request, xử lý gián đoạn và mã lỗi. Bổ sung kiểm thử hạn mức, schema và allowlist không cần gọi dịch vụ Gemini thật. Chưa kiểm chứng kết nối Gemini bằng API key thật trong đợt này.
+
+
+### Ràng buộc xếp lịch trong bộ nhớ
+
+ScheduleConstraints tập trung kiểm tra phòng, giảng viên và trợ giảng, nhóm lớp, lịch định kỳ, ngày nghỉ và giờ bận. SchedulingService giữ các phương thức công khai hiện có để các caller không đổi; truy vấn lịch thực tế vẫn qua SchedulingRepository. Giữ nguyên thứ tự mã BR, cấu trúc lỗi, quy tắc ngày/ca và trọng số GA; hợp nhất điều kiện giờ bận trùng lặp. Bốn kiểm thử bổ sung xác minh thứ tự lỗi, mã nhóm, cùng lớp trong ngày, ngày nghỉ và giờ tránh/bận.

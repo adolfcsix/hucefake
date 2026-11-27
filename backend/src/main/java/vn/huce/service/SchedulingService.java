@@ -7,12 +7,10 @@ import vn.huce.repository.SchedulingRepository;
 import static vn.huce.validation.Inputs.*;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -74,7 +72,9 @@ public class SchedulingService {
         var to=f.get("effectiveTo")==null||"".equals(f.get("effectiveTo"))?day(section.get("end_date")):day(date(f.get("effectiveTo")));
         return new Slot(prior==null?0:prior.id,n(section,"id"),nullableId(section.get("staff_id")),roomId,(int)number(f.get("dayOfWeek"),1,7),(int)number(f.get("periodFrom"),1,15),(int)n(section,"periods_per_session"),from,to);
     }
-    public boolean fits(Map<String,Object> room,Map<String,Object> section){return room!=null&&section!=null&&"ACTIVE".equals(room.get("status"))&&n(room,"capacity")>=n(section,"capacity")&&Objects.equals(room.get("type"),section.get("required_room_type"));}
+    public boolean fits(Map<String, Object> room, Map<String, Object> section) {
+        return ScheduleConstraints.fits(room, section);
+    }
     public Span interval(Context context, Slot slot, LocalDate date) {
         return ScheduleCalendar.interval(context, slot, date);
     }
@@ -83,61 +83,30 @@ public class SchedulingService {
         return ScheduleCalendar.holiday(context, campusId, date);
     }
 
-    public Set<Long> staff(Context ctx,Slot slot){
-        var set=ids(ctx.sections.get(slot.section).get("assistant_ids"));if(slot.staff!=null)set.add(slot.staff);return set;
+    public Set<Long> staff(Context context, Slot slot) {
+        return ScheduleConstraints.staff(context, slot);
     }
-    public Map<String,Object> issue(String rule,String message,Map<String,Object> section){
-        var out=new LinkedHashMap<String,Object>();out.put("rule",rule);out.put("message",message);if(section!=null)out.put("sectionCode",section.get("code"));return out;
+
+    public Map<String, Object> issue(String rule, String message, Map<String, Object> section) {
+        return ScheduleConstraints.issue(rule, message, section);
     }
-    public Map<String,Object> pairIssue(Context ctx,Slot b,String rule,String message){
-        var out=issue(rule,message,ctx.sections.get(b.section));out.put("patternId",b.id);out.put("roomCode",ctx.rooms.get(b.room).get("code"));out.put("dayOfWeek",b.day);out.put("periodFrom",b.first);out.put("periodCount",b.count);return out;
+
+    public Map<String, Object> pairIssue(Context context, Slot other, String rule, String message) {
+        return ScheduleConstraints.pairIssue(context, other, rule, message);
     }
-    public List<Map<String,Object>> pair(Context ctx,Slot a,Slot b){
-        var out=new ArrayList<Map<String,Object>>();
-        if(a.day!=b.day)return out;
-        LocalDate from=a.from.isAfter(b.from)?a.from:b.from,to=a.to.isBefore(b.to)?a.to:b.to;
-        boolean sameSection=a.section==b.section,sameRoom=a.room==b.room,sameStaff=!Collections.disjoint(staff(ctx,a),staff(ctx,b));
-        var groups=ids(ctx.sections.get(a.section).get("group_ids"));var other=ctx.sections.get(b.section);
-        boolean sameGroup=!Collections.disjoint(groups,ids(other.get("group_ids")));
-        if(!sameSection&&!sameRoom&&!sameStaff&&!sameGroup)return out;
-        long ca=n(ctx.rooms.get(a.room),"campus_id"),cb=n(ctx.rooms.get(b.room),"campus_id");
-        boolean teaches=false,overlap=false;
-        for(var d=firstDay(from,a.day);!d.isAfter(to);d=d.plusWeeks(1)){
-            if(holiday(ctx,ca,d)||holiday(ctx,cb,d))continue;
-            teaches=true;
-            if(ca==cb){overlap=a.first<=b.last()&&b.first<=a.last();break;}
-            var x=interval(ctx,a,d);var y=interval(ctx,b,d);
-            if(x!=null&&y!=null&&x.start.isBefore(y.end)&&y.start.isBefore(x.end)){overlap=true;break;}
-        }
-        if(!teaches)return out;
-        if(sameSection)out.add(pairIssue(ctx,b,"BR09","Lớp đã có buổi khác trong ngày."));
-        if(overlap){
-            if(sameRoom)out.add(pairIssue(ctx,b,"BR04","Phòng đã được xếp cho lớp khác."));
-            if(sameStaff)out.add(pairIssue(ctx,b,"BR05","Giảng viên đã có lịch dạy."));
-            if(sameGroup){
-                var issue=pairIssue(ctx,b,"BR06","Lớp hành chính đối tượng đã có lịch.");
-                var ids=(Object[])other.get("group_ids");var codes=(Object[])other.get("group_codes");var shared=new ArrayList<Object>();
-                for(int i=0;i<ids.length;i++)if(groups.contains(nullableId(ids[i])))shared.add(codes[i]);
-                issue.put("groupCodes",shared);out.add(issue);
-            }
-        }return out;
+
+    public List<Map<String, Object>> pair(Context context, Slot first, Slot second) {
+        return ScheduleConstraints.pair(context, first, second);
     }
-    public List<Map<String,Object>> problems(Context ctx,Slot slot){
-        var section=ctx.sections.get(slot.section);
-        if(section==null||slot.staff==null||!Objects.equals(slot.staff,nullableId(section.get("staff_id"))))return List.of(issue("BR02","Lớp chưa có giảng viên chính hợp lệ.",section));
-        if(!fits(ctx.rooms.get(slot.room),section))return List.of(issue("BR07","Phòng phải hoạt động, đúng loại và đủ sức chứa.",section));
-        if(slot.from.isBefore(day(section.get("start_date")))||slot.to.isAfter(day(section.get("end_date")))||slot.from.isAfter(slot.to)||firstDay(slot.from,slot.day).isAfter(slot.to)||occurrences(slot).stream().anyMatch(d->interval(ctx,slot,d)==null))
-            return List.of(issue("BR03","Tiết học phải nằm trọn trong một ca và trong khoảng ngày của lớp.",section));
-        var out=new ArrayList<Map<String,Object>>();var staff=staff(ctx,slot);
-        if(ctx.availability.stream().anyMatch(r->staff.contains(n(r,"staff_id"))&&n(r,"semester_id")==n(section,"semester_id")&&n(r,"day_of_week")==slot.day&&"BUSY".equals(r.get("kind"))&&n(r,"period_from")<=slot.last()&&n(r,"period_to")>=slot.first))
-            out.add(issue("BR08","Giảng viên đã khai báo bận.",section));
-        for(var other:ctx.patterns)if(slot.id==0||slot.id!=other.id)out.addAll(pair(ctx,slot,other));
-        return out;
+
+    public List<Map<String, Object>> problems(Context context, Slot slot) {
+        return ScheduleConstraints.problems(context, slot);
     }
-    public boolean busy(Context ctx,Slot slot,String kind){
-        var section=ctx.sections.get(slot.section);var members=staff(ctx,slot);
-        return ctx.availability.stream().anyMatch(r->members.contains(n(r,"staff_id"))&&n(r,"semester_id")==n(section,"semester_id")&&n(r,"day_of_week")==slot.day&&kind.equals(r.get("kind"))&&n(r,"period_from")<=slot.last()&&n(r,"period_to")>=slot.first);
+
+    public boolean busy(Context context, Slot slot, String kind) {
+        return ScheduleConstraints.busy(context, slot, kind);
     }
+
     public List<Map<String, Object>> actualConflicts(Context context, Slot slot, Span span, long excludedSessionId) {
         return repository.actualConflicts(slot.section(), slot.room(), staff(context, slot),
                 span.start(), span.end(), excludedSessionId);

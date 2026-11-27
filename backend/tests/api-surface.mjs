@@ -145,3 +145,7 @@ const chatControllerSource = readFileSync(new URL('controller/ChatController.jav
 assert.doesNotMatch(chatControllerSource, /\bGeminiAdvisor\b|gemini\.(?:take|classify)\(/)
 assert.ok(existsSync(new URL('service/chat/ScheduleAssistantService.java', root)))
 console.log('PASS: schedule assistant classification stays in service layer')
+
+const constraintSource = readFileSync(new URL('service/ScheduleConstraints.java', root), 'utf8')
+assert.doesNotMatch(constraintSource, /\b(?:SqlStore|JdbcTemplate|SELECT|INSERT\s+INTO|DELETE\s+FROM|UPDATE\s+\w+\s+SET)\b/)
+console.log('PASS: in-memory schedule constraints remain independent of persistence')
