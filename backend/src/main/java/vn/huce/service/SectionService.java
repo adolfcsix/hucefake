@@ -13,6 +13,7 @@ import vn.huce.dto.SectionIdResponse;
 import vn.huce.model.SectionSemester;
 import vn.huce.model.SectionSubject;
 import vn.huce.model.SectionDraft;
+import vn.huce.model.SectionEditSnapshot;
 import vn.huce.repository.AuditRepository;
 import vn.huce.repository.SectionRepository;
 
@@ -52,13 +53,13 @@ public class SectionService {
         }
     }
 
-    public Map<String, Object> editable(Actor actor, long sectionId) {
-        Map<String, Object> section = sections.findSection(sectionId);
-        unit(actor, section.get("managing_unit_id"));
-        if (!"DRAFT".equals(section.get("status"))) {
+    public SectionEditSnapshot editable(Actor actor, long sectionId) {
+        SectionEditSnapshot section = sections.findSectionForEdit(sectionId);
+        unit(actor, section.managingUnitId());
+        if (!"DRAFT".equals(section.status())) {
             throw state("Chỉ chỉnh lớp nháp.");
         }
-        unlocked(n(section, "semester_id"));
+        unlocked(section.semesterId());
         return section;
     }
 

@@ -1,6 +1,7 @@
 package vn.huce.service;
 
 import vn.huce.model.SchedulingSection;
+import vn.huce.model.SectionEditSnapshot;
 import vn.huce.model.SchedulingRoom;
 import java.time.LocalDate;
 import java.util.List;
@@ -56,9 +57,9 @@ class SchedulingServiceTest {
     private final LocalDate monday = LocalDate.of(2026, 11, 30);
     private final Actor staff = new Actor(1L, "staff", "STAFF", 2L, 3L);
 
-    private Map<String, Object> section() {
-        return Map.of("id", 2L, "staff_id", 3L, "start_date", monday.toString(),
-                "end_date", monday.plusWeeks(2).toString(), "periods_per_session", 2);
+    private SectionEditSnapshot section() {
+        return new SectionEditSnapshot(2L, 1L, 1L, "DRAFT", 0L, 0L, 1, 2, 3L,
+                monday, monday.plusWeeks(2), Map.of());
     }
 
     private Context candidateContext(List<Slot> patterns) {

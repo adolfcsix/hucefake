@@ -19,6 +19,7 @@ import vn.huce.model.AssignmentRole;
 import vn.huce.model.PatternDraft;
 import vn.huce.model.SchedulePatternSnapshot;
 import vn.huce.model.SectionDraft;
+import vn.huce.model.SectionEditSnapshot;
 import vn.huce.model.SectionSemester;
 import vn.huce.model.SectionSubject;
 import vn.huce.repository.AuditRepository;
@@ -81,13 +82,13 @@ public class SectionMutationService {
 
     public SectionIdResponse update(Actor actor, long sectionId, Map<String, Object> input) {
         role(actor, "STAFF");
-        Map<String, Object> current = sections.editable(actor, sectionId);
-        version(input.get("version"), current);
+        SectionEditSnapshot current = sections.editable(actor, sectionId);
+        version(input.get("version"), current.version(), current::conflictDetails);
         SectionDraft draft = sections.form(actor, input);
-        if (n(current, "semester_id") != draft.semesterId()) {
+        if (current.semesterId() != draft.semesterId()) {
             throw invalid("Không thể chuyển học kỳ của lớp.");
         }
-        if (n(current, "scheduled") > draft.sessionsPerWeek()
+        if (current.scheduled() > draft.sessionsPerWeek()
                 || repository.hasIncompatiblePatterns(sectionId, draft)) {
             throw state("Hãy gỡ lịch định kỳ bị ảnh hưởng trước khi sửa lớp.");
         }
@@ -98,7 +99,8 @@ public class SectionMutationService {
 
     public Object cancel(Actor actor, long sectionId, String expectedVersion) {
         role(actor, "STAFF");
-        version(expectedVersion, sections.editable(actor, sectionId));
+        SectionEditSnapshot section = sections.editable(actor, sectionId);
+        version(expectedVersion, section.version(), section::conflictDetails);
         repository.cancelDraft(sectionId);
         audit.record(actor, "CANCEL", "course_sections", sectionId);
         return null;
@@ -106,14 +108,14 @@ public class SectionMutationService {
 
     public Object assign(Actor actor, long sectionId, Map<String, Object> input) {
         role(actor, "STAFF");
-        Map<String, Object> section = sections.editable(actor, sectionId);
+        SectionEditSnapshot section = sections.editable(actor, sectionId);
         checkOptionalVersion(input, section);
         SectionAssignmentRequest request = SectionRequestParser.assignment(input);
         applyAssignment(actor, sectionId, section, request);
         return null;
     }
 
-    private void applyAssignment(Actor actor, long sectionId, Map<String, Object> section,
+    private void applyAssignment(Actor actor, long sectionId, SectionEditSnapshot section,
                                  SectionAssignmentRequest request) {
         long mainLecturer = request.staffId();
         Map<Long, AssignmentRole> desired = new LinkedHashMap<>();
@@ -133,11 +135,11 @@ public class SectionMutationService {
                 repository.closeAssignment(assignment.id());
             }
         }
-        LocalDate startDate = LocalDate.parse(s(section, "start_date"));
+        LocalDate startDate = section.startDate();
         for (Map.Entry<Long, AssignmentRole> entry : desired.entrySet()) {
             repository.addAssignment(sectionId, entry.getKey(), entry.getValue(), startDate, actor.id());
         }
-        if (!Objects.equals(SchedulingService.nullableId(section.get("staff_id")), mainLecturer)) {
+        if (!Objects.equals(section.staffId(), mainLecturer)) {
             repository.replacePatternLecturer(sectionId, mainLecturer);
         }
         scheduling.recheck(sectionId, actor);
@@ -170,9 +172,9 @@ public class SectionMutationService {
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public Object conflicts(Actor actor, Map<String, Object> input) {
         role(actor, "STAFF", "MANAGER");
-        Map<String, Object> section = repository.findSection(id(input.get("sectionId")));
-        unit(actor, section.get("managing_unit_id"));
-        if (!"DRAFT".equals(section.get("status"))) {
+        SectionEditSnapshot section = repository.findSectionForEdit(id(input.get("sectionId")));
+        unit(actor, section.managingUnitId());
+        if (!"DRAFT".equals(section.status())) {
             throw state("Chỉ kiểm tra phương án cho lớp nháp.");
         }
         SchedulingService.Context context = scheduling.context();
@@ -183,14 +185,14 @@ public class SectionMutationService {
 
     public SchedulePatternIdResponse savePattern(Actor actor, Map<String, Object> input, Long patternId) {
         role(actor, "STAFF");
-        Map<String, Object> section = sections.editable(actor, id(input.get("sectionId")));
+        SectionEditSnapshot section = sections.editable(actor, id(input.get("sectionId")));
         SchedulingService.Context context = scheduling.context();
         SchedulingService.Slot slot = scheduling.candidate(actor, context, input, patternId, section);
         if (patternId != null) {
             SchedulePatternSnapshot current = patterns.find(patternId);
             version(input.get("version"), current.version(), current::conflictDetails);
         }
-        if (patternId == null && n(section, "scheduled") >= n(section, "sessions_per_week")) {
+        if (patternId == null && section.scheduled() >= section.sessionsPerWeek()) {
             throw state("Lớp đã xếp đủ số buổi mỗi tuần.");
         }
         SchedulingService.Result result = scheduling.check(context, slot, actor, true);
@@ -205,9 +207,9 @@ public class SectionMutationService {
         return new SchedulePatternIdResponse(savedId);
     }
 
-    private void checkOptionalVersion(Map<String, Object> input, Map<String, Object> row) {
+    private void checkOptionalVersion(Map<String, Object> input, SectionEditSnapshot row) {
         if (input.get("version") != null) {
-            version(input.get("version"), row);
+            version(input.get("version"), row.version(), row::conflictDetails);
         }
     }
 }

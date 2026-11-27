@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
 import vn.huce.model.SectionDraft;
+import vn.huce.model.SectionEditSnapshot;
 import vn.huce.model.SectionSemester;
 import vn.huce.model.SectionSubject;
 import vn.huce.dto.SectionIdResponse;
@@ -75,8 +76,9 @@ class SectionServiceTest {
 
     @Test
     void staffCannotEditAnotherUnitSection() {
-        when(repository.findSection(9L)).thenReturn(Map.of("id", 9L,
-                "managing_unit_id", 99L, "status", "DRAFT", "semester_id", 4L));
+        when(repository.findSectionForEdit(9L)).thenReturn(new SectionEditSnapshot(
+                9L, 4L, 99L, "DRAFT", 0L, 0L, 2, 3, null,
+                semester.startDate(), semester.endDate(), Map.of()));
         assertEquals(403, assertThrows(ApiFailure.class, () -> service.editable(staff, 9L)).status());
         verify(repository, never()).hasSubmittedTimetable(anyLong());
         verifyNoInteractions(audit);

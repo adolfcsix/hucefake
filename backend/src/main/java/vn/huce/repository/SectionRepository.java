@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 import vn.huce.exception.ApiFailure;
 import vn.huce.model.AssignmentRole;
 import vn.huce.model.SectionDraft;
+import vn.huce.model.SectionEditSnapshot;
 import vn.huce.model.SectionSemester;
 import vn.huce.model.SectionSubject;
 
@@ -53,6 +54,17 @@ public class SectionRepository {
 
     public Map<String, Object> findSection(long sectionId) {
         return store.need(SECTION_SQL + " WHERE c.id=?", sectionId);
+    }
+
+    public SectionEditSnapshot findSectionForEdit(long sectionId) {
+        Map<String, Object> row = findSection(sectionId);
+        return new SectionEditSnapshot(sectionId, ((Number) row.get("semester_id")).longValue(),
+                row.get("managing_unit_id") == null ? null : ((Number) row.get("managing_unit_id")).longValue(),
+                (String) row.get("status"), ((Number) row.get("version")).longValue(),
+                ((Number) row.get("scheduled")).longValue(), ((Number) row.get("sessions_per_week")).intValue(),
+                ((Number) row.get("periods_per_session")).intValue(),
+                row.get("staff_id") == null ? null : ((Number) row.get("staff_id")).longValue(),
+                LocalDate.parse((String) row.get("start_date")), LocalDate.parse((String) row.get("end_date")), row);
     }
 
     public SectionSemester findSemester(long semesterId) {

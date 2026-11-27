@@ -12,6 +12,7 @@ import vn.huce.model.AssignmentRole;
 import vn.huce.model.PatternDraft;
 import vn.huce.model.SchedulePatternSnapshot;
 import vn.huce.model.SectionSemester;
+import vn.huce.model.SectionEditSnapshot;
 import vn.huce.repository.AuditRepository;
 import vn.huce.repository.SchedulePatternRepository;
 import vn.huce.repository.SectionRepository;
@@ -29,9 +30,15 @@ class SectionMutationServiceTest {
             repository, patterns, audit, sections, scheduling);
     private final Actor staff = new Actor(1L, "staff", "STAFF", 2L, 3L);
 
+    private SectionEditSnapshot section(long version) {
+        return new SectionEditSnapshot(7L, 4L, 3L, "DRAFT", version, 0L, 2, 3, 12L,
+                LocalDate.of(2026, 9, 1), LocalDate.of(2026, 12, 1),
+                Map.of("version", version, "code", "HP07"));
+    }
+
     @Test
     void rejectsDuplicateMainAndAssistantBeforeWriting() {
-        when(sections.editable(staff, 7L)).thenReturn(Map.of("version", 1L));
+        when(sections.editable(staff, 7L)).thenReturn(section(1L));
         assertThrows(ApiFailure.class, () -> service.assign(staff, 7L,
                 Map.of("staffId", 12L, "assistantIds", List.of(12L))));
         verifyNoInteractions(repository, patterns, audit, scheduling);
@@ -39,7 +46,7 @@ class SectionMutationServiceTest {
 
     @Test
     void targetGroupsAreDeduplicatedAndScheduleIsRechecked() {
-        when(sections.editable(staff, 7L)).thenReturn(Map.of("version", 1L));
+        when(sections.editable(staff, 7L)).thenReturn(section(1L));
         service.groups(staff, 7L, Map.of("groupIds", List.of(2L, 2L, 3L)));
         var ordered = inOrder(repository, scheduling, audit);
         ordered.verify(repository).replaceTargetGroups(7L, java.util.Set.of(2L, 3L));
@@ -60,17 +67,18 @@ class SectionMutationServiceTest {
 
     @Test
     void staleVersionIsRejectedBeforeAssignmentParsing() {
-        when(sections.editable(staff, 7L)).thenReturn(Map.of("version", 2L));
+        when(sections.editable(staff, 7L)).thenReturn(section(2L));
         var error = assertThrows(ApiFailure.class, () ->
                 service.assign(staff, 7L, Map.of("version", 1L, "staffId", false)));
         assertEquals(409, error.status());
         assertEquals("VERSION_CONFLICT", error.code());
+        assertEquals(section(2L).conflictDetails(), error.details());
         verifyNoInteractions(repository, patterns, audit, scheduling);
     }
 
     @Test
     void invalidGroupSelectionDoesNotMutateRepository() {
-        when(sections.editable(staff, 7L)).thenReturn(Map.of("version", 1L));
+        when(sections.editable(staff, 7L)).thenReturn(section(1L));
         var error = assertThrows(ApiFailure.class, () ->
                 service.groups(staff, 7L, Map.of("groupIds", List.of(1, 1.5))));
         assertEquals(400, error.status());
@@ -80,8 +88,7 @@ class SectionMutationServiceTest {
     @Test
     void assignmentRetainsMainAndReplacesOnlyChangedAssistants() {
         LocalDate start = LocalDate.of(2026, 9, 1);
-        when(sections.editable(staff, 7L)).thenReturn(Map.of(
-                "version", 1L, "start_date", start.toString(), "staff_id", 12L));
+        when(sections.editable(staff, 7L)).thenReturn(section(1L));
         when(repository.isActiveLecturer(12L)).thenReturn(true);
         when(repository.isActiveLecturer(13L)).thenReturn(true);
         when(repository.activeAssignments(7L)).thenReturn(List.of(
@@ -100,7 +107,7 @@ class SectionMutationServiceTest {
 
     @Test
     void schedulePatternWriteReturnsTypedIdAndPreservesAudit() {
-        var section = Map.<String, Object>of("scheduled", 0L, "sessions_per_week", 2L);
+        var section = section(1L);
         var input = Map.<String, Object>of("sectionId", 7L);
         var context = new SchedulingService.Context(Map.of(), Map.of(), List.of(), List.of(), List.of(), List.of());
         var from = LocalDate.of(2026, 9, 1);

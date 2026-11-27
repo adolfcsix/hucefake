@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
 import vn.huce.model.SchedulePatternSnapshot;
+import vn.huce.model.SectionEditSnapshot;
 import vn.huce.model.TeachingPeriod;
 import vn.huce.model.NonTeachingDay;
 import vn.huce.model.StaffAvailability;
@@ -127,11 +128,11 @@ public class SchedulingService {
     }
 
     public Slot candidate(Actor actor, Context context, Map<String, Object> body,
-                          Long priorId, Map<String, Object> section) {
+                          Long priorId, SectionEditSnapshot section) {
         Slot prior = priorId == null ? null : context.patterns().stream()
                 .filter(pattern -> pattern.id() == priorId)
                 .findFirst().orElseThrow(() -> new ApiFailure(404, "NOT_FOUND", "Không tìm thấy dữ liệu."));
-        if (prior != null && prior.section() != n(section, "id")) {
+        if (prior != null && prior.section() != section.id()) {
             throw invalid("Không thể chuyển lịch sang lớp khác.");
         }
 
@@ -145,16 +146,16 @@ public class SchedulingService {
             requireCampus(actor, context.rooms().get(prior.room()).campusId());
         }
 
-        LocalDate from = effectiveDate(body.get("effectiveFrom"), section.get("start_date"));
-        LocalDate to = effectiveDate(body.get("effectiveTo"), section.get("end_date"));
-        return new Slot(prior == null ? 0 : prior.id(), n(section, "id"),
-                nullableId(section.get("staff_id")), roomId,
+        LocalDate from = effectiveDate(body.get("effectiveFrom"), section.startDate());
+        LocalDate to = effectiveDate(body.get("effectiveTo"), section.endDate());
+        return new Slot(prior == null ? 0 : prior.id(), section.id(),
+                section.staffId(), roomId,
                 (int) number(body.get("dayOfWeek"), 1, 7), (int) number(body.get("periodFrom"), 1, 15),
-                (int) n(section, "periods_per_session"), from, to);
+                section.periodsPerSession(), from, to);
     }
 
-    private LocalDate effectiveDate(Object value, Object fallback) {
-        return value == null || "".equals(value) ? day(fallback) : day(date(value));
+    private LocalDate effectiveDate(Object value, LocalDate fallback) {
+        return value == null || "".equals(value) ? fallback : day(date(value));
     }
 
     public boolean fits(SchedulingRoom room, Map<String, Object> section) {
