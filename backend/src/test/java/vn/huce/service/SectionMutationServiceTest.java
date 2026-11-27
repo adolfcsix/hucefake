@@ -1,6 +1,7 @@
 package vn.huce.service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -9,6 +10,7 @@ import vn.huce.dto.SchedulePatternIdResponse;
 import vn.huce.exception.ApiFailure;
 import vn.huce.model.AssignmentRole;
 import vn.huce.model.PatternDraft;
+import vn.huce.model.SchedulePatternSnapshot;
 import vn.huce.model.SectionSemester;
 import vn.huce.repository.AuditRepository;
 import vn.huce.repository.SchedulePatternRepository;
@@ -113,5 +115,38 @@ class SectionMutationServiceTest {
         when(patterns.insert(draft, 1L)).thenReturn(42L);
         assertEquals(new SchedulePatternIdResponse(42L), service.savePattern(staff, input, null));
         verify(audit).record(staff, "SAVE", "section_schedule_patterns", 42L);
+    }
+
+    @Test
+    void stalePatternDeletionPreservesDetailsAndDoesNotWrite() {
+        var pattern = new SchedulePatternSnapshot(42L, 7L, 12L, 4L, 2, 1, 3,
+                LocalDate.of(2026, 9, 1), LocalDate.of(2026, 12, 1), "MANUAL",
+                null, 1L, LocalDateTime.of(2026, 9, 1, 8, 0), 2, 5L);
+        when(patterns.findWithCampus(42L)).thenReturn(pattern);
+        var error = assertThrows(ApiFailure.class, () -> service.deletePattern(staff, 42L, "1"));
+        assertEquals(409, error.status());
+        assertEquals("VERSION_CONFLICT", error.code());
+        assertEquals(pattern.conflictDetails(), error.details());
+        var ordered = inOrder(patterns, sections, scheduling);
+        ordered.verify(patterns).findWithCampus(42L);
+        ordered.verify(sections).editable(staff, 7L);
+        ordered.verify(scheduling).requireCampus(staff, 5L);
+        verify(patterns, never()).delete(anyLong());
+        verifyNoInteractions(audit);
+    }
+
+    @Test
+    void matchingPatternVersionDeletesAndAudits() {
+        var pattern = new SchedulePatternSnapshot(42L, 7L, 12L, 4L, 2, 1, 3,
+                LocalDate.of(2026, 9, 1), LocalDate.of(2026, 12, 1), "MANUAL",
+                null, 1L, LocalDateTime.of(2026, 9, 1, 8, 0), 2, 5L);
+        when(patterns.findWithCampus(42L)).thenReturn(pattern);
+        assertNull(service.deletePattern(staff, 42L, "2"));
+        var ordered = inOrder(patterns, sections, scheduling, audit);
+        ordered.verify(patterns).findWithCampus(42L);
+        ordered.verify(sections).editable(staff, 7L);
+        ordered.verify(scheduling).requireCampus(staff, 5L);
+        ordered.verify(patterns).delete(42L);
+        ordered.verify(audit).record(staff, "DELETE", "section_schedule_patterns", 42L);
     }
 }

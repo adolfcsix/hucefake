@@ -17,6 +17,7 @@ import vn.huce.dto.SectionTargetGroupsRequest;
 import vn.huce.exception.ApiFailure;
 import vn.huce.model.AssignmentRole;
 import vn.huce.model.PatternDraft;
+import vn.huce.model.SchedulePatternSnapshot;
 import vn.huce.model.SectionDraft;
 import vn.huce.model.SectionSemester;
 import vn.huce.model.SectionSubject;
@@ -157,10 +158,10 @@ public class SectionMutationService {
 
     public Object deletePattern(Actor actor, long patternId, String expectedVersion) {
         role(actor, "STAFF");
-        Map<String, Object> pattern = patterns.findWithCampus(patternId);
-        sections.editable(actor, n(pattern, "section_id"));
-        scheduling.requireCampus(actor, n(pattern, "campus_id"));
-        version(expectedVersion, pattern);
+        SchedulePatternSnapshot pattern = patterns.findWithCampus(patternId);
+        sections.editable(actor, pattern.sectionId());
+        scheduling.requireCampus(actor, pattern.campusId());
+        version(expectedVersion, pattern.version(), pattern::conflictDetails);
         patterns.delete(patternId);
         audit.record(actor, "DELETE", "section_schedule_patterns", patternId);
         return null;
@@ -186,7 +187,8 @@ public class SectionMutationService {
         SchedulingService.Context context = scheduling.context();
         SchedulingService.Slot slot = scheduling.candidate(actor, context, input, patternId, section);
         if (patternId != null) {
-            version(input.get("version"), patterns.find(patternId));
+            SchedulePatternSnapshot current = patterns.find(patternId);
+            version(input.get("version"), current.version(), current::conflictDetails);
         }
         if (patternId == null && n(section, "scheduled") >= n(section, "sessions_per_week")) {
             throw state("Lớp đã xếp đủ số buổi mỗi tuần.");
@@ -208,5 +210,4 @@ public class SectionMutationService {
             version(input.get("version"), row);
         }
     }
-
 }

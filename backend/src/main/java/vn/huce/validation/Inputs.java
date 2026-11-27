@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Supplier;
 import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
 
@@ -81,6 +82,13 @@ public final class Inputs {
         if (number(value, 0, 9007199254740991L) != ((Number) row.get("version")).longValue()) {
             throw new ApiFailure(409, "VERSION_CONFLICT",
                     "Dữ liệu đã thay đổi. Hãy tải lại trước khi lưu.", row);
+        }
+    }
+
+    public static void version(Object value, long currentVersion, Supplier<Object> details) {
+        if (number(value, 0, 9007199254740991L) != currentVersion) {
+            throw new ApiFailure(409, "VERSION_CONFLICT",
+                    "Dữ liệu đã thay đổi. Hãy tải lại trước khi lưu.", details.get());
         }
     }
 
