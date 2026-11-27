@@ -27,7 +27,7 @@ class ApprovalServiceTest {
     private final NotificationService notifications = mock(NotificationService.class);
     private final SchedulingService scheduling = mock(SchedulingService.class);
     private final ApprovalService service = new ApprovalService(repository, audit, notifications,
-            scheduling, new ObjectMapper());
+            scheduling, new ObjectMapper(), new ApprovalAssessmentService(repository, scheduling));
     private final Actor staff = new Actor(1L, "staff", "STAFF", 2L, 3L);
     private final Actor manager = new Actor(9L, "manager", "MANAGER", null, null);
 
