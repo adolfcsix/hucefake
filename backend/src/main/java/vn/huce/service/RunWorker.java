@@ -1,7 +1,6 @@
 package vn.huce.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -10,11 +9,11 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
+import vn.huce.model.ClaimedScheduleRun;
 import vn.huce.repository.RunRepository;
 import vn.huce.repository.MutationRepository;
 
-import static vn.huce.validation.Inputs.*;
-import static vn.huce.service.SchedulingService.nullableId;
+import static vn.huce.validation.Inputs.role;
 
 @Service
 class RunWorker {
@@ -38,7 +37,7 @@ class RunWorker {
     public void poll() {
         Long claimedId = null;
         try {
-            Map<String, Object> run = tx.execute(status -> {
+            ClaimedScheduleRun run = tx.execute(status -> {
                 mutations.lock();
                 repository.failInterrupted();
                 return repository.claimNext();
@@ -46,16 +45,14 @@ class RunWorker {
             if (run == null) {
                 return;
             }
-            claimedId = n(run, "id");
+            claimedId = run.id();
             final long runId = claimedId;
-            GeneticScheduler.Parameters settings = json.readValue(s(run, "parameters_json"), GeneticScheduler.Parameters.class);
+            GeneticScheduler.Parameters settings = json.readValue(run.parametersJson(), GeneticScheduler.Parameters.class);
             GeneticScheduler.Input input = tx.execute(status -> {
                 mutations.lock();
-                Map<String, Object> user = repository.activeRequester(n(run, "requested_by"));
-                Actor actor = new Actor(n(user, "id"), s(user, "username"), s(user, "role"),
-                        nullableId(user.get("staff_id")), nullableId(user.get("unit_id")));
+                Actor actor = repository.activeRequester(run.requestedBy());
                 role(actor, "STAFF", "MANAGER");
-                return genetic.input(actor, n(run, "semester_id"));
+                return genetic.input(actor, run.semesterId());
             });
             GeneticScheduler.Outcome outcome = genetic.solve(input, settings, progress ->
                     tx.executeWithoutResult(status -> repository.recordProgress(runId,

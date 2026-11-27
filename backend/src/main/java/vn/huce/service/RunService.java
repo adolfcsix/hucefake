@@ -13,6 +13,8 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
+import vn.huce.model.ScheduleRunItem;
+import vn.huce.model.ScheduleRunStatus;
 import vn.huce.repository.ApprovalRepository;
 import vn.huce.repository.AuditRepository;
 import vn.huce.repository.RunRepository;
@@ -43,7 +45,7 @@ public class RunService {
         role(actor, "STAFF", "MANAGER");
         Map<String, Object> row = repository.find(runId);
         if ("STAFF".equals(actor.role()) && n(row, "requested_by") != actor.id()
-                && (!Set.of("COMPLETED", "APPLIED").contains(row.get("status"))
+                && (!ScheduleRunStatus.valueOf(s(row, "status")).visibleToOtherStaff()
                     || !repository.visibleManagerRun(runId, actor.unitId()))) {
             throw forbidden();
         }
@@ -83,10 +85,11 @@ public class RunService {
 
     public Object apply(Actor actor, long runId) {
         Map<String, Object> run = get(actor, runId);
-        if ("APPLIED".equals(run.get("status"))) {
-            return Map.of("status", "APPLIED");
+        ScheduleRunStatus status = ScheduleRunStatus.valueOf(s(run, "status"));
+        if (status == ScheduleRunStatus.APPLIED) {
+            return Map.of("status", ScheduleRunStatus.APPLIED.name());
         }
-        if (!"COMPLETED".equals(run.get("status")) || n(run, "hard_violations") != 0) {
+        if (status != ScheduleRunStatus.COMPLETED || n(run, "hard_violations") != 0) {
             throw state("Chỉ áp dụng được phương án hoàn tất với 0 vi phạm cứng.");
         }
         long semesterId = n(run, "semester_id");
@@ -101,24 +104,24 @@ public class RunService {
         List<Slot> fixed = new ArrayList<>(context.patterns());
         ApiFailure stale = new ApiFailure(409, "VERSION_CONFLICT",
                 "Dữ liệu đã thay đổi. Hãy tải lại trước khi lưu.", Map.of("runId", runId));
-        for (Map<String, Object> item : repository.rawItems(runId)) {
-            Map<String, Object> section = context.sections().get(n(item, "section_id"));
+        for (ScheduleRunItem item : repository.rawItems(runId)) {
+            Map<String, Object> section = context.sections().get(item.sectionId());
             if (section == null) {
                 throw stale;
             }
             unit(actor, section.get("managing_unit_id"));
             if (!expectedIds.contains(n(section, "id"))
-                    || !Objects.equals(nullableId(section.get("staff_id")), nullableId(item.get("staff_id")))
-                    || n(section, "periods_per_session") != n(item, "period_count")) {
+                    || !Objects.equals(nullableId(section.get("staff_id")), item.staffId())
+                    || n(section, "periods_per_session") != item.periodCount()) {
                 throw stale;
             }
-            Map<String, Object> room = context.rooms().get(n(item, "room_id"));
+            Map<String, Object> room = context.rooms().get(item.roomId());
             if (room == null) {
                 throw stale;
             }
             scheduling.requireCampus(actor, n(room, "campus_id"));
             Slot slot = GeneticScheduler.make(section, n(room, "id"),
-                    (int) n(item, "day_of_week"), (int) n(item, "period_from"));
+                    item.dayOfWeek(), item.periodFrom());
             Context test = new Context(context.sections(), context.rooms(), context.periods(),
                     context.availability(), context.holidays(), fixed);
             Result result = scheduling.check(test, slot, actor, false);
@@ -141,7 +144,7 @@ public class RunService {
         }
         repository.markApplied(runId);
         audit.record(actor, "APPLY", "schedule_runs", runId);
-        return Map.of("status", "APPLIED", "patterns", plan.size());
+        return Map.of("status", ScheduleRunStatus.APPLIED.name(), "patterns", plan.size());
     }
 
     public void discard(Actor actor, long runId) {
@@ -149,7 +152,7 @@ public class RunService {
         if ("STAFF".equals(actor.role()) && n(run, "requested_by") != actor.id()) {
             throw forbidden();
         }
-        if (!Set.of("QUEUED", "COMPLETED", "FAILED").contains(run.get("status"))) {
+        if (!ScheduleRunStatus.valueOf(s(run, "status")).discardable()) {
             throw state("Lần chạy không thể bỏ ở trạng thái hiện tại.");
         }
         repository.discard(runId);

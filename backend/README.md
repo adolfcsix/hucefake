@@ -114,3 +114,8 @@ ApprovalStatus và TimetableVersionStatus phản ánh hai vòng đời riêng th
 ### Kiểu dữ liệu điều chỉnh buổi học
 
 SessionChangeAction và SessionRequestStatus tách hành động điều chỉnh khỏi trạng thái đề nghị theo migration PostgreSQL. SessionChangeRequest và SessionRequestDecision kiểm tra dữ liệu theo từng vai trò; SessionChangeRepository nhận Enum và ghi giá trị name() như trước. SessionMutationService tách tạo buổi thay thế và đóng đề nghị đang chờ; giữ nguyên thứ tự kiểm tra, quyền, giao dịch và JSON. Controller giữ body gốc cho idempotency. Các Map projection từ PostgreSQL vẫn được giữ trong phạm vi tương thích hiện tại. Bổ sung kiểm thử hủy buổi, loại đề nghị không phù hợp, đề nghị đã xử lý và giới hạn hành động của giảng viên.
+
+
+### Kiểu dữ liệu lần chạy xếp lịch
+
+ScheduleRunStatus phản ánh sáu trạng thái trong ràng buộc schedule_runs, tập trung điều kiện xem lần chạy của quản lý và loại bỏ lần chạy. ClaimedScheduleRun định kiểu dữ liệu worker nhận; ScheduleRunItem định kiểu phương án trước khi kiểm tra lại và áp dụng. RunRepository ánh xạ JDBC, RunWorker sử dụng Actor đã ánh xạ và không đọc Map cột dữ liệu. RunController được chuẩn hóa cách trình bày; các phản hồi động và body chống lặp giữ nguyên JSON. Không thay đổi thuật toán, thứ tự khóa, giao dịch, schema hoặc quy tắc nghiệp vụ. Kiểm thử bổ sung quyền đọc, trạng thái, bỏ lần chạy và từ chối phương án lỗi thời.

@@ -7,6 +7,9 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Repository;
 import vn.huce.Accounts.Actor;
+import vn.huce.model.ClaimedScheduleRun;
+import vn.huce.model.ScheduleRunItem;
+import vn.huce.exception.ApiFailure;
 
 @Repository
 public class RunRepository {
@@ -39,8 +42,13 @@ public class RunRepository {
                 """, semesterId, actorId, parametersJson);
     }
 
-    public List<Map<String, Object>> rawItems(long runId) {
-        return store.rows("SELECT * FROM schedule_run_items WHERE run_id=? ORDER BY id", runId);
+    public List<ScheduleRunItem> rawItems(long runId) {
+        return store.jdbc().query("""
+                SELECT section_id,staff_id,room_id,day_of_week,period_from,period_count
+                FROM schedule_run_items WHERE run_id=? ORDER BY id
+                """, (row, index) -> new ScheduleRunItem(
+                row.getLong("section_id"), row.getLong("staff_id"), row.getLong("room_id"),
+                row.getInt("day_of_week"), row.getInt("period_from"), row.getInt("period_count")), runId);
     }
 
     public void insertPattern(long runId, long actorId, long sectionId, Long staffId, long roomId,
@@ -93,20 +101,28 @@ public class RunRepository {
                 """);
     }
 
-    public Map<String, Object> claimNext() {
-        return store.one("""
+    public ClaimedScheduleRun claimNext() {
+        List<ClaimedScheduleRun> rows = store.jdbc().query("""
                 UPDATE schedule_runs SET status='RUNNING',started_at=now() WHERE id=(
                     SELECT id FROM schedule_runs WHERE status='QUEUED' ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 1)
                 RETURNING id,semester_id,requested_by,parameters::text AS parameters_json
-                """);
+                """, (row, index) -> new ClaimedScheduleRun(row.getLong("id"),
+                row.getLong("semester_id"), row.getLong("requested_by"), row.getString("parameters_json")));
+        return rows.isEmpty() ? null : rows.getFirst();
     }
 
-    public Map<String, Object> activeRequester(long userId) {
-        return store.need("""
+    public Actor activeRequester(long userId) {
+        List<Actor> rows = store.jdbc().query("""
                 SELECT u.id,u.username,r.code AS role,p.id AS staff_id,p.unit_id FROM users u
                 JOIN roles r ON r.role_id=u.role_id LEFT JOIN staff_profiles p ON p.user_id=u.id AND p.status='ACTIVE'
                 WHERE u.id=? AND u.status='ACTIVE'
-                """, userId);
+                """, (row, index) -> new Actor(row.getLong("id"), row.getString("username"),
+                row.getString("role"), row.getObject("staff_id", Long.class),
+                row.getObject("unit_id", Long.class)), userId);
+        if (rows.isEmpty()) {
+            throw new ApiFailure(404, "NOT_FOUND", "Không tìm thấy dữ liệu.");
+        }
+        return rows.getFirst();
     }
 
     public void recordProgress(long runId, int generation, int hard, double soft) {

@@ -3,6 +3,9 @@ package vn.huce.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.List;
+import vn.huce.model.ScheduleRunItem;
+import vn.huce.model.ScheduleRunStatus;
 import org.junit.jupiter.api.Test;
 import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
@@ -89,5 +92,47 @@ class RunServiceTest {
         assertThrows(ApiFailure.class, () -> service.discard(staff, 7L));
         verify(repository, never()).discard(anyLong());
         verifyNoInteractions(audit);
+    }
+
+    @Test
+    void completedManagerRunCanBeReadWithinStaffUnit() {
+        when(repository.find(7L)).thenReturn(run(2L, "COMPLETED", 0));
+        when(repository.visibleManagerRun(7L, 3L)).thenReturn(true);
+        var response = service.get(staff, 7L);
+        assertEquals("COMPLETED", response.get("status"));
+        assertEquals(Map.of(), response.get("parameters"));
+        assertFalse(response.containsKey("parameters_json"));
+    }
+
+    @Test
+    void failedOwnedRunCanBeDiscardedAndAudited() {
+        when(repository.find(7L)).thenReturn(run(1L, "FAILED", 0));
+        service.discard(staff, 7L);
+        verify(repository).discard(7L);
+        verify(audit).record(staff, "DISCARD", "schedule_runs", 7L);
+    }
+
+    @Test
+    void staleTypedPlacementCannotBeApplied() {
+        when(repository.find(7L)).thenReturn(run(1L, "COMPLETED", 0));
+        var context = new SchedulingService.Context(Map.of(), Map.of(),
+                List.of(), List.of(), List.of(), List.of());
+        when(scheduling.context()).thenReturn(context);
+        when(genetic.targets(context, staff, 4L)).thenReturn(List.of());
+        when(repository.rawItems(7L)).thenReturn(List.of(new ScheduleRunItem(10L, 2L, 3L, 1, 1, 2)));
+        assertEquals("VERSION_CONFLICT", assertThrows(ApiFailure.class,
+                () -> service.apply(staff, 7L)).code());
+        verify(repository, never()).markApplied(anyLong());
+        verifyNoInteractions(audit);
+    }
+
+    @Test
+    void statusRulesMatchExistingLifecycle() {
+        for (ScheduleRunStatus status : ScheduleRunStatus.values()) {
+            assertEquals(java.util.Set.of("COMPLETED", "APPLIED").contains(status.name()),
+                    status.visibleToOtherStaff());
+            assertEquals(java.util.Set.of("QUEUED", "COMPLETED", "FAILED").contains(status.name()),
+                    status.discardable());
+        }
     }
 }
