@@ -60,4 +60,24 @@ class SectionServiceTest {
         assertEquals(Map.of("id", 9L), service.saveDraft(staff, input("2026-09-10")));
         verify(audit).record(staff, "CREATE", "course_sections", 9L);
     }
+
+    @Test
+    void staffCannotCreateDraftForAnotherUnit() {
+        when(repository.findSemester(4L)).thenReturn(semester);
+        when(repository.findSubject(5L)).thenReturn(Map.of("id", 5L, "status", "ACTIVE",
+                "managing_unit_id", 99L));
+        assertEquals(403, assertThrows(ApiFailure.class,
+                () -> service.saveDraft(staff, input("2026-09-10"))).status());
+        verify(repository, never()).insertDraft(any(), anyLong());
+        verifyNoInteractions(audit);
+    }
+
+    @Test
+    void staffCannotEditAnotherUnitSection() {
+        when(repository.findSection(9L)).thenReturn(Map.of("id", 9L,
+                "managing_unit_id", 99L, "status", "DRAFT", "semester_id", 4L));
+        assertEquals(403, assertThrows(ApiFailure.class, () -> service.editable(staff, 9L)).status());
+        verify(repository, never()).hasSubmittedTimetable(anyLong());
+        verifyNoInteractions(audit);
+    }
 }

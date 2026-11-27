@@ -164,3 +164,8 @@ SetupCommand tạo RuntimeModeRepository và MutationRepository từ JdbcTemplat
 ### Loại bỏ cầu nối cũ sau cải tổ
 
 Rà soát các repository, service, controller, CLI và toàn bộ 31 file Java test tại d08205e. Không còn nơi gọi SqlStore.audit(); audit nghiệp vụ sử dụng AuditRepository.record. Bỏ phương thức cũ, dependency AuditRepository và constructor thừa trong SqlStore. Bỏ wrapper SchedulingService.pairIssue không còn caller; ScheduleConstraints vẫn giữ xử lý nội bộ. Bổ sung bốn kiểm thử hợp đồng truy vấn, phân trang và mã lỗi. Giữ SqlStore vì các projection và CLI vẫn cần JDBC adapter; không xóa các dependency Maven đang phục vụ runtime.
+
+
+### Kiểm toán quyền ghi và phạm vi khoa
+
+Đối chiếu sáu Controller ghi dữ liệu, các service lớp học phần, lịch, phê duyệt, GA và đề xuất HUCEChat. Bổ sung MutationAuthorizationTest: 28 endpoint ghi nghiệp vụ, 81 tổ hợp vai trò bị từ chối (25 endpoint x 3 vai trò và 3 endpoint GA x 2 vai trò), yêu cầu 403/FORBIDDEN trước khi gọi MutationService hoặc service nghiệp vụ. Bổ sung hai test lớp học phần ngoài khoa. Đây là unit test quyền ở Controller/Service, không thay thế các kiểm thử HTTP/CSRF/PostgreSQL và phạm vi dữ liệu thật trong CI. Không thay đổi chính sách quyền đang có.
