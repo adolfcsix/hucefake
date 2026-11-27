@@ -1,5 +1,7 @@
 package vn.huce.service;
 
+import vn.huce.model.SchedulingSection;
+import vn.huce.model.SchedulingRoom;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -8,6 +10,9 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
+import vn.huce.model.PublishedSession;
+import vn.huce.model.StaffAvailability;
+import vn.huce.model.AvailabilityEntry.Kind;
 import vn.huce.repository.SchedulingRepository;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -25,10 +30,10 @@ class GeneticSchedulerTest {
         return new Slot(0L, 1L, 2L, 3L, day, first, 2, monday, monday.plusWeeks(2));
     }
 
-    private Context context(List<Map<String, Object>> availability) {
-        return new Context(Map.of(1L, Map.of("id", 1L, "semester_id", 4L, "staff_id", 2L,
-                        "capacity", 30, "assistant_ids", new Long[0], "group_ids", new Long[0])),
-                Map.of(3L, Map.of("id", 3L, "campus_id", 5L, "capacity", 60)),
+    private Context context(List<StaffAvailability> availability) {
+        return new Context(Map.of(1L, new SchedulingSection(1L, 4L, 6L, "DRAFT", "A", "Toán", 2L,
+                        30, "LECTURE", 2, 2, 0L, monday, monday.plusWeeks(2), Set.of(), Map.of())),
+                Map.of(3L, new SchedulingRoom(3L, 5L, "P3", 60, "LECTURE", "ACTIVE")),
                 List.of(), availability, List.of(), List.of());
     }
 
@@ -46,10 +51,8 @@ class GeneticSchedulerTest {
     @Test
     void fitnessKeepsBusyAndAvoidWeightsAndRoomCapacityPenalty() {
         var availability = List.of(
-                Map.<String, Object>of("staff_id", 2L, "semester_id", 4L, "day_of_week", 1,
-                        "period_from", 1, "period_to", 1, "kind", "BUSY"),
-                Map.<String, Object>of("staff_id", 2L, "semester_id", 4L, "day_of_week", 1,
-                        "period_from", 2, "period_to", 2, "kind", "AVOID"));
+                new StaffAvailability(2L, 4L, 1, 1, 1, Kind.BUSY),
+                new StaffAvailability(2L, 4L, 1, 2, 2, Kind.AVOID));
         Slot candidate = slot(1, 1);
         var input = new GeneticScheduler.Input(context(availability), List.of(List.of(candidate)));
         var score = new GeneticFitnessEvaluator(input, scheduling).score(List.of(candidate));
@@ -71,13 +74,45 @@ class GeneticSchedulerTest {
     }
 
     @Test
+    void publishedAssistantConflictBlocksOverlapButNotAdjacentTime() {
+        Actor staff = new Actor(1L, "staff", "STAFF", 2L, 6L);
+        var section = new SchedulingSection(1L, 4L, 6L, "DRAFT", "A", "Toán", 2L,
+                30, "LECTURE", 1, 1, 0L, monday, monday.plusDays(1), Set.of(8L), Map.of(10L, "K66"));
+        var context = new Context(Map.of(1L, section),
+                Map.of(3L, new SchedulingRoom(3L, 5L, "P3", 60, "LECTURE", "ACTIVE")),
+                List.of(), List.of(), List.of(), List.of());
+        SchedulingService mockScheduling = mock(SchedulingService.class);
+        when(mockScheduling.context()).thenReturn(context);
+        when(mockScheduling.campuses(staff)).thenReturn(Set.of(5L));
+        when(mockScheduling.fits(any(SchedulingRoom.class), any(SchedulingSection.class))).thenReturn(true);
+        when(mockScheduling.staff(eq(context), any(Slot.class))).thenReturn(Set.of(2L, 8L));
+        when(mockScheduling.interval(eq(context), any(Slot.class), any(LocalDate.class))).thenAnswer(call -> {
+            Slot candidate = call.getArgument(1);
+            LocalDate date = call.getArgument(2);
+            if (candidate.first() != 1 || candidate.day() > 2) {
+                return null;
+            }
+            return new Span(date.atTime(7, 0), date.atTime(8, 0));
+        });
+        when(repository.publishedSessions(monday, monday.plusDays(1))).thenReturn(List.of(
+                new PublishedSession(99L, null, monday.atTime(7, 30), monday.atTime(9, 0),
+                        Set.of(8L), Set.of()),
+                new PublishedSession(98L, 3L, monday.plusDays(1).atTime(8, 0),
+                        monday.plusDays(1).atTime(9, 0), Set.of(2L), Set.of(10L))));
+        var input = new GeneticInputBuilder(mockScheduling, repository).build(staff, 4L);
+        assertEquals(1, input.genes().size());
+        assertEquals(List.of(new Slot(0, 1L, 2L, 3L, 2, 1, 1, monday, monday.plusDays(1))),
+                input.genes().getFirst());
+    }
+
+    @Test
     void targetsRespectSemesterUnitStatusAndRemainingSessions() {
-        Map<String, Object> a = Map.of("id", 1L, "semester_id", 4L, "status", "DRAFT",
-                "managing_unit_id", 6L, "scheduled", 0, "sessions_per_week", 2);
-        Map<String, Object> b = Map.of("id", 2L, "semester_id", 4L, "status", "DRAFT",
-                "managing_unit_id", 7L, "scheduled", 0, "sessions_per_week", 2);
-        Map<String, Object> c = Map.of("id", 3L, "semester_id", 4L, "status", "DRAFT",
-                "managing_unit_id", 6L, "scheduled", 2, "sessions_per_week", 2);
+        var a = new SchedulingSection(1L, 4L, 6L, "DRAFT", "A", "Toán", 2L,
+                30, "LECTURE", 2, 2, 0L, monday, monday.plusWeeks(2), Set.of(), Map.of());
+        var b = new SchedulingSection(2L, 4L, 7L, "DRAFT", "B", "Toán", 2L,
+                30, "LECTURE", 2, 2, 0L, monday, monday.plusWeeks(2), Set.of(), Map.of());
+        var c = new SchedulingSection(3L, 4L, 6L, "DRAFT", "C", "Toán", 2L,
+                30, "LECTURE", 2, 2, 2L, monday, monday.plusWeeks(2), Set.of(), Map.of());
         Context context = new Context(Map.of(1L, a, 2L, b, 3L, c), Map.of(),
                 List.of(), List.of(), List.of(), List.of());
         Actor staff = new Actor(1L, "staff", "STAFF", 2L, 6L);

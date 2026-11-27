@@ -1,9 +1,9 @@
 package vn.huce.service.chat;
 
+import vn.huce.model.ChatSemester;
 import org.junit.jupiter.api.Test;
 import vn.huce.exception.ApiFailure;
 import java.time.LocalDate;
-import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ChatIntentTest {
@@ -24,11 +24,20 @@ class ChatIntentTest {
     }
 
     @Test
+    void nextSessionWindowUsesSelectedSemesterEnd() {
+        LocalDate now = LocalDate.of(2026, 11, 27);
+        var semester = new ChatSemester(7L, "HK1", LocalDate.of(2026, 9, 1), LocalDate.of(2026, 12, 31));
+        var window = ChatDateRangeParser.window("buổi tiếp theo", "NEXT", now, semester);
+        assertEquals("2026-11-27", window.from());
+        assertEquals("2026-12-31", window.to());
+    }
+
+    @Test
     void parsesDatesAndRejectsInvalidRange() {
         LocalDate now = LocalDate.of(2026, 11, 27);
-        assertEquals("2026-11-28", ChatDateRangeParser.window("ngày mai", "SCHEDULE", now, Map.of()).from());
-        assertEquals("2026-11-30", ChatDateRangeParser.window("thứ hai tuần sau", "SCHEDULE", now, Map.of()).from());
-        assertThrows(ApiFailure.class, () -> ChatDateRangeParser.window("31/02/2026", "SCHEDULE", now, Map.of()));
-        assertThrows(ApiFailure.class, () -> ChatDateRangeParser.window("01/01/2026 đến 15/03/2026", "SCHEDULE", now, Map.of()));
+        assertEquals("2026-11-28", ChatDateRangeParser.window("ngày mai", "SCHEDULE", now, null).from());
+        assertEquals("2026-11-30", ChatDateRangeParser.window("thứ hai tuần sau", "SCHEDULE", now, null).from());
+        assertThrows(ApiFailure.class, () -> ChatDateRangeParser.window("31/02/2026", "SCHEDULE", now, null));
+        assertThrows(ApiFailure.class, () -> ChatDateRangeParser.window("01/01/2026 đến 15/03/2026", "SCHEDULE", now, null));
     }
 }

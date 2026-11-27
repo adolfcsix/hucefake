@@ -1,5 +1,6 @@
 package vn.huce.service.chat;
 
+import vn.huce.model.ChatSemester;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -9,6 +10,7 @@ import vn.huce.repository.CatalogRepository;
 import vn.huce.service.ApprovalService;
 import vn.huce.service.SectionService;
 import vn.huce.service.SessionMutationService;
+import vn.huce.service.AvailabilityService;
 import vn.huce.service.SessionReadService;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -21,14 +23,39 @@ class ChatReplyServiceTest {
     private final ApprovalService approvals = mock(ApprovalService.class);
     private final SessionReadService reads = mock(SessionReadService.class);
     private final SessionMutationService sessions = mock(SessionMutationService.class);
-    private final ChatReplyService service = new ChatReplyService(catalog, proposals, sections, approvals, reads, sessions);
+    private final AvailabilityService availability = mock(AvailabilityService.class);
+    private final ChatReplyService service = new ChatReplyService(catalog, proposals, sections, approvals, reads, sessions, availability);
     private final Actor student = new Actor(1L, "student", "STUDENT", null, null);
 
     @Test
     void unauthorizedActionCannotReachDomainService() {
         assertEquals(403, assertThrows(ApiFailure.class,
-                () -> service.answer(student, "APPLY", Map.of(), "áp dụng", Map.of())).status());
-        verifyNoInteractions(catalog, proposals, sections, approvals, reads, sessions);
+                () -> service.answer(student, "APPLY", null, "áp dụng", Map.of())).status());
+        verifyNoInteractions(catalog, proposals, sections, approvals, reads, sessions, availability);
+    }
+
+    @Test
+    void draftPromptRetainsIsoDateStringsAndSemesterIdentifier() {
+        Actor staff = new Actor(2L, "staff", "STAFF", 3L, 4L);
+        var semester = new ChatSemester(7L, "HK1", java.time.LocalDate.of(2026, 9, 1),
+                java.time.LocalDate.of(2026, 12, 31));
+        when(catalog.subjects(false, 4L)).thenReturn(List.of());
+        var result = service.answer(staff, "DRAFT", semester, "Tạo lớp", Map.of());
+        assertEquals(Map.of("semesterId", 7L, "from", "2026-09-01", "to", "2026-12-31",
+                "subjects", List.of()), result.get("draft"));
+        verifyNoInteractions(proposals, sections, approvals, reads, sessions, availability);
+    }
+
+    @Test
+    void lecturerAvailabilityReadsOnlyFromItsOwningService() {
+        Actor lecturer = new Actor(2L, "lecturer", "LECTURER", 3L, 4L);
+        var semester = new ChatSemester(7L, "HK1", java.time.LocalDate.of(2026, 9, 1),
+                java.time.LocalDate.of(2026, 12, 31));
+        when(availability.find(lecturer, 7L)).thenReturn(List.of());
+        assertEquals("availability", service.answer(lecturer, "AVAILABILITY", semester,
+                "Giờ bận", Map.of()).get("target"));
+        verify(availability).find(lecturer, 7L);
+        verifyNoInteractions(sessions, proposals, sections, approvals, reads, catalog);
     }
 
     @Test

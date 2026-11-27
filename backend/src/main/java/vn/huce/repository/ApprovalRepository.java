@@ -3,11 +3,23 @@ package vn.huce.repository;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
+import vn.huce.exception.ApiFailure;
+import vn.huce.model.ApprovalRequestSnapshot;
+import vn.huce.model.ApprovalStatus;
+import vn.huce.model.TimetableVersionSnapshot;
+import vn.huce.model.TimetableVersionStatus;
 
 @Repository
 public class ApprovalRepository {
+    private static final String VERSION_COLUMNS = "id,semester_id,version_no,status,section_count,created_by";
+    private static final RowMapper<TimetableVersionSnapshot> VERSION_MAPPER = (rs, row) ->
+            new TimetableVersionSnapshot(rs.getLong("id"), rs.getLong("semester_id"),
+                    rs.getInt("version_no"), TimetableVersionStatus.valueOf(rs.getString("status")),
+                    rs.getInt("section_count"), rs.getLong("created_by"));
     private final SqlStore store;
 
     public ApprovalRepository(SqlStore store) {
@@ -21,13 +33,24 @@ public class ApprovalRepository {
                 """, approvalId);
     }
 
+    public ApprovalRequestSnapshot findApprovalForMutation(long approvalId) {
+        return require(store.jdbc().query("""
+                SELECT a.id,a.requested_by,a.work_item_id,a.status,a.payload::text AS payload_json
+                FROM approval_requests a JOIN timetable_versions t ON t.approval_request_id=a.id
+                WHERE a.id=?
+                """, (rs, row) -> new ApprovalRequestSnapshot(rs.getLong("id"),
+                rs.getLong("requested_by"), rs.getLong("work_item_id"),
+                ApprovalStatus.valueOf(rs.getString("status")), rs.getString("payload_json")), approvalId));
+    }
+
     public int patternVersion(long patternId) {
-        return ((Number) store.need("SELECT version FROM section_schedule_patterns WHERE id=?", patternId)
-                .get("version")).intValue();
+        return require(store.jdbc().query("SELECT version FROM section_schedule_patterns WHERE id=?",
+                (rs, row) -> rs.getInt("version"), patternId));
     }
 
     public void requireSemester(long semesterId) {
-        store.need("SELECT id FROM semesters WHERE id=?", semesterId);
+        require(store.jdbc().query("SELECT id FROM semesters WHERE id=?",
+                (rs, row) -> rs.getLong("id"), semesterId));
     }
 
     public boolean hasSubmittedVersion(long semesterId) {
@@ -35,37 +58,49 @@ public class ApprovalRepository {
                 semesterId);
     }
 
-    public Map<String, Object> findDraft(long semesterId, long actorId) {
-        return store.one("""
+    public Long findDraft(long semesterId, long actorId) {
+        List<Long> rows = store.jdbc().query("""
                 SELECT id FROM timetable_versions WHERE semester_id=? AND created_by=? AND status='DRAFT'
                 ORDER BY id DESC LIMIT 1
-                """, semesterId, actorId);
+                """, (rs, row) -> rs.getLong("id"), semesterId, actorId);
+        return rows.isEmpty() ? null : rows.getFirst();
     }
 
-    public Map<String, Object> createDraft(long semesterId, long actorId) {
-        return store.need("""
+    public long createDraft(long semesterId, long actorId) {
+        List<Long> rows = store.jdbc().query("""
                 INSERT INTO timetable_versions(semester_id,version_no,created_by)
                 SELECT ?,COALESCE(max(version_no),0)+1,? FROM timetable_versions WHERE semester_id=? RETURNING id
-                """, semesterId, actorId, semesterId);
+                """, (rs, row) -> rs.getLong("id"), semesterId, actorId, semesterId);
+        return require(rows);
     }
 
-    public Map<String, Object> findVersion(long versionId) {
-        return store.need("SELECT * FROM timetable_versions WHERE id=?", versionId);
+    public TimetableVersionSnapshot findVersion(long versionId) {
+        return require(store.jdbc().query("SELECT " + VERSION_COLUMNS
+                + " FROM timetable_versions WHERE id=?", VERSION_MAPPER, versionId));
     }
 
-    public Map<String, Object> findVersionForApproval(long approvalId) {
-        return store.need("SELECT * FROM timetable_versions WHERE approval_request_id=?", approvalId);
+    public TimetableVersionSnapshot findVersionForApproval(long approvalId) {
+        return require(store.jdbc().query("SELECT " + VERSION_COLUMNS
+                + " FROM timetable_versions WHERE approval_request_id=?", VERSION_MAPPER, approvalId));
+    }
+
+    private static <T> T require(List<T> rows) {
+        if (rows.isEmpty()) {
+            throw new ApiFailure(404, "NOT_FOUND", "Không tìm thấy dữ liệu.");
+        }
+        return rows.getFirst();
     }
 
     public long createWorkItem(long actorId) {
-        return ((Number) store.need("INSERT INTO work_items(kind,created_by) VALUES ('TIMETABLE',?) RETURNING id",
-                actorId).get("id")).longValue();
+        return require(store.jdbc().query(
+                "INSERT INTO work_items(kind,created_by) VALUES ('TIMETABLE',?) RETURNING id",
+                (rs, row) -> rs.getLong("id"), actorId));
     }
 
     public long createApproval(long workItemId, long actorId, String snapshotJson) {
-        return ((Number) store.need("""
+        return require(store.jdbc().query("""
                 INSERT INTO approval_requests(work_item_id,requested_by,payload) VALUES (?,?,?::jsonb) RETURNING id
-                """, workItemId, actorId, snapshotJson).get("id")).longValue();
+                """, (rs, row) -> rs.getLong("id"), workItemId, actorId, snapshotJson));
     }
 
     public void submitVersion(long versionId, long sectionCount, long approvalId) {
@@ -88,8 +123,11 @@ public class ApprovalRepository {
         store.jdbc().update("UPDATE timetable_versions SET status='RETURNED' WHERE approval_request_id=?", approvalId);
     }
 
-    public Map<String, Object> priorExecution(long approvalId) {
-        return store.one("SELECT result::text AS result FROM execution_records WHERE approval_request_id=?", approvalId);
+    public String priorExecution(long approvalId) {
+        List<String> rows = store.jdbc().query(
+                "SELECT result::text AS result FROM execution_records WHERE approval_request_id=?",
+                (rs, row) -> rs.getString("result"), approvalId);
+        return rows.isEmpty() ? null : rows.getFirst();
     }
 
     public void insertSession(long sectionId, Long staffId, long roomId, int periodFrom, int periodCount,

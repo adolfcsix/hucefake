@@ -28,10 +28,7 @@ class ChatClassifier {
         String previous = null;
         if (conversationId != null) {
             repository.findOwned(actor, conversationId);
-            Map<String, Object> row = repository.previousIntent(conversationId);
-            if (row != null) {
-                previous = s(row, "intent");
-            }
+            previous = repository.previousIntent(conversationId);
         }
 
         Set<String> permitted = ChatPermissions.allowed(actor.role());

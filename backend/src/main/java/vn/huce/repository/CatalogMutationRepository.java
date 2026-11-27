@@ -2,6 +2,9 @@ package vn.huce.repository;
 
 import java.sql.Date;
 import java.sql.Time;
+import java.time.LocalDate;
+import vn.huce.exception.ApiFailure;
+import vn.huce.model.PeriodRevision;
 import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Repository;
@@ -17,21 +20,29 @@ public class CatalogMutationRepository {
         this.store = store;
     }
 
-    public Map<String, Object> findRoom(long roomId) {
-        return store.need("SELECT * FROM teaching_rooms WHERE id=?", roomId);
+    private static <T> T require(List<T> rows) {
+        if (rows.isEmpty()) {
+            throw new ApiFailure(404, "NOT_FOUND", "Không tìm thấy dữ liệu.");
+        }
+        return rows.getFirst();
     }
 
-    public Map<String, Object> insertRoom(RoomDraft draft) {
-        return store.need("""
+    public long roomCampus(long roomId) {
+        return require(store.jdbc().query("SELECT campus_id FROM teaching_rooms WHERE id=?",
+                (rs, row) -> rs.getLong("campus_id"), roomId));
+    }
+
+    public long insertRoom(RoomDraft draft) {
+        return require(store.jdbc().query("""
                 INSERT INTO teaching_rooms(campus_id,code,name,capacity,type,status)
                 VALUES (?,?,?,?,?,?) RETURNING id
-                """, draft.campusId(), draft.code(), draft.name(), draft.capacity(), draft.type(), draft.status());
+                """, (rs, row) -> rs.getLong("id"), draft.campusId(), draft.code(), draft.name(), draft.capacity(), draft.type(), draft.status()));
     }
 
-    public Map<String, Object> updateRoom(long roomId, RoomDraft draft) {
-        return store.need("""
+    public long updateRoom(long roomId, RoomDraft draft) {
+        return require(store.jdbc().query("""
                 UPDATE teaching_rooms SET code=?,name=?,capacity=?,type=?,status=? WHERE id=? RETURNING id
-                """, draft.code(), draft.name(), draft.capacity(), draft.type(), draft.status(), roomId);
+                """, (rs, row) -> rs.getLong("id"), draft.code(), draft.name(), draft.capacity(), draft.type(), draft.status(), roomId));
     }
 
     public List<Map<String, Object>> affectedRoomSessions(long roomId, RoomDraft draft) {
@@ -55,8 +66,9 @@ public class CatalogMutationRepository {
         return store.jdbc().queryForObject("SELECT count(*) FROM campuses WHERE status='ACTIVE'", Long.class);
     }
 
-    public Map<String, Object> findHoliday(long holidayId) {
-        return store.need("SELECT * FROM non_teaching_days WHERE id=?", holidayId);
+    public Long holidayCampus(long holidayId) {
+        return require(store.jdbc().query("SELECT campus_id FROM non_teaching_days WHERE id=?",
+                (rs, row) -> rs.getObject("campus_id", Long.class), holidayId));
     }
 
     public List<Map<String, Object>> affectedHolidaySessions(HolidayDraft draft) {
@@ -69,24 +81,26 @@ public class CatalogMutationRepository {
                 """, draft.campusId(), draft.campusId(), Date.valueOf(draft.startDate()), Date.valueOf(draft.endDate()));
     }
 
-    public Map<String, Object> insertHoliday(HolidayDraft draft, long actorId) {
-        return store.need("""
+    public long insertHoliday(HolidayDraft draft, long actorId) {
+        return require(store.jdbc().query("""
                 INSERT INTO non_teaching_days(campus_id,start_date,end_date,name,created_by)
                 VALUES (?,?,?,?,?) RETURNING id
-                """, draft.campusId(), Date.valueOf(draft.startDate()), Date.valueOf(draft.endDate()), draft.name(), actorId);
+                """, (rs, row) -> rs.getLong("id"), draft.campusId(), Date.valueOf(draft.startDate()), Date.valueOf(draft.endDate()), draft.name(), actorId));
     }
 
-    public Map<String, Object> updateHoliday(long holidayId, HolidayDraft draft) {
-        return store.need("""
+    public long updateHoliday(long holidayId, HolidayDraft draft) {
+        return require(store.jdbc().query("""
                 UPDATE non_teaching_days SET campus_id=?,start_date=?,end_date=?,name=? WHERE id=? RETURNING id
-                """, draft.campusId(), Date.valueOf(draft.startDate()), Date.valueOf(draft.endDate()), draft.name(), holidayId);
+                """, (rs, row) -> rs.getLong("id"), draft.campusId(), Date.valueOf(draft.startDate()), Date.valueOf(draft.endDate()), draft.name(), holidayId));
     }
 
-    public Map<String, Object> latestPeriod(PeriodDraft draft) {
-        return store.one("""
-                SELECT * FROM period_definitions WHERE campus_id=? AND period_no=?
+    public PeriodRevision latestPeriod(PeriodDraft draft) {
+        List<PeriodRevision> rows = store.jdbc().query("""
+                SELECT id,effective_from FROM period_definitions WHERE campus_id=? AND period_no=?
                 ORDER BY effective_from DESC LIMIT 1
-                """, draft.campusId(), draft.periodNumber());
+                """, (rs, row) -> new PeriodRevision(rs.getLong("id"),
+                rs.getObject("effective_from", LocalDate.class)), draft.campusId(), draft.periodNumber());
+        return rows.isEmpty() ? null : rows.getFirst();
     }
 
     public List<Map<String, Object>> affectedPeriodSessions(PeriodDraft draft) {
@@ -112,11 +126,11 @@ public class CatalogMutationRepository {
                 Date.valueOf(replacement.effectiveFrom()), periodId);
     }
 
-    public Map<String, Object> insertPeriod(PeriodDraft draft) {
-        return store.need("""
+    public long insertPeriod(PeriodDraft draft) {
+        return require(store.jdbc().query("""
                 INSERT INTO period_definitions(campus_id,period_no,start_time,end_time,shift,effective_from)
                 VALUES (?,?,?,?,?,?) RETURNING id
-                """, draft.campusId(), draft.periodNumber(), Time.valueOf(draft.startTime()),
-                Time.valueOf(draft.endTime()), draft.shift(), Date.valueOf(draft.effectiveFrom()));
+                """, (rs, row) -> rs.getLong("id"), draft.campusId(), draft.periodNumber(), Time.valueOf(draft.startTime()),
+                Time.valueOf(draft.endTime()), draft.shift(), Date.valueOf(draft.effectiveFrom())));
     }
 }

@@ -6,14 +6,27 @@ import java.util.Locale;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
+import vn.huce.exception.ApiFailure;
+import vn.huce.model.AssignmentRole;
 import vn.huce.model.SectionDraft;
+import vn.huce.model.SectionEditSnapshot;
+import vn.huce.model.SessionSectionSnapshot;
+import vn.huce.model.SectionSemester;
+import vn.huce.model.SectionSubject;
 
 import static vn.huce.repository.SectionQueries.PATTERN_SQL;
 import static vn.huce.repository.SectionQueries.SECTION_SQL;
 
 @Repository
 public class SectionRepository {
+    private static final RowMapper<SectionSemester> SEMESTER_MAPPER = (rs, row) ->
+            new SectionSemester(rs.getLong("id"), rs.getString("code"), rs.getString("status"),
+                    rs.getObject("start_date", LocalDate.class), rs.getObject("end_date", LocalDate.class));
+    private static final RowMapper<SectionSubject> SUBJECT_MAPPER = (rs, row) ->
+            new SectionSubject(rs.getLong("id"), rs.getString("code"), rs.getString("name"),
+                    rs.getString("status"), rs.getObject("managing_unit_id", Long.class));
     private final SqlStore store;
 
     public SectionRepository(SqlStore store) {
@@ -44,12 +57,43 @@ public class SectionRepository {
         return store.need(SECTION_SQL + " WHERE c.id=?", sectionId);
     }
 
-    public Map<String, Object> findSemester(long semesterId) {
-        return store.need("SELECT * FROM semesters WHERE id=?", semesterId);
+    public SessionSectionSnapshot findSectionForSession(long sectionId) {
+        return require(store.jdbc().query("""
+                SELECT c.id,c.semester_id,c.code,c.status,c.capacity,c.required_room_type,s.managing_unit_id
+                FROM course_sections c JOIN subjects s ON s.id=c.subject_id WHERE c.id=?
+                """, (rs, row) -> new SessionSectionSnapshot(rs.getLong("id"), rs.getLong("semester_id"),
+                rs.getString("code"), rs.getString("status"), rs.getInt("capacity"),
+                rs.getString("required_room_type"), rs.getObject("managing_unit_id", Long.class)), sectionId));
     }
 
-    public Map<String, Object> findSubject(long subjectId) {
-        return store.need("SELECT * FROM subjects WHERE id=?", subjectId);
+    public SectionEditSnapshot findSectionForEdit(long sectionId) {
+        Map<String, Object> row = findSection(sectionId);
+        return new SectionEditSnapshot(sectionId, ((Number) row.get("semester_id")).longValue(),
+                row.get("managing_unit_id") == null ? null : ((Number) row.get("managing_unit_id")).longValue(),
+                (String) row.get("status"), ((Number) row.get("version")).longValue(),
+                ((Number) row.get("scheduled")).longValue(), ((Number) row.get("sessions_per_week")).intValue(),
+                ((Number) row.get("periods_per_session")).intValue(),
+                row.get("staff_id") == null ? null : ((Number) row.get("staff_id")).longValue(),
+                LocalDate.parse((String) row.get("start_date")), LocalDate.parse((String) row.get("end_date")), row);
+    }
+
+    public SectionSemester findSemester(long semesterId) {
+        return require(store.jdbc().query(
+                "SELECT id,code,status,start_date,end_date FROM semesters WHERE id=?",
+                SEMESTER_MAPPER, semesterId));
+    }
+
+    public SectionSubject findSubject(long subjectId) {
+        return require(store.jdbc().query(
+                "SELECT id,code,name,status,managing_unit_id FROM subjects WHERE id=?",
+                SUBJECT_MAPPER, subjectId));
+    }
+
+    private static <T> T require(List<T> rows) {
+        if (rows.isEmpty()) {
+            throw new ApiFailure(404, "NOT_FOUND", "Không tìm thấy dữ liệu.");
+        }
+        return rows.getFirst();
     }
 
     public boolean codeExists(long semesterId, String code) {
@@ -57,21 +101,23 @@ public class SectionRepository {
                 semesterId, code);
     }
 
-    public Map<String, Object> insertDraft(SectionDraft draft, long creatorId) {
-        return store.need("""
+    public long insertDraft(SectionDraft draft, long creatorId) {
+        return require(store.jdbc().query("""
                 INSERT INTO course_sections(semester_id,subject_id,code,capacity,sessions_per_week,
                     periods_per_session,required_room_type,start_date,end_date,created_by)
                 VALUES (?,?,?,?,?,?,?,?,?,?) RETURNING id
-                """, draft.semesterId(), draft.subjectId(), draft.code(), draft.capacity(),
-                draft.sessionsPerWeek(), draft.periodsPerSession(), draft.requiredRoomType(),
-                Date.valueOf(draft.startDate()), Date.valueOf(draft.endDate()), creatorId);
+                """, (rs, row) -> rs.getLong("id"), draft.semesterId(), draft.subjectId(),
+                draft.code(), draft.capacity(), draft.sessionsPerWeek(), draft.periodsPerSession(),
+                draft.requiredRoomType(), Date.valueOf(draft.startDate()),
+                Date.valueOf(draft.endDate()), creatorId));
     }
 
-    public Map<String, Object> findActiveSubjectByCode(Long unitId, String code) {
-        return store.one("""
-                SELECT * FROM subjects WHERE managing_unit_id=? AND status='ACTIVE'
+    public SectionSubject findActiveSubjectByCode(Long unitId, String code) {
+        List<SectionSubject> rows = store.jdbc().query("""
+                SELECT id,code,name,status,managing_unit_id FROM subjects WHERE managing_unit_id=? AND status='ACTIVE'
                 AND (code=? OR code=?) ORDER BY CASE WHEN code=? THEN 0 ELSE 1 END LIMIT 1
-                """, unitId, code, code.toUpperCase(Locale.ROOT), code);
+                """, SUBJECT_MAPPER, unitId, code, code.toUpperCase(Locale.ROOT), code);
+        return rows.isEmpty() ? null : rows.getFirst();
     }
 
     public boolean hasIncompatiblePatterns(long sectionId, SectionDraft draft) {
@@ -107,13 +153,14 @@ public class SectionRepository {
                 """, staffId);
     }
 
-    public record Assignment(long id, long staffId, String role) {
+    public record Assignment(long id, long staffId, AssignmentRole role) {
     }
 
     public List<Assignment> activeAssignments(long sectionId) {
         return store.jdbc().query("""
                 SELECT id,staff_id,role FROM section_assignments WHERE section_id=? AND valid_to IS NULL
-                """, (rs, row) -> new Assignment(rs.getLong("id"), rs.getLong("staff_id"), rs.getString("role")),
+                """, (rs, row) -> new Assignment(rs.getLong("id"), rs.getLong("staff_id"),
+                        AssignmentRole.valueOf(rs.getString("role"))),
                 sectionId);
     }
 
@@ -123,10 +170,10 @@ public class SectionRepository {
                 """, assignmentId);
     }
 
-    public void addAssignment(long sectionId, long staffId, String role, LocalDate validFrom, long actorId) {
+    public void addAssignment(long sectionId, long staffId, AssignmentRole role, LocalDate validFrom, long actorId) {
         store.jdbc().update("""
                 INSERT INTO section_assignments(section_id,staff_id,role,valid_from,assigned_by) VALUES (?,?,?,?,?)
-                """, sectionId, staffId, role, Date.valueOf(validFrom), actorId);
+                """, sectionId, staffId, role.name(), Date.valueOf(validFrom), actorId);
     }
 
     public void replacePatternLecturer(long sectionId, long staffId) {

@@ -1,5 +1,6 @@
 package vn.huce.service.chat;
 
+import vn.huce.model.ChatSemester;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -9,6 +10,9 @@ import java.util.Map;
 import org.springframework.stereotype.Service;
 import vn.huce.Accounts.Actor;
 import vn.huce.dto.ChatClassification;
+import vn.huce.model.ChatConversationSnapshot;
+import vn.huce.model.ChatExchangeReceipt;
+import vn.huce.model.ChatExchangeSnapshot;
 import vn.huce.repository.ChatRepository;
 
 import static vn.huce.validation.Inputs.*;
@@ -32,39 +36,32 @@ public class ChatService {
         return repository.conversations(actor, search.substring(0, Math.min(80, search.length())));
     }
 
-    public Map<String, Object> owned(Actor actor, long conversationId) {
+    private ChatConversationSnapshot owned(Actor actor, long conversationId) {
         return repository.findOwned(actor, conversationId);
     }
 
     public Map<String, Object> conversation(Actor actor, long conversationId) {
-        Map<String, Object> result = owned(actor, conversationId);
-        List<Map<String, Object>> rows = new ArrayList<>(repository.exchanges(conversationId));
+        ChatConversationSnapshot conversation = owned(actor, conversationId);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("id", conversation.id());
+        result.put("title", conversation.title());
+        List<ChatExchangeSnapshot> rows = new ArrayList<>(repository.exchanges(conversationId));
         Collections.reverse(rows);
         List<Map<String, Object>> exchanges = new ArrayList<>();
-        for (Map<String, Object> row : rows) {
-            Map<String, Object> reply = proposals.decode(row.get("reply"));
+        for (ChatExchangeSnapshot row : rows) {
+            Map<String, Object> reply = proposals.decode(row.replyJson());
             if (reply.get("proposal") instanceof Map<?, ?> raw) {
                 Map<String, Object> proposal = new LinkedHashMap<>();
                 raw.forEach((key, value) -> proposal.put(key.toString(), value));
-                proposal.put("outcome", outcome(row));
-                proposal.put("result", proposals.decode(row.get("result")));
+                proposal.put("outcome", row.outcome());
+                proposal.put("result", proposals.decode(row.resultJson()));
                 reply.put("proposal", proposal);
             }
-            exchanges.add(Map.of("id", row.get("id"), "question", row.get("question"),
-                    "created_at", row.get("created_at"), "reply", reply));
+            exchanges.add(Map.of("id", row.id(), "question", row.question(),
+                    "created_at", row.createdAt(), "reply", reply));
         }
         result.put("exchanges", exchanges);
         return result;
-    }
-
-    private String outcome(Map<String, Object> row) {
-        if (row.get("result") != null) {
-            return "CONFIRMED";
-        }
-        if (row.get("cancelled_at") != null) {
-            return "CANCELLED";
-        }
-        return Boolean.TRUE.equals(row.get("expired")) ? "EXPIRED" : "PENDING";
     }
 
     public ChatClassification classify(Actor actor, Map<String, Object> input) {
@@ -77,18 +74,21 @@ public class ChatService {
         if (conversationId != null) {
             owned(actor, conversationId);
         }
-        Map<String, Object> semester = input.get("semesterId") == null ? null
+        ChatSemester semester = input.get("semesterId") == null ? null
                 : repository.semester(id(input.get("semesterId")));
         Map<String, Object> reply = replies.answer(actor, classification.intent(), semester, question, input);
         if (conversationId == null) {
             conversationId = repository.createConversation(actor, question.substring(0, Math.min(80, question.length())));
         }
         reply.put("intent", classification.intent());
-        reply.put("semesterId", semester == null ? null : semester.get("id"));
+        reply.put("semesterId", semester == null ? null : semester.id());
         reply.put("sourceAt", Instant.now().toString());
         reply.put("modelUnavailable", classification.modelUnavailable());
         Object proposalId = reply.get("proposal") instanceof Map<?, ?> proposal ? proposal.get("id") : null;
-        Map<String, Object> exchange = repository.insertExchange(conversationId, question, proposals.encode(reply), proposalId);
+        ChatExchangeReceipt receipt = repository.insertExchange(conversationId, question, proposals.encode(reply), proposalId);
+        Map<String, Object> exchange = new LinkedHashMap<>();
+        exchange.put("id", receipt.id());
+        exchange.put("created_at", receipt.createdAt());
         exchange.put("question", question);
         exchange.put("reply", reply);
         repository.touch(conversationId);

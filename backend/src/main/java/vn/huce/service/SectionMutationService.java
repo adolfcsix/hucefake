@@ -2,21 +2,30 @@ package vn.huce.service;
 
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import vn.huce.Accounts.Actor;
+import vn.huce.dto.SchedulePatternIdResponse;
+import vn.huce.dto.SectionAssignmentRequest;
+import vn.huce.dto.SectionIdResponse;
+import vn.huce.dto.SectionImportResponse;
+import vn.huce.dto.SectionTargetGroupsRequest;
 import vn.huce.exception.ApiFailure;
+import vn.huce.model.AssignmentRole;
 import vn.huce.model.PatternDraft;
+import vn.huce.model.SchedulePatternSnapshot;
 import vn.huce.model.SectionDraft;
+import vn.huce.model.SectionEditSnapshot;
+import vn.huce.model.SectionSemester;
+import vn.huce.model.SectionSubject;
 import vn.huce.repository.AuditRepository;
 import vn.huce.repository.SchedulePatternRepository;
 import vn.huce.repository.SectionRepository;
+import vn.huce.validation.SectionRequestParser;
 
 import static vn.huce.validation.Inputs.*;
 
@@ -38,10 +47,10 @@ public class SectionMutationService {
     }
 
     // Write operations participate in MutationService's transaction and advisory lock.
-    public Object importSections(Actor actor, Map<String, Object> input) {
+    public SectionImportResponse importSections(Actor actor, Map<String, Object> input) {
         role(actor, "STAFF");
-        Map<String, Object> semester = repository.findSemester(id(input.get("semesterId")));
-        sections.unlocked(n(semester, "id"));
+        SectionSemester semester = repository.findSemester(id(input.get("semesterId")));
+        sections.unlocked(semester.id());
         if (!(input.get("rows") instanceof List<?> rows) || rows.isEmpty() || rows.size() > 200) {
             throw invalid("Mỗi tệp cần có từ 1 đến 200 lớp.");
         }
@@ -54,11 +63,11 @@ public class SectionMutationService {
                 }
                 @SuppressWarnings("unchecked")
                 Map<String, Object> row = (Map<String, Object>) raw;
-                if (!Objects.equals(row.get("semesterCode"), semester.get("code"))) {
+                if (!Objects.equals(row.get("semesterCode"), semester.code())) {
                     throw invalid("Mã học kỳ trong tệp khác học kỳ đang chọn.");
                 }
                 String code = text(row.get("subjectCode"), 40);
-                Map<String, Object> subject = repository.findActiveSubjectByCode(actor.unitId(), code);
+                SectionSubject subject = repository.findActiveSubjectByCode(actor.unitId(), code);
                 if (subject == null) {
                     throw invalid("Mã học phần chưa có hoặc nằm ngoài phạm vi khoa.");
                 }
@@ -68,29 +77,30 @@ public class SectionMutationService {
                         "Dòng dữ liệu " + index + " · " + failure.getMessage(), failure.details());
             }
         }
-        return Map.of("imported", rows.size());
+        return new SectionImportResponse(rows.size());
     }
 
-    public Object update(Actor actor, long sectionId, Map<String, Object> input) {
+    public SectionIdResponse update(Actor actor, long sectionId, Map<String, Object> input) {
         role(actor, "STAFF");
-        Map<String, Object> current = sections.editable(actor, sectionId);
-        version(input.get("version"), current);
+        SectionEditSnapshot current = sections.editable(actor, sectionId);
+        version(input.get("version"), current.version(), current::conflictDetails);
         SectionDraft draft = sections.form(actor, input);
-        if (n(current, "semester_id") != draft.semesterId()) {
+        if (current.semesterId() != draft.semesterId()) {
             throw invalid("Không thể chuyển học kỳ của lớp.");
         }
-        if (n(current, "scheduled") > draft.sessionsPerWeek()
+        if (current.scheduled() > draft.sessionsPerWeek()
                 || repository.hasIncompatiblePatterns(sectionId, draft)) {
             throw state("Hãy gỡ lịch định kỳ bị ảnh hưởng trước khi sửa lớp.");
         }
         repository.updateDraft(sectionId, draft);
         audit.record(actor, "UPDATE", "course_sections", sectionId);
-        return Map.of("id", sectionId);
+        return new SectionIdResponse(sectionId);
     }
 
     public Object cancel(Actor actor, long sectionId, String expectedVersion) {
         role(actor, "STAFF");
-        version(expectedVersion, sections.editable(actor, sectionId));
+        SectionEditSnapshot section = sections.editable(actor, sectionId);
+        version(expectedVersion, section.version(), section::conflictDetails);
         repository.cancelDraft(sectionId);
         audit.record(actor, "CANCEL", "course_sections", sectionId);
         return null;
@@ -98,17 +108,20 @@ public class SectionMutationService {
 
     public Object assign(Actor actor, long sectionId, Map<String, Object> input) {
         role(actor, "STAFF");
-        Map<String, Object> section = sections.editable(actor, sectionId);
+        SectionEditSnapshot section = sections.editable(actor, sectionId);
         checkOptionalVersion(input, section);
-        long mainLecturer = id(input.get("staffId"));
-        Set<Long> assistants = idSet(input.get("assistantIds"));
-        if (assistants.contains(mainLecturer)) {
-            throw invalid("Giảng viên chính không thể đồng thời là trợ giảng.");
-        }
-        Map<Long, String> desired = new LinkedHashMap<>();
-        desired.put(mainLecturer, "MAIN");
-        for (long assistant : assistants) {
-            desired.put(assistant, "ASSISTANT");
+        SectionAssignmentRequest request = SectionRequestParser.assignment(input);
+        applyAssignment(actor, sectionId, section, request);
+        return null;
+    }
+
+    private void applyAssignment(Actor actor, long sectionId, SectionEditSnapshot section,
+                                 SectionAssignmentRequest request) {
+        long mainLecturer = request.staffId();
+        Map<Long, AssignmentRole> desired = new LinkedHashMap<>();
+        desired.put(mainLecturer, AssignmentRole.MAIN);
+        for (long assistant : request.assistantIds()) {
+            desired.put(assistant, AssignmentRole.ASSISTANT);
         }
         for (long staffId : desired.keySet()) {
             if (!repository.isActiveLecturer(staffId)) {
@@ -122,23 +135,23 @@ public class SectionMutationService {
                 repository.closeAssignment(assignment.id());
             }
         }
-        LocalDate startDate = LocalDate.parse(s(section, "start_date"));
-        for (Map.Entry<Long, String> entry : desired.entrySet()) {
+        LocalDate startDate = section.startDate();
+        for (Map.Entry<Long, AssignmentRole> entry : desired.entrySet()) {
             repository.addAssignment(sectionId, entry.getKey(), entry.getValue(), startDate, actor.id());
         }
-        if (!Objects.equals(SchedulingService.nullableId(section.get("staff_id")), mainLecturer)) {
+        if (!Objects.equals(section.staffId(), mainLecturer)) {
             repository.replacePatternLecturer(sectionId, mainLecturer);
         }
         scheduling.recheck(sectionId, actor);
         repository.touch(sectionId);
         audit.record(actor, "ASSIGN", "course_sections", sectionId);
-        return null;
     }
 
     public Object groups(Actor actor, long sectionId, Map<String, Object> input) {
         role(actor, "STAFF");
         checkOptionalVersion(input, sections.editable(actor, sectionId));
-        repository.replaceTargetGroups(sectionId, idSet(input.get("groupIds")));
+        SectionTargetGroupsRequest request = SectionRequestParser.groups(input);
+        repository.replaceTargetGroups(sectionId, request.groupIds());
         scheduling.recheck(sectionId, actor);
         repository.touch(sectionId);
         audit.record(actor, "SET_TARGET_GROUPS", "course_sections", sectionId);
@@ -147,10 +160,10 @@ public class SectionMutationService {
 
     public Object deletePattern(Actor actor, long patternId, String expectedVersion) {
         role(actor, "STAFF");
-        Map<String, Object> pattern = patterns.findWithCampus(patternId);
-        sections.editable(actor, n(pattern, "section_id"));
-        scheduling.requireCampus(actor, n(pattern, "campus_id"));
-        version(expectedVersion, pattern);
+        SchedulePatternSnapshot pattern = patterns.findWithCampus(patternId);
+        sections.editable(actor, pattern.sectionId());
+        scheduling.requireCampus(actor, pattern.campusId());
+        version(expectedVersion, pattern.version(), pattern::conflictDetails);
         patterns.delete(patternId);
         audit.record(actor, "DELETE", "section_schedule_patterns", patternId);
         return null;
@@ -159,9 +172,9 @@ public class SectionMutationService {
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public Object conflicts(Actor actor, Map<String, Object> input) {
         role(actor, "STAFF", "MANAGER");
-        Map<String, Object> section = repository.findSection(id(input.get("sectionId")));
-        unit(actor, section.get("managing_unit_id"));
-        if (!"DRAFT".equals(section.get("status"))) {
+        SectionEditSnapshot section = repository.findSectionForEdit(id(input.get("sectionId")));
+        unit(actor, section.managingUnitId());
+        if (!"DRAFT".equals(section.status())) {
             throw state("Chỉ kiểm tra phương án cho lớp nháp.");
         }
         SchedulingService.Context context = scheduling.context();
@@ -170,15 +183,16 @@ public class SectionMutationService {
         return scheduling.check(context, slot, actor, true);
     }
 
-    public Object savePattern(Actor actor, Map<String, Object> input, Long patternId) {
+    public SchedulePatternIdResponse savePattern(Actor actor, Map<String, Object> input, Long patternId) {
         role(actor, "STAFF");
-        Map<String, Object> section = sections.editable(actor, id(input.get("sectionId")));
+        SectionEditSnapshot section = sections.editable(actor, id(input.get("sectionId")));
         SchedulingService.Context context = scheduling.context();
         SchedulingService.Slot slot = scheduling.candidate(actor, context, input, patternId, section);
         if (patternId != null) {
-            version(input.get("version"), patterns.find(patternId));
+            SchedulePatternSnapshot current = patterns.find(patternId);
+            version(input.get("version"), current.version(), current::conflictDetails);
         }
-        if (patternId == null && n(section, "scheduled") >= n(section, "sessions_per_week")) {
+        if (patternId == null && section.scheduled() >= section.sessionsPerWeek()) {
             throw state("Lớp đã xếp đủ số buổi mỗi tuần.");
         }
         SchedulingService.Result result = scheduling.check(context, slot, actor, true);
@@ -187,29 +201,15 @@ public class SectionMutationService {
         }
         PatternDraft draft = new PatternDraft(slot.section(), slot.staff(), slot.room(), slot.day(),
                 slot.first(), slot.count(), slot.from(), slot.to());
-        Map<String, Object> row = patternId == null ? patterns.insert(draft, actor.id())
+        long savedId = patternId == null ? patterns.insert(draft, actor.id())
                 : patterns.update(patternId, draft);
-        audit.record(actor, "SAVE", "section_schedule_patterns", n(row, "id"));
-        return row;
+        audit.record(actor, "SAVE", "section_schedule_patterns", savedId);
+        return new SchedulePatternIdResponse(savedId);
     }
 
-    private void checkOptionalVersion(Map<String, Object> input, Map<String, Object> row) {
+    private void checkOptionalVersion(Map<String, Object> input, SectionEditSnapshot row) {
         if (input.get("version") != null) {
-            version(input.get("version"), row);
+            version(input.get("version"), row.version(), row::conflictDetails);
         }
-    }
-
-    private Set<Long> idSet(Object value) {
-        Set<Long> result = new LinkedHashSet<>();
-        if (value == null) {
-            return result;
-        }
-        if (!(value instanceof List<?> list) || list.size() > 200) {
-            throw invalid("Danh sách lựa chọn không hợp lệ.");
-        }
-        for (Object item : list) {
-            result.add(id(item));
-        }
-        return result;
     }
 }

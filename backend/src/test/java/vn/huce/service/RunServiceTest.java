@@ -4,8 +4,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.List;
+import vn.huce.dto.ScheduleRunIdResponse;
+import vn.huce.dto.ScheduleRunApplyResponse;
 import vn.huce.model.ScheduleRunItem;
 import vn.huce.model.ScheduleRunStatus;
+import vn.huce.model.ScheduleRunSnapshot;
 import org.junit.jupiter.api.Test;
 import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
@@ -70,25 +73,58 @@ class RunServiceTest {
     }
 
     @Test
+    void enqueueReturnsTypedIdAndAuditsThePersistedRun() {
+        when(repository.enqueue(eq(4L), eq(1L), anyString())).thenReturn(7L);
+        assertEquals(new ScheduleRunIdResponse(7L), service.enqueue(staff, 4L, Map.of("seed", 10)));
+        var order = inOrder(genetic, repository, audit);
+        order.verify(genetic).input(staff, 4L);
+        order.verify(repository).enqueue(eq(4L), eq(1L), anyString());
+        order.verify(audit).record(staff, "QUEUE", "schedule_runs", 7L);
+    }
+
+    @Test
     void hardViolationsPreventApplyingRun() {
-        when(repository.find(7L)).thenReturn(run(1L, "COMPLETED", 2));
+        when(repository.findSnapshot(7L)).thenReturn(new ScheduleRunSnapshot(
+                7L, 4L, 1L, ScheduleRunStatus.COMPLETED, 2));
         assertThrows(ApiFailure.class, () -> service.apply(staff, 7L));
         verify(repository, never()).markApplied(anyLong());
         verifyNoInteractions(approvals, scheduling, genetic, audit);
     }
 
     @Test
+    void unknownHardViolationCountIsNotApplicable() {
+        when(repository.findSnapshot(7L)).thenReturn(new ScheduleRunSnapshot(
+                7L, 4L, 1L, ScheduleRunStatus.COMPLETED, null));
+        assertEquals("INVALID_STATE", assertThrows(ApiFailure.class,
+                () -> service.apply(staff, 7L)).code());
+        verifyNoInteractions(approvals, scheduling, genetic, audit);
+        verify(repository, never()).markApplied(anyLong());
+    }
+
+    @Test
+    void visibleManagerRunStillCannotBeDiscardedByStaff() {
+        when(repository.findSnapshot(7L)).thenReturn(new ScheduleRunSnapshot(
+                7L, 4L, 2L, ScheduleRunStatus.COMPLETED, 0));
+        when(repository.visibleManagerRun(7L, 3L)).thenReturn(true);
+        assertEquals(403, assertThrows(ApiFailure.class, () -> service.discard(staff, 7L)).status());
+        verify(repository, never()).discard(anyLong());
+        verifyNoInteractions(audit);
+    }
+
+    @Test
     void repeatedApplyDoesNotWriteAgain() {
-        when(repository.find(7L)).thenReturn(run(1L, "APPLIED", 0));
-        assertEquals(Map.of("status", "APPLIED"), service.apply(staff, 7L));
-        verify(repository).find(7L);
+        when(repository.findSnapshot(7L)).thenReturn(new ScheduleRunSnapshot(
+                7L, 4L, 1L, ScheduleRunStatus.APPLIED, 0));
+        assertEquals(new ScheduleRunApplyResponse(ScheduleRunStatus.APPLIED, null), service.apply(staff, 7L));
+        verify(repository).findSnapshot(7L);
         verifyNoMoreInteractions(repository);
         verifyNoInteractions(approvals, scheduling, genetic, audit);
     }
 
     @Test
     void runningJobCannotBeDiscarded() {
-        when(repository.find(7L)).thenReturn(run(1L, "RUNNING", 0));
+        when(repository.findSnapshot(7L)).thenReturn(new ScheduleRunSnapshot(
+                7L, 4L, 1L, ScheduleRunStatus.RUNNING, 0));
         assertThrows(ApiFailure.class, () -> service.discard(staff, 7L));
         verify(repository, never()).discard(anyLong());
         verifyNoInteractions(audit);
@@ -106,7 +142,8 @@ class RunServiceTest {
 
     @Test
     void failedOwnedRunCanBeDiscardedAndAudited() {
-        when(repository.find(7L)).thenReturn(run(1L, "FAILED", 0));
+        when(repository.findSnapshot(7L)).thenReturn(new ScheduleRunSnapshot(
+                7L, 4L, 1L, ScheduleRunStatus.FAILED, 0));
         service.discard(staff, 7L);
         verify(repository).discard(7L);
         verify(audit).record(staff, "DISCARD", "schedule_runs", 7L);
@@ -114,7 +151,8 @@ class RunServiceTest {
 
     @Test
     void staleTypedPlacementCannotBeApplied() {
-        when(repository.find(7L)).thenReturn(run(1L, "COMPLETED", 0));
+        when(repository.findSnapshot(7L)).thenReturn(new ScheduleRunSnapshot(
+                7L, 4L, 1L, ScheduleRunStatus.COMPLETED, 0));
         var context = new SchedulingService.Context(Map.of(), Map.of(),
                 List.of(), List.of(), List.of(), List.of());
         when(scheduling.context()).thenReturn(context);

@@ -1,15 +1,14 @@
 package vn.huce.service.chat;
 
+import vn.huce.model.ChatSemester;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static vn.huce.validation.Inputs.date;
 import static vn.huce.validation.Inputs.invalid;
-import static vn.huce.validation.Inputs.s;
 
 final class ChatDateRangeParser {
     private static final Pattern DATE = Pattern.compile("\\b([0-9]{4}-[0-9]{2}-[0-9]{2}|[0-9]{1,2}/[0-9]{1,2}(?:/[0-9]{4})?)\\b");
@@ -21,7 +20,7 @@ final class ChatDateRangeParser {
     record Window(String from, String to) {
     }
 
-    static Window window(String message, String action, LocalDate now, Map<String, Object> semester) {
+    static Window window(String message, String action, LocalDate now, ChatSemester semester) {
         String question = ChatIntent.normalize(message);
         List<LocalDate> dates = new ArrayList<>();
         Matcher matcher = DATE.matcher(question);
@@ -78,7 +77,7 @@ final class ChatDateRangeParser {
             return single(start.plusDays(6));
         }
         if ("NEXT".equals(action) && !question.contains("tuan ")) {
-            return new Window(now.toString(), s(semester, "end_date"));
+            return new Window(now.toString(), semester.endDate().toString());
         }
         return new Window(start.toString(), start.plusDays(6).toString());
     }

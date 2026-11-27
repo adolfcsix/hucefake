@@ -1,5 +1,6 @@
 package vn.huce.service;
 
+import vn.huce.model.SchedulingSection;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -52,9 +53,9 @@ public class AvailabilityService {
 
         SchedulingService.Context context = scheduling.context();
         for (SchedulingService.Slot slot : context.patterns()) {
-            Map<String, Object> section = context.sections().get(slot.section());
+            SchedulingSection section = context.sections().get(slot.section());
             if (scheduling.staff(context, slot).contains(actor.staffId())
-                    && n(section, "semester_id") == semesterId && scheduling.busy(context, slot, "BUSY")) {
+                    && section.semesterId() == semesterId && scheduling.busy(context, slot, AvailabilityEntry.Kind.BUSY)) {
                 throw conflict(Map.of("issues", List.of(scheduling.issue(
                         "BR08", "Đã có lịch giảng trong khoảng giờ bận.", section))));
             }

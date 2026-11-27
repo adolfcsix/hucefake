@@ -1,5 +1,6 @@
 package vn.huce.service;
 
+import vn.huce.model.SchedulingSection;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -10,6 +11,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import org.springframework.stereotype.Service;
+import vn.huce.model.AvailabilityEntry.Kind;
 import vn.huce.Accounts.Actor;
 import vn.huce.service.SchedulingService.Context;
 import vn.huce.service.SchedulingService.Slot;
@@ -67,11 +69,11 @@ public class GeneticScheduler {
         return number.doubleValue();
     }
 
-    List<Map<String, Object>> targets(Context context, Actor actor, long semesterId) {
+    List<SchedulingSection> targets(Context context, Actor actor, long semesterId) {
         return inputBuilder.targets(context, actor, semesterId);
     }
 
-    static Slot make(Map<String, Object> section, long roomId, int dayOfWeek, int periodFrom) {
+    static Slot make(SchedulingSection section, long roomId, int dayOfWeek, int periodFrom) {
         return GeneticInputBuilder.make(section, roomId, dayOfWeek, periodFrom);
     }
 
@@ -145,7 +147,7 @@ public class GeneticScheduler {
                     }
                 }
             }
-            if (evaluator.busy(slot, "BUSY") > 0) {
+            if (evaluator.busy(slot, Kind.BUSY) > 0) {
                 messages.add("Giảng viên bận trong khung tiết.");
             }
             String message = String.join(" ", messages);

@@ -70,7 +70,7 @@ public class ApprovalController {
     public Object decide(Authentication authentication, HttpServletRequest request, @PathVariable long id,
                          @RequestBody Map<String, Object> body) {
         Actor actor = actor(authentication, "MANAGER");
-        return writes.write(actor, request, body, () -> approvals.decide(actor, approvals.approval(id), body));
+        return writes.write(actor, request, body, () -> approvals.decide(actor, approvals.approvalForMutation(id), body));
     }
 
     @PostMapping("/approvals/{id}/apply")
@@ -78,7 +78,7 @@ public class ApprovalController {
                         @RequestBody(required = false) Map<String, Object> body) {
         Actor actor = actor(authentication, "MANAGER");
         return writes.write(actor, request, body == null ? Map.of() : body,
-                () -> approvals.apply(actor, approvals.approval(id)));
+                () -> approvals.apply(actor, approvals.approvalForMutation(id)));
     }
 
     @PostMapping("/approvals/{id}/publish")

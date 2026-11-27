@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 import vn.huce.Accounts.Actor;
 import vn.huce.model.SessionChangeAction;
 import vn.huce.service.MutationService;
+import vn.huce.service.AvailabilityService;
 import vn.huce.service.SessionMutationService;
 
 import static vn.huce.validation.Inputs.choice;
@@ -30,10 +31,12 @@ import static vn.huce.validation.Inputs.role;
 public class SessionMutationController {
     private final MutationService writes;
     private final SessionMutationService sessions;
+    private final AvailabilityService availability;
 
-    SessionMutationController(MutationService writes, SessionMutationService sessions) {
+    SessionMutationController(MutationService writes, SessionMutationService sessions, AvailabilityService availability) {
         this.writes = writes;
         this.sessions = sessions;
+        this.availability = availability;
     }
 
     private Actor actor(Authentication authentication, String... roles) {
@@ -69,7 +72,7 @@ public class SessionMutationController {
 
     @GetMapping("/me/availability")
     public Object availability(Authentication authentication, @RequestParam String semesterId) {
-        return sessions.availability(actor(authentication, "LECTURER"), id(semesterId));
+        return availability.find(actor(authentication, "LECTURER"), id(semesterId));
     }
 
     @PutMapping("/me/availability")
@@ -77,7 +80,7 @@ public class SessionMutationController {
                                                 @RequestBody Map<String, Object> body) {
         Actor actor = actor(authentication, "LECTURER");
         writes.write(actor, request, body, () -> {
-            sessions.setAvailability(actor, body);
+            availability.replace(actor, body);
             return null;
         });
         return ResponseEntity.noContent().build();

@@ -1,5 +1,6 @@
 package vn.huce.service.chat;
 
+import vn.huce.model.ChatSemester;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -9,7 +10,7 @@ import org.springframework.stereotype.Service;
 import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
 import vn.huce.model.ProposalAction;
-import vn.huce.model.ScheduleRunStatus;
+import vn.huce.model.ProposalSnapshot;
 import vn.huce.repository.AuditRepository;
 import vn.huce.repository.ChatRepository;
 import vn.huce.repository.NotificationRepository;
@@ -85,7 +86,7 @@ public class ProposalService {
     private record Preview(Object parameters, Long runId, Map<String, Object> details) {
     }
 
-    public Map<String, Object> prepare(Actor actor, String rawAction, Map<String, Object> semester,
+    public Map<String, Object> prepare(Actor actor, String rawAction, ChatSemester semester,
                                        Map<String, Object> input) {
         permission(actor, rawAction);
         ProposalAction action = action(rawAction);
@@ -101,91 +102,93 @@ public class ProposalService {
         if (preview == null) {
             return null;
         }
-        var result = repository.insert(actor.id(), semester == null ? null : semester.get("id"),
+        var result = repository.insert(actor.id(), semester == null ? null : semester.id(),
                 action.name(), preview.runId(), preview.parameters() == null ? null : encode(preview.parameters()));
         result.put("action", action.name());
-        result.put("semester", semester == null ? null : semester.get("code"));
+        result.put("semester", semester == null ? null : semester.code());
         result.put("preview", preview.details());
         return result;
     }
 
-    private Preview previewApply(Actor actor, Map<String, Object> semester, Map<String, Object> input) {
-        var run = runs.get(actor, id(input.get("runId")));
-        long runId = n(run, "id");
-        if (n(run, "semester_id") != n(semester, "id")) {
+    private Preview previewApply(Actor actor, ChatSemester semester, Map<String, Object> input) {
+        var run = runs.snapshot(actor, id(input.get("runId")));
+        long runId = run.id();
+        if (run.semesterId() != semester.id()) {
             throw forbidden();
         }
-        if (!ScheduleRunStatus.COMPLETED.name().equals(run.get("status")) || n(run, "hard_violations") != 0) {
+        if (!run.applicable()) {
             throw state("Chọn phương án đã hoàn tất với 0 vi phạm cứng.");
         }
         long count = repository.countRunItems(runId);
         return new Preview(null, runId, Map.of("runId", runId, "count", count, "hardViolations", 0));
     }
 
-    private Preview previewDraft(Actor actor, Map<String, Object> semester, Map<String, Object> input) {
+    private Preview previewDraft(Actor actor, ChatSemester semester, Map<String, Object> input) {
         if (!(input.get("draft") instanceof Map<?, ?> draft)) {
             throw invalid("Thông tin lớp nháp không hợp lệ.");
         }
         Map<String, Object> form = new LinkedHashMap<>();
         draft.forEach((key, value) -> form.put(key.toString(), value));
-        form.put("semesterId", semester.get("id"));
+        form.put("semesterId", semester.id());
         var normalized = sections.previewDraft(actor, form);
-        var subject = sectionRepository.findSubject(id(normalized.get("subjectId")));
-        Map<String, Object> details = new LinkedHashMap<>(normalized);
-        details.put("subject", subject.get("code") + " · " + subject.get("name"));
+        var subject = sectionRepository.findSubject(normalized.subjectId());
+        // Adapt the typed preview only at the heterogeneous proposal response boundary.
+        Map<String, Object> details = json.convertValue(normalized, new TypeReference<Map<String, Object>>() {});
+        details.put("subject", subject.code() + " · " + subject.name());
         return new Preview(normalized, null, details);
     }
 
     private Preview previewNotifications(Actor actor) {
         var summary = notifications.unreadSummary(actor.id());
-        if (n(summary, "count") == 0) {
+        if (summary.count() == 0) {
             return null;
         }
-        return new Preview(Map.of("lastId", summary.get("last_id")), null, Map.of("count", summary.get("count")));
+        return new Preview(Map.of("lastId", summary.lastId()), null, Map.of("count", summary.count()));
     }
 
-    public Map<String, Object> owned(Actor actor, long proposalId) {
+    private ProposalSnapshot owned(Actor actor, long proposalId) {
         var row = repository.lock(proposalId);
-        if (n(row, "requested_by") != actor.id()) {
+        if (row.requestedBy() != actor.id()) {
             throw forbidden();
         }
-        permission(actor, s(row, "action"));
+        permission(actor, row.action().name());
         if (repository.hasDifferentConversationScope(proposalId, actor)) {
             throw forbidden();
         }
-        row.put("parameters", decode(row.remove("params_json")));
-        row.put("result", decode(row.remove("result_json")));
         return row;
     }
 
-    @SuppressWarnings("unchecked")
     public Object confirm(Actor actor, long proposalId) {
         var proposal = owned(actor, proposalId);
-        if (proposal.get("result") != null) {
-            return proposal.get("result");
+        if (proposal.resultJson() != null) {
+            return decode(proposal.resultJson());
         }
-        if (proposal.get("cancelled_at") != null) {
+        if (proposal.cancelled()) {
             throw state("Đề xuất đã hủy.");
         }
-        if (Boolean.TRUE.equals(proposal.get("expired"))) {
+        if (proposal.expired()) {
             throw state("Đề xuất đã hết hạn. Hãy tạo đề xuất mới.");
         }
-        ProposalAction action = action(s(proposal, "action"));
-        var parameters = (Map<String, Object>) proposal.get("parameters");
+        ProposalAction action = proposal.action();
+        var parameters = decode(proposal.parametersJson());
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("action", action.name());
         switch (action) {
-            case GENERATE -> result.putAll((Map<String, Object>) runs.enqueue(actor, n(proposal, "semester_id"), parameters));
+            case GENERATE -> result.put("id", runs.enqueue(actor, proposal.semesterId(), parameters).id());
             case APPLY -> {
-                var run = runs.get(actor, n(proposal, "run_id"));
-                if (n(run, "semester_id") != n(proposal, "semester_id")) {
+                var run = runs.snapshot(actor, proposal.runId());
+                if (run.semesterId() != proposal.semesterId()) {
                     throw forbidden();
                 }
-                result.putAll((Map<String, Object>) runs.apply(actor, n(proposal, "run_id")));
-                result.put("id", proposal.get("run_id"));
+                var applied = runs.apply(actor, proposal.runId());
+                result.put("status", applied.status().name());
+                if (applied.patterns() != null) {
+                    result.put("patterns", applied.patterns());
+                }
+                result.put("id", proposal.runId());
             }
             case DRAFT -> {
-                result.putAll((Map<String, Object>) sections.saveDraft(actor, parameters));
+                result.put("id", sections.saveDraft(actor, parameters).id());
                 result.put("code", parameters.get("code"));
             }
             case READ_NOTICES -> result.put("marked", notifications.markThrough(actor.id(), id(parameters.get("lastId"))));
@@ -197,7 +200,7 @@ public class ProposalService {
 
     public Object cancel(Actor actor, long proposalId) {
         var row = owned(actor, proposalId);
-        if (row.get("result") != null) {
+        if (row.resultJson() != null) {
             throw state("Đề xuất đã thực hiện.");
         }
         repository.cancel(proposalId);

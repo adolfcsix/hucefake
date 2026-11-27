@@ -2,16 +2,28 @@ package vn.huce.repository;
 
 import java.sql.Timestamp;
 import java.sql.Date;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.Arrays;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.springframework.stereotype.Repository;
 import vn.huce.Accounts.Actor;
 
-import static vn.huce.validation.Inputs.n;
+import vn.huce.model.SchedulePatternSnapshot;
+import vn.huce.model.PublishedSession;
+import vn.huce.model.TeachingPeriod;
+import vn.huce.model.NonTeachingDay;
+import vn.huce.model.StaffAvailability;
+import vn.huce.model.SchedulingRoom;
+import vn.huce.model.SchedulingSection;
+import vn.huce.model.AvailabilityEntry.Kind;
 
 @Repository
 public class SchedulingRepository {
@@ -21,46 +33,83 @@ public class SchedulingRepository {
         this.store = store;
     }
 
-    public List<Map<String, Object>> activeSections() {
-        return store.rows(SectionQueries.SECTION_SQL + " WHERE c.status IN ('OPEN','DRAFT') ORDER BY c.id");
+    public List<SchedulingSection> activeSections() {
+        return store.jdbc().query(SectionQueries.SECTION_SQL + " WHERE c.status IN ('OPEN','DRAFT') ORDER BY c.id",
+                (rs, row) -> new SchedulingSection(rs.getLong("id"), rs.getLong("semester_id"),
+                rs.getObject("managing_unit_id", Long.class), rs.getString("status"), rs.getString("code"),
+                rs.getString("subject_name"), rs.getObject("staff_id", Long.class), rs.getInt("capacity"),
+                rs.getString("required_room_type"), rs.getInt("sessions_per_week"),
+                rs.getInt("periods_per_session"), rs.getLong("scheduled"),
+                rs.getObject("start_date", LocalDate.class), rs.getObject("end_date", LocalDate.class),
+                readIds(rs, "assistant_ids"), readGroups(rs)));
     }
 
-    public List<Map<String, Object>> rooms() {
-        return store.rows("""
+    private static Map<Long, String> readGroups(ResultSet rs) throws SQLException {
+        var ids = new ArrayList<>(readIds(rs, "group_ids"));
+        var codes = rs.getArray("group_codes");
+        try {
+            String[] values = (String[]) codes.getArray();
+            if (ids.size() != values.length) {
+                throw new SQLException("Mismatched section group identifiers and codes");
+            }
+            Map<Long, String> groups = new LinkedHashMap<>();
+            for (int i = 0; i < ids.size(); i++) {
+                groups.put(ids.get(i), values[i]);
+            }
+            return groups;
+        } finally {
+            codes.free();
+        }
+    }
+
+    public List<SchedulingRoom> rooms() {
+        return store.jdbc().query("""
                 SELECT r.id,r.campus_id,r.code,r.capacity,r.type,
                     CASE WHEN c.status='ACTIVE' THEN r.status ELSE 'INACTIVE' END AS status
                 FROM teaching_rooms r JOIN campuses c ON c.id=r.campus_id ORDER BY r.id
-                """);
+                """, (rs, row) -> new SchedulingRoom(rs.getLong("id"), rs.getLong("campus_id"),
+                rs.getString("code"), rs.getInt("capacity"), rs.getString("type"), rs.getString("status")));
     }
 
-    public List<Map<String, Object>> activePeriods() {
-        return store.rows("SELECT * FROM period_definitions WHERE status='ACTIVE' ORDER BY effective_from DESC");
+    public List<TeachingPeriod> activePeriods() {
+        return store.jdbc().query("""
+                SELECT campus_id,period_no,start_time,end_time,shift,effective_from,effective_to
+                FROM period_definitions WHERE status='ACTIVE' ORDER BY effective_from DESC
+                """, (rs, row) -> new TeachingPeriod(rs.getLong("campus_id"), rs.getInt("period_no"),
+                rs.getTime("start_time").toLocalTime(), rs.getTime("end_time").toLocalTime(),
+                rs.getString("shift"), rs.getObject("effective_from", LocalDate.class),
+                rs.getObject("effective_to", LocalDate.class)));
     }
 
-    public List<Map<String, Object>> availability() {
-        return store.rows("SELECT * FROM staff_availability ORDER BY id");
+    public List<StaffAvailability> availability() {
+        return store.jdbc().query("""
+                SELECT staff_id,semester_id,day_of_week,period_from,period_to,kind
+                FROM staff_availability ORDER BY id
+                """, (rs, row) -> new StaffAvailability(rs.getLong("staff_id"),
+                rs.getLong("semester_id"), rs.getInt("day_of_week"), rs.getInt("period_from"),
+                rs.getInt("period_to"), Kind.valueOf(rs.getString("kind"))));
     }
 
-    public List<Map<String, Object>> holidays() {
-        return store.rows("SELECT * FROM non_teaching_days");
+    public List<NonTeachingDay> holidays() {
+        return store.jdbc().query("SELECT campus_id,start_date,end_date FROM non_teaching_days",
+                (rs, row) -> new NonTeachingDay(rs.getObject("campus_id", Long.class),
+                        rs.getObject("start_date", LocalDate.class), rs.getObject("end_date", LocalDate.class)));
     }
 
-    public List<Map<String, Object>> draftPatterns() {
-        return store.rows("""
-                SELECT p.* FROM section_schedule_patterns p JOIN course_sections c ON c.id=p.section_id
+    public List<SchedulePatternSnapshot> draftPatterns() {
+        return store.jdbc().query("SELECT " + SchedulePatternRepository.COLUMNS + """
+                FROM section_schedule_patterns p JOIN course_sections c ON c.id=p.section_id
                 WHERE c.status='DRAFT' ORDER BY p.id
-                """);
+                """, (rs, row) -> SchedulePatternRepository.snapshot(rs, null));
     }
 
     public Set<Long> allowedCampuses(Actor actor) {
-        List<Map<String, Object>> rows = "STAFF".equals(actor.role())
-                ? store.rows("SELECT campus_id AS id FROM staff_campuses JOIN campuses c ON c.id=campus_id WHERE staff_id=? AND c.status='ACTIVE'", actor.staffId())
-                : store.rows("SELECT id FROM campuses WHERE status='ACTIVE'");
-        Set<Long> result = new LinkedHashSet<>();
-        for (Map<String, Object> row : rows) {
-            result.add(n(row, "id"));
-        }
-        return result;
+        List<Long> rows = "STAFF".equals(actor.role())
+                ? store.jdbc().query("SELECT campus_id AS id FROM staff_campuses JOIN campuses c ON c.id=campus_id WHERE staff_id=? AND c.status='ACTIVE'",
+                        (rs, row) -> rs.getLong("id"), actor.staffId())
+                : store.jdbc().query("SELECT id FROM campuses WHERE status='ACTIVE'",
+                        (rs, row) -> rs.getLong("id"));
+        return new LinkedHashSet<>(rows);
     }
 
     public List<Map<String, Object>> actualConflicts(long sectionId, long roomId, Set<Long> staffIds,
@@ -82,12 +131,27 @@ public class SchedulingRepository {
                 Timestamp.valueOf(end), Timestamp.valueOf(start), roomId, staffArray, sectionId, sectionId);
     }
 
-    public List<Map<String, Object>> publishedSessions(LocalDate from, LocalDate to) {
-        return store.rows("""
+    public List<PublishedSession> publishedSessions(LocalDate from, LocalDate to) {
+        return store.jdbc().query("""
           SELECT x.section_id,x.room_id,x.start_at,x.end_at,
           ARRAY[x.staff_id] || ARRAY(SELECT a.staff_id FROM section_assignments a WHERE a.section_id=x.section_id AND a.role='ASSISTANT' AND a.valid_to IS NULL) AS staff_ids,
           ARRAY(SELECT g.group_id FROM section_target_groups g WHERE g.section_id=x.section_id) AS group_ids
           FROM class_sessions x WHERE x.start_at<?::date+1 AND x.end_at>=?::date AND x.status<>'CANCELLED'
-          """, Date.valueOf(to), Date.valueOf(from));
+          """, (rs, row) -> new PublishedSession(rs.getLong("section_id"),
+                rs.getObject("room_id", Long.class), rs.getTimestamp("start_at").toLocalDateTime(),
+                rs.getTimestamp("end_at").toLocalDateTime(), readIds(rs, "staff_ids"),
+                readIds(rs, "group_ids")), Date.valueOf(to), Date.valueOf(from));
+    }
+
+    private static Set<Long> readIds(ResultSet rs, String column) throws SQLException {
+        var array = rs.getArray(column);
+        if (array == null) {
+            return new LinkedHashSet<>();
+        }
+        try {
+            return new LinkedHashSet<>(Arrays.asList((Long[]) array.getArray()));
+        } finally {
+            array.free();
+        }
     }
 }

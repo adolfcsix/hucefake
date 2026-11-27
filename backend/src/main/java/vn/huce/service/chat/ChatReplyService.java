@@ -1,5 +1,6 @@
 package vn.huce.service.chat;
 
+import vn.huce.model.ChatSemester;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -17,6 +18,7 @@ import vn.huce.repository.CatalogRepository;
 import vn.huce.service.ApprovalService;
 import vn.huce.service.SectionService;
 import vn.huce.service.SessionMutationService;
+import vn.huce.service.AvailabilityService;
 import vn.huce.service.SessionReadService;
 
 import static vn.huce.validation.Inputs.*;
@@ -29,20 +31,23 @@ class ChatReplyService {
     private final ApprovalService approvals;
     private final SessionReadService reads;
     private final SessionMutationService sessions;
+    private final AvailabilityService availability;
 
     ChatReplyService(CatalogRepository catalog, ProposalService proposals, SectionService sections,
-                     ApprovalService approvals, SessionReadService reads, SessionMutationService sessions) {
+                     ApprovalService approvals, SessionReadService reads, SessionMutationService sessions,
+                     AvailabilityService availability) {
         this.catalog = catalog;
         this.proposals = proposals;
         this.sections = sections;
         this.approvals = approvals;
         this.reads = reads;
         this.sessions = sessions;
+        this.availability = availability;
     }
 
     private static final String EMPTY = "Chưa tìm thấy dữ liệu trong phạm vi đã chọn.";
 
-    Map<String, Object> answer(Actor actor, String action, Map<String, Object> semester,
+    Map<String, Object> answer(Actor actor, String action, ChatSemester semester,
                                String question, Map<String, Object> input) {
         if (!Set.of("UNRELATED", "DENIED").contains(action)
                 && !ChatPermissions.allowed(actor.role()).contains(action)) {
@@ -68,7 +73,7 @@ class ChatReplyService {
         }
 
         Map<String, String> query = query(semester);
-        String code = s(semester, "code");
+        String code = semester.code();
         return switch (action) {
             case "SCHEDULE", "NEXT" -> schedule(actor, action, semester, question, query);
             case "SECTIONS" -> sections(actor, question, query, code);
@@ -99,9 +104,9 @@ class ChatReplyService {
         return response;
     }
 
-    private Map<String, Object> schedule(Actor actor, String action, Map<String, Object> semester,
+    private Map<String, Object> schedule(Actor actor, String action, ChatSemester semester,
                                           String question, Map<String, String> query) {
-        String code = s(semester, "code");
+        String code = semester.code();
         var window = ChatDateRangeParser.window(question, action,
                 LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh")), semester);
         if (window.from().compareTo(window.to()) > 0) {
@@ -170,8 +175,8 @@ class ChatReplyService {
                 "requests", rows, total);
     }
 
-    private Map<String, Object> availability(Actor actor, Map<String, Object> semester, String code) {
-        var rows = sessions.availability(actor, n(semester, "id"));
+    private Map<String, Object> availability(Actor actor, ChatSemester semester, String code) {
+        var rows = availability.find(actor, semester.id());
         var entries = rows.stream().limit(8).map(row -> item(
                 (n(row, "day_of_week") == 7 ? "Chủ nhật" : "Thứ " + (n(row, "day_of_week") + 1))
                         + " · tiết " + row.get("period_from") + "–" + row.get("period_to"),
@@ -180,8 +185,8 @@ class ChatReplyService {
                 "availability", entries, rows.size());
     }
 
-    private Map<String, Object> statistics(Actor actor, Map<String, Object> semester) {
-        var statistics = page(reads.stats(actor, s(semester, "id")));
+    private Map<String, Object> statistics(Actor actor, ChatSemester semester) {
+        var statistics = page(reads.stats(actor, Long.toString(semester.id())));
         var rooms = items(Map.of("items", statistics.get("rooms")));
         var lecturers = items(Map.of("items", statistics.get("lecturers")));
         List<Map<String, Object>> rows = new ArrayList<>();
@@ -190,15 +195,15 @@ class ChatReplyService {
         lecturers.stream().limit(4).forEach(row -> rows.add(item("Giảng viên " + row.get("code"),
                 row.get("sessions") + " buổi · " + row.get("periods") + " tiết")));
         return report(rows.isEmpty() ? "Chưa có lịch công bố để tổng hợp."
-                        : "Mức sử dụng theo lịch công bố · " + s(semester, "code"),
+                        : "Mức sử dụng theo lịch công bố · " + semester.code(),
                 "statistics", rows, rooms.size() + lecturers.size());
     }
 
-    private Map<String, Object> draft(Actor actor, Map<String, Object> semester, Map<String, Object> input) {
+    private Map<String, Object> draft(Actor actor, ChatSemester semester, Map<String, Object> input) {
         if (input.get("draft") == null) {
             var response = report("Điền thông tin lớp để xem trước đề xuất.", "sections");
-            response.put("draft", Map.of("semesterId", semester.get("id"), "from", semester.get("start_date"),
-                    "to", semester.get("end_date"), "subjects", catalog.subjects(false, actor.unitId())));
+            response.put("draft", Map.of("semesterId", semester.id(), "from", semester.startDate().toString(),
+                    "to", semester.endDate().toString(), "subjects", catalog.subjects(false, actor.unitId())));
             return response;
         }
         var response = report("Kiểm tra thông tin lớp nháp trước khi tạo.", "sections");
@@ -206,7 +211,7 @@ class ChatReplyService {
         return response;
     }
 
-    private Map<String, Object> scheduleProposal(Actor actor, String action, Map<String, Object> semester,
+    private Map<String, Object> scheduleProposal(Actor actor, String action, ChatSemester semester,
                                                  String question, Map<String, Object> body) {
         var input = new LinkedHashMap<>(body);
         var matcher = Pattern.compile("#([0-9]+)|(?:lan chay|phuong an)\\s+([0-9]+)")
@@ -292,9 +297,9 @@ class ChatReplyService {
         return (List<Map<String, Object>>) page.get("items");
     }
 
-    private static Map<String, String> query(Map<String, Object> semester) {
+    private static Map<String, String> query(ChatSemester semester) {
         Map<String, String> query = new HashMap<>();
-        query.put("semesterId", s(semester, "id"));
+        query.put("semesterId", Long.toString(semester.id()));
         query.put("page", "1");
         query.put("pageSize", "8");
         return query;

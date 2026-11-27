@@ -9,6 +9,8 @@ import org.springframework.stereotype.Repository;
 import vn.huce.Accounts.Actor;
 import vn.huce.model.ClaimedScheduleRun;
 import vn.huce.model.ScheduleRunItem;
+import vn.huce.model.ScheduleRunSnapshot;
+import vn.huce.model.ScheduleRunStatus;
 import vn.huce.exception.ApiFailure;
 
 @Repository
@@ -28,6 +30,18 @@ public class RunRepository {
         return store.need("SELECT *,parameters::text AS parameters_json FROM schedule_runs WHERE id=?", runId);
     }
 
+    public ScheduleRunSnapshot findSnapshot(long runId) {
+        List<ScheduleRunSnapshot> rows = store.jdbc().query("""
+                SELECT id,semester_id,requested_by,status,hard_violations FROM schedule_runs WHERE id=?
+                """, (rs, row) -> new ScheduleRunSnapshot(rs.getLong("id"), rs.getLong("semester_id"),
+                rs.getLong("requested_by"), ScheduleRunStatus.valueOf(rs.getString("status")),
+                rs.getObject("hard_violations", Integer.class)), runId);
+        if (rows.isEmpty()) {
+            throw new ApiFailure(404, "NOT_FOUND", "Không tìm thấy dữ liệu.");
+        }
+        return rows.getFirst();
+    }
+
     public boolean visibleManagerRun(long runId, Long unitId) {
         return store.exists("SELECT 1 FROM schedule_runs run WHERE run.id=? AND " + MANAGER_SCOPE, runId, unitId);
     }
@@ -36,10 +50,14 @@ public class RunRepository {
         return store.exists("SELECT 1 FROM schedule_runs WHERE semester_id=? AND status IN ('QUEUED','RUNNING')", semesterId);
     }
 
-    public Map<String, Object> enqueue(long semesterId, long actorId, String parametersJson) {
-        return store.need("""
+    public long enqueue(long semesterId, long actorId, String parametersJson) {
+        List<Long> rows = store.jdbc().query("""
                 INSERT INTO schedule_runs(semester_id,requested_by,parameters) VALUES (?,?,?::jsonb) RETURNING id
-                """, semesterId, actorId, parametersJson);
+                """, (rs, row) -> rs.getLong("id"), semesterId, actorId, parametersJson);
+        if (rows.isEmpty()) {
+            throw new ApiFailure(404, "NOT_FOUND", "Không tìm thấy dữ liệu.");
+        }
+        return rows.getFirst();
     }
 
     public List<ScheduleRunItem> rawItems(long runId) {
