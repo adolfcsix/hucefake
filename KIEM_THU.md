@@ -56,6 +56,11 @@ Mốc 2016d49: [CI](https://github.com/adolfcsix/hucefake/actions/runs/458662669
 
 Mốc 000f45a: [CI 3/3 PASS](https://github.com/adolfcsix/hucefake/actions/runs/45968189635), gồm kiểm thử phân quyền và cấu trúc CSS/module.
 Mốc 5d7834a: [CI 3/3 PASS](https://github.com/adolfcsix/hucefake/actions/runs/45969423750), gồm kiểm thử mutation đồng thời, rollback nhập lớp, công bố và tiến độ GA.
-Mốc 69edb3e: đã đưa vào PR #4, đang nghiệm thu; bổ sung kiểm tra Gemini và cách ly phiên demo/private. Chỉ xác nhận PASS trên đúng SHA sau khi đủ ba job.
+Mốc 69edb3e: [CI 3/3 PASS](https://github.com/adolfcsix/hucefake/actions/runs/45970442711); 161 Java test, 0 lỗi/skip; 63 module frontend reachable; PostgreSQL, GA, private CLI/restore, Chromium và cách ly phiên demo/private đã chạy thành công. Gemini thật vẫn chưa kiểm thử.
 
 Kiểm toán cấu trúc: 9 Controller, 30 file Service, 20 Repository trước tách CLI; DTO/model, config, security, validation và exception riêng; 63 module JS/JSX/CSS. Giữ Accounts.Actor ở binary name cũ để tương thích phiên JDBC. SetupRepository tiếp nhận SQL của CLI, giữ TransactionTemplate, runtime-mode guard, tham số SQL và thứ tự ghi; cần kiểm thử private CLI và restore trên commit mới. Không đổi schema, API hay thiết kế UI. Chưa có nghiệm thu Gemini thật hoặc pentest độc lập, chưa merge main.
+
+
+### Kiểm kê dependency Java
+
+POM hiện có 6 dependency runtime/compile trực tiếp và spring-boot-starter-test ở scope test; phiên bản do Spring Boot parent quản lý. CI bổ sung cây Maven runtime đã resolve (dependency plugin 3.8.1) và CycloneDX 1.5 đối chiếu từng JAR trong chính gói đã kiểm thử, kèm SHA-256; lỗi thiếu hoặc JAR không rõ nguồn làm hỏng job. Artifact huce-maven-inventory chứa dependency-tree.json và huce.cdx.json, không commit báo cáo vào repo. Hai test Python dùng JAR giả kiểm tra thành phần bắc cầu, thành phần test, hash, thiếu/thừa JAR. Không thêm thư viện runtime. Kiểm kê không phải quét CVE: để kiểm tra lỗ hổng đã công bố, tải artifact và chạy OSV-Scanner v2: `osv-scanner scan source -L huce.cdx.json`. Xem https://google.github.io/osv-scanner/usage/scan-source . Cần xem kết quả, đánh giá ảnh hưởng và nâng cấp dependency có kiểm thử hồi quy; chưa có kết quả quét Java thật.
