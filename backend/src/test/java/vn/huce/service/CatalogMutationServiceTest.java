@@ -71,6 +71,7 @@ class CatalogMutationServiceTest {
                 5L, new SchedulingRoom(5L, 5L, "P5", 40, "LECTURE", "ACTIVE")),
                 List.of(), List.of(), List.of(), List.of(affected, otherCampus, otherPeriod));
         when(scheduling.context()).thenReturn(context);
+        when(repository.latestPeriod(any())).thenReturn(null);
         when(repository.insertPeriod(any())).thenReturn(Map.of("id", 9L));
         assertEquals(Map.of("id", 9L), service.createPeriod(staff, Map.of("campusId", 4L,
                 "periodNo", 2, "effectiveFrom", from.toString(),
