@@ -76,3 +76,8 @@ Kiểm thử source-integrity rà cả import trong mã frontend, unit test và 
 ### Phân loại và phản hồi HUCEChat
 
 `ChatClassifier` kiểm tra phạm vi hội thoại, nhận diện ý định bằng quy tắc hoặc Gemini và đối chiếu quyền. `ChatClassification` là DTO kết quả phân loại; không phải giấy phép thực thi. `ChatReplyService` kiểm tra quyền lại và điều phối các phương thức nghiệp vụ theo từng nhóm phản hồi. `ChatService` lưu lịch sử và điều phối luồng tin nhắn. `ProposalService` tiếp tục yêu cầu xác nhận trước khi ghi nghiệp vụ. Cấu trúc JSON phía React không thay đổi; các Map tương thích cũ và việc định kiểu toàn bộ đề xuất vẫn cần rà soát.
+
+
+### Xếp lịch và khung thời gian
+
+`SchedulingRepository` phụ trách đọc dữ liệu xếp lịch, cơ sở được phép và truy vấn xung đột với buổi học thực tế. `ScheduleCalendar` tính ngày xuất hiện định kỳ, ngày nghỉ và khoảng giờ theo phiên bản khung tiết. `SchedulingService` giữ các phương thức nghiệp vụ hiện có cho xếp lịch tay, phê duyệt và Genetic Algorithm. Chưa thay đổi hàm mục tiêu, quy tắc xung đột hay tham số của thuật toán. Các record Slot, Span, Context và Result vẫn ở SchedulingService để tránh thay đổi hàng loạt bên gọi; việc định kiểu context và chuẩn hóa phần ràng buộc còn lại thuộc đợt sau.

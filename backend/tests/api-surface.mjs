@@ -108,3 +108,10 @@ for (const name of ['ChatClassifier', 'ChatReplyService']) {
 }
 assert.ok(existsSync(new URL('dto/ChatClassification.java', root)))
 console.log('PASS: chat classification and reply boundaries')
+
+for (const name of ['SchedulingService', 'ScheduleCalendar']) {
+  const source = readFileSync(new URL('service/' + name + '.java', root), 'utf8')
+  assert.doesNotMatch(source, /\b(?:SqlStore|JdbcTemplate|SELECT|INSERT\s+INTO|DELETE\s+FROM|UPDATE\s+\w+\s+SET)\b/)
+}
+assert.ok(existsSync(new URL('repository/SchedulingRepository.java', root)))
+console.log('PASS: scheduling persistence and calendar boundaries')
