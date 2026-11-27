@@ -174,3 +174,8 @@ Rà soát các repository, service, controller, CLI và toàn bộ 31 file Java 
 ### Kiểm thử giao dịch PostgreSQL khi có yêu cầu đồng thời
 
 Mở rộng section-contract.mjs (CI chạy với Spring Boot và PostgreSQL 16 thật, chỉ trên database demo dùng một lần): hai POST tạo lớp cùng Idempotency-Key phải trả cùng ID, hai PATCH cùng version nhưng key khác chỉ một thành công và một VERSION_CONFLICT, nhập tệp lỗi phải rollback mọi dòng rồi cho phép sửa payload và dùng lại key (không để bản ghi idempotency của giao dịch thất bại), hai lần áp dụng phê duyệt đồng thời với key khác phải trả cùng kết quả công bố. Các assertion hiện có về số lớp, version, số buổi và thông báo vẫn được giữ. Không sửa nghiệp vụ hoặc schema khi chưa có lỗi được chứng minh. Cần CI mới để xác minh các test đồng thời.
+
+
+### Bảo toàn trạng thái tiến độ xếp lịch
+
+RunRepository.recordProgress chỉ ghi lịch sử thế hệ nếu UPDATE có tác động đến một lượt RUNNING và thế hệ mới không nhỏ hơn thế hệ đã lưu. Hai câu lệnh nằm trong TransactionTemplate của RunWorker: UPDATE khóa dòng đến cuối transaction, vì vậy callback muộn sau khi lượt chạy đã kết thúc hoặc bị đánh dấu FAILED không được ghi thêm progress. Ba unit test kiểm tra lượt không còn hợp lệ, thứ tự ghi khi được chấp nhận và thế hệ cũ. Không thay đổi thuật toán, schema, endpoint hay giao diện.

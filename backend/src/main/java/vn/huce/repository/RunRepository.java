@@ -126,7 +126,12 @@ public class RunRepository {
     }
 
     public void recordProgress(long runId, int generation, int hard, double soft) {
-        store.jdbc().update("UPDATE schedule_runs SET generations_run=? WHERE id=? AND status='RUNNING'", generation, runId);
+        int updated = store.jdbc().update(
+                "UPDATE schedule_runs SET generations_run=? WHERE id=? AND status='RUNNING' AND generations_run<=?",
+                generation, runId, generation);
+        if (updated == 0) {
+            return;
+        }
         store.jdbc().update("""
                 INSERT INTO schedule_run_progress(run_id,generation,hard_violations,soft_penalty) VALUES (?,?,?,?)
                 ON CONFLICT(run_id,generation) DO UPDATE SET hard_violations=EXCLUDED.hard_violations,soft_penalty=EXCLUDED.soft_penalty
