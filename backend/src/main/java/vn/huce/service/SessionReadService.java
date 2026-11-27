@@ -10,7 +10,7 @@ import static vn.huce.validation.Inputs.*;
 
 @Service
 public class SessionReadService {
-    public static final String STAFF_IDS="(ARRAY[x.staff_id] || ARRAY(SELECT a.staff_id FROM section_assignments a WHERE a.section_id=x.section_id AND a.role='ASSISTANT' AND a.valid_to IS NULL))";
+    public static final String STAFF_IDS = vn.huce.repository.SessionQueries.STAFF_IDS;
     static final String SESSION_SQL="""
       SELECT x.id,x.section_id,x.staff_id,x.room_id,x.period_from,x.period_count,x.status,x.source_session_id,
         to_char(x.start_at,'YYYY-MM-DD"T"HH24:MI:SS') AS start_at,to_char(x.end_at,'YYYY-MM-DD"T"HH24:MI:SS') AS end_at,

@@ -56,3 +56,8 @@ Kiểm thử source-integrity rà cả import trong mã frontend, unit test và 
 ### Phê duyệt và công bố thời khóa biểu
 
 `ApprovalService` xử lý điều kiện gửi duyệt, quyền quyết định, đối chiếu phương án và sinh buổi học. `ApprovalRepository` sở hữu SQL của quy trình, `ApprovalSnapshot` giữ cấu trúc dữ liệu phương án đã gửi tương thích payload cũ. `NotificationService` và `NotificationRepository` phụ trách thông báo cho quản lý, người gửi và thành viên lớp; nghiệp vụ đổi lịch gọi trực tiếp NotificationService thay vì phụ thuộc ApprovalService. Các thao tác ghi vẫn dùng giao dịch và khóa chống lặp của MutationService. Một số projection Map và cấu trúc payload cũ được giữ để không phá vỡ hợp đồng API.
+
+
+### Điều chỉnh buổi học và lịch rảnh giảng viên
+
+`SessionMutationService` giữ nghiệp vụ đổi phòng, nghỉ học, học bù và xử lý đề nghị. `SessionChangeRepository` sở hữu truy vấn và thao tác ghi tương ứng. `AvailabilityService` kiểm tra quyền, học kỳ, định kiểu các khoảng lịch rảnh thành `AvailabilityEntry` và kiểm tra xung đột; `AvailabilityRepository` thực hiện truy vấn. Thông báo sử dụng NotificationService. Các thao tác ghi tiếp tục nằm trong giao dịch MutationService để rollback khi phát hiện xung đột. SessionReadService và phần truy vấn lịch trong HUCEChat vẫn cần cải tổ tiếp.

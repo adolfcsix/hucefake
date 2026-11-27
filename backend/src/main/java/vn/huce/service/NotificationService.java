@@ -22,4 +22,12 @@ public class NotificationService {
     public void notifySection(long sectionId, String message) {
         repository.notifySection(sectionId, message);
     }
+
+    public void notifyStaffProfile(long staffId, String message) {
+        repository.notifyStaffProfile(staffId, message);
+    }
+
+    public void notifyScopedStaff(Object unitId, Object roomId, String message) {
+        repository.notifyScopedStaff(unitId, roomId, message);
+    }
 }

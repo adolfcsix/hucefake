@@ -31,4 +31,21 @@ public class NotificationRepository {
                 ) audience
                 """, message, sectionId, sectionId);
     }
+
+    public void notifyStaffProfile(long staffId, String message) {
+        jdbc.update("INSERT INTO notifications(user_id,message) SELECT user_id,? FROM staff_profiles WHERE id=?",
+                message, staffId);
+    }
+
+    public void notifyScopedStaff(Object unitId, Object roomId, String message) {
+        jdbc.update("""
+                INSERT INTO notifications(user_id,message)
+                SELECT p.user_id,? FROM staff_profiles p JOIN users u ON u.id=p.user_id
+                JOIN roles r ON r.role_id=u.role_id
+                WHERE p.unit_id=? AND p.status='ACTIVE' AND u.status='ACTIVE' AND r.code='STAFF'
+                AND (?::bigint IS NULL OR EXISTS(
+                    SELECT 1 FROM teaching_rooms t JOIN staff_campuses sc ON sc.campus_id=t.campus_id
+                    JOIN campuses c ON c.id=t.campus_id WHERE t.id=? AND sc.staff_id=p.id AND c.status='ACTIVE'))
+                """, message, unitId, roomId, roomId);
+    }
 }

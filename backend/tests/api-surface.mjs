@@ -77,3 +77,11 @@ for (const name of ['ApprovalService', 'NotificationService']) {
 assert.ok(existsSync(new URL('repository/ApprovalRepository.java', root)))
 assert.ok(existsSync(new URL('repository/NotificationRepository.java', root)))
 console.log('PASS: approval and notification persistence boundaries')
+
+for (const name of ['SessionMutationService', 'AvailabilityService']) {
+  const source = readFileSync(new URL('service/' + name + '.java', root), 'utf8')
+  assert.doesNotMatch(source, /\b(?:SqlStore|JdbcTemplate|SELECT|INSERT\s+INTO|DELETE\s+FROM|UPDATE\s+\w+\s+SET)\b/)
+}
+assert.ok(existsSync(new URL('repository/SessionChangeRepository.java', root)))
+assert.ok(existsSync(new URL('repository/AvailabilityRepository.java', root)))
+console.log('PASS: session change and lecturer availability persistence boundaries')
