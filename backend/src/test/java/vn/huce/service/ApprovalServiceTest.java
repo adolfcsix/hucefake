@@ -42,6 +42,7 @@ class ApprovalServiceTest {
 
     @Test
     void newDraftReturnsPersistedVersionId() {
+        when(repository.findDraft(4L, 1L)).thenReturn(null);
         when(repository.createDraft(4L, 1L)).thenReturn(8L);
         assertEquals(new TimetableVersionIdResponse(8L), service.create(staff, 4L));
         var order = inOrder(repository);
@@ -75,6 +76,7 @@ class ApprovalServiceTest {
 
     @Test
     void publicationRequiresSubmittedVersionBeforeScheduling() {
+        when(repository.priorExecution(7L)).thenReturn(null);
         when(repository.findVersionForApproval(7L)).thenReturn(new TimetableVersionSnapshot(
                 4L, 2L, 1, TimetableVersionStatus.RETURNED, 2, 1L));
         var error = assertThrows(ApiFailure.class, () -> service.apply(manager, Map.of(
