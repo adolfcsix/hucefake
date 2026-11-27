@@ -61,6 +61,28 @@ class RuntimeInventoryTest(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "differs from resolved dependency"):
                 module.inventory(root, jar)
 
+    def test_metadata_only_starter_is_recorded_and_scanned(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = pathlib.Path(folder) / "resolved"
+            jar = pathlib.Path(folder) / "app.jar"
+            boot = self.resolved(root, "org.springframework.boot", "spring-boot", "3.5.8", b"boot")
+            starter = root / "org/springframework/boot/spring-boot-starter-web/3.5.8/spring-boot-starter-web-3.5.8.jar"
+            starter.parent.mkdir(parents=True)
+            with zipfile.ZipFile(starter, "w") as archive:
+                archive.writestr("META-INF/MANIFEST.MF", "Manifest-Version: 1.0")
+                archive.writestr("META-INF/LICENSE.txt", "license")
+            with zipfile.ZipFile(jar, "w") as archive:
+                archive.writestr("BOOT-INF/lib/" + boot, b"boot")
+            result = module.inventory(root, jar)
+            omitted = [c for c in result["components"] if c["name"] == "spring-boot-starter-web"]
+            self.assertEqual(len(omitted), 1)
+            self.assertEqual(omitted[0]["properties"][0]["value"], "resolved-metadata-only-starter")
+            for name in ("example/Unexpected.class", "META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports"):
+                with zipfile.ZipFile(starter, "w") as archive:
+                    archive.writestr(name, b"runtime")
+                with self.assertRaisesRegex(AssertionError, "missing from package"):
+                    module.inventory(root, jar)
+
 
 if __name__ == "__main__":
     unittest.main()
