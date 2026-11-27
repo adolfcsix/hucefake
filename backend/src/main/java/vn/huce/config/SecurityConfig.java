@@ -2,18 +2,15 @@ package vn.huce.config;
 
 import vn.huce.Accounts;
 import vn.huce.service.AccountService;
+import vn.huce.security.SessionPrincipalRefreshFilter;
 
 import java.util.List;
 import java.io.IOException;
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
@@ -21,7 +18,6 @@ import org.springframework.security.web.context.SecurityContextHolderFilter;
 import org.springframework.security.web.csrf.CsrfException;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
-import org.springframework.web.filter.OncePerRequestFilter;
 
 @Configuration
 public class SecurityConfig {
@@ -34,24 +30,7 @@ public class SecurityConfig {
         var csrf = new HttpSessionCsrfTokenRepository();
         csrf.setHeaderName("X-CSRF-Token");
         var handler = new CsrfTokenRequestAttributeHandler();
-        var refresh = new OncePerRequestFilter(){
-            @Override protected void doFilterInternal(HttpServletRequest req,HttpServletResponse res,FilterChain chain)
-                  throws ServletException,IOException {
-                var context=SecurityContextHolder.getContext();
-                var auth=context.getAuthentication();
-                if(auth!=null && auth.getPrincipal() instanceof Accounts.Actor prior){
-                    var actor=accounts.active(prior.username());
-                    if(actor==null || actor.id()!=prior.id()){
-                        context.setAuthentication(null);
-                        contexts.saveContext(context,req,res);
-                    } else if(!actor.equals(prior)){
-                        context.setAuthentication(authentication(actor));
-                        contexts.saveContext(context,req,res);
-                    }
-                }
-                chain.doFilter(req,res);
-            }
-        };
+        var refresh = new SessionPrincipalRefreshFilter(contexts, accounts);
         return http.securityContext(c->c.securityContextRepository(contexts))
           .csrf(c->c.csrfTokenRepository(csrf).csrfTokenRequestHandler(handler))
           .addFilterAfter(refresh,SecurityContextHolderFilter.class)

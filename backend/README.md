@@ -99,3 +99,8 @@ Kiểm thử source-integrity rà cả import trong mã frontend, unit test và 
 ### Giao dịch và chống thực thi lặp
 
 `MutationRepository` tập trung khóa advisory PostgreSQL dùng chung với RunWorker, đọc/ghi và dọn bản ghi chống lặp. `IdempotencyRecord` định kiểu fingerprint và JSON phản hồi. `MutationService` giữ giao dịch Spring, kiểm tra khóa yêu cầu, tạo SHA-256 theo thứ tự trường và cấu hình JSON cũ, gọi nghiệp vụ và lưu phản hồi. Không đổi bảng, mã khóa, HTTP contract hoặc thứ tự kiểm tra. Kiểm thử độc lập kiểm tra replay, xung đột khóa, yêu cầu lỗi và tương thích fingerprint cũ; rollback thực tế vẫn phải xác minh qua CI tích hợp.
+
+
+### DTO xác thực và làm mới phiên
+
+AuthController sử dụng LoginRequest, DemoLoginRequest, AuthModeResponse và CsrfResponse trong package dto. LoginRequest chỉ nhận mật khẩu khi đọc JSON, không trả mật khẩu khi serialize hoặc gọi toString. Accounts.Actor giữ nguyên tên lớp và các trường để tương thích dữ liệu phiên cũ. SessionPrincipalRefreshFilter phụ trách kiểm tra lại tài khoản và phạm vi quyền từng yêu cầu; được tạo và đăng ký một lần trong SecurityConfig, không đăng ký như filter servlet độc lập. Không thay đổi đường dẫn, mã HTTP, cookie, CSRF hoặc hành vi đăng nhập dùng thử. Kiểm thử mới bao gồm hợp đồng JSON và các trường hợp tài khoản bị khóa, thay thế hoặc thay đổi quyền.
