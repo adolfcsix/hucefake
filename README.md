@@ -1,6 +1,6 @@
 # HUCE — Lớp học phần và Thời khóa biểu
 
-Ứng dụng học tập độc lập, không phải cổng chính thức của trường. Frontend ReactJS (Vite, JSX), backend Java 21 / Spring Boot 3.5.8, PostgreSQL 16. Spring Security xác thực, phân quyền và CSRF; JDBC thực hiện truy vấn, Flyway quản lý migration; Spring Session lưu phiên trong PostgreSQL. Node.js chỉ build React và chạy kiểm thử HTTP, không phục vụ backend.
+Ứng dụng học tập độc lập, không phải cổng chính thức của trường. Frontend ReactJS (Vite, JSX), backend Java 21 / Spring Boot 3.5.16, PostgreSQL 16. Spring Security xác thực, phân quyền và CSRF; JDBC thực hiện truy vấn, Flyway quản lý migration; Spring Session lưu phiên trong PostgreSQL. Node.js chỉ build React và chạy kiểm thử HTTP, không phục vụ backend.
 
 Ảnh đăng nhập: [Hướng dẫn cho tân sinh viên HUCE](https://ttcntt.huce.edu.vn/huong-dan-cho-tan-sinh-vien).
 
