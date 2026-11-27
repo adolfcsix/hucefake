@@ -154,3 +154,8 @@ RuntimeMode giữ trách nhiệm ApplicationRunner và giao dịch khởi tạo,
 ### Kiểm tra liên kết CLI và cấu hình bảo mật
 
 SetupCommand tạo RuntimeModeRepository và MutationRepository từ JdbcTemplate của giao dịch CLI đang có, tránh constructor RuntimeMode cũ và khóa advisory lặp. CLI vẫn chạy không cần Spring application context. SecurityConfig và LoginThrottle chuẩn hóa cách trình bày, giữ nguyên CSRF, danh sách endpoint công khai, cookie, mã lỗi và hạn mức. Không loại bỏ dependency Maven chỉ vì ít xuất hiện trong import: Flyway, JDBC, PostgreSQL runtime, Spring Session, Security và Web đều phục vụ runtime/CLI. Cần kiểm chứng luồng setup catalog/account và database demo/private qua CI của cây mã nguồn mới.
+
+
+### Kiểm tra tương thích trước/sau cải tổ
+
+Đối chiếu với main gốc affdb91: SqlStore/Inputs (ánh xạ JDBC, phân trang, giới hạn số, ngày, version, phạm vi khoa), Accounts/AccountService (BCrypt, dummy hash, trạng thái và hồ sơ), ApiFailure/GlobalExceptionHandler (HTTP status, mã lỗi, request_id), ChatIntent/ChatPermissions/ChatDateRangeParser (thứ tự nhận diện, quyền, khoảng ngày). Kiểm tra truy vấn môn học cho biểu mẫu nháp vẫn chỉ lấy id/code/name của môn ACTIVE thuộc khoa. Bổ sung 12 kiểm thử hồi quy cho Inputs, AccountService và GlobalExceptionHandler; không thay đổi hành vi sản xuất trong đợt này. Các kết quả đối chiếu tĩnh không thay thế kiểm thử CI.
