@@ -32,12 +32,13 @@ public class ApprovalRepository {
     }
 
     public int patternVersion(long patternId) {
-        return ((Number) store.need("SELECT version FROM section_schedule_patterns WHERE id=?", patternId)
-                .get("version")).intValue();
+        return require(store.jdbc().query("SELECT version FROM section_schedule_patterns WHERE id=?",
+                (rs, row) -> rs.getInt("version"), patternId));
     }
 
     public void requireSemester(long semesterId) {
-        store.need("SELECT id FROM semesters WHERE id=?", semesterId);
+        require(store.jdbc().query("SELECT id FROM semesters WHERE id=?",
+                (rs, row) -> rs.getLong("id"), semesterId));
     }
 
     public boolean hasSubmittedVersion(long semesterId) {
@@ -58,23 +59,20 @@ public class ApprovalRepository {
                 INSERT INTO timetable_versions(semester_id,version_no,created_by)
                 SELECT ?,COALESCE(max(version_no),0)+1,? FROM timetable_versions WHERE semester_id=? RETURNING id
                 """, (rs, row) -> rs.getLong("id"), semesterId, actorId, semesterId);
-        if (rows.isEmpty()) {
-            throw new ApiFailure(404, "NOT_FOUND", "Không tìm thấy dữ liệu.");
-        }
-        return rows.getFirst();
+        return require(rows);
     }
 
     public TimetableVersionSnapshot findVersion(long versionId) {
-        return requireVersion(store.jdbc().query("SELECT " + VERSION_COLUMNS
+        return require(store.jdbc().query("SELECT " + VERSION_COLUMNS
                 + " FROM timetable_versions WHERE id=?", VERSION_MAPPER, versionId));
     }
 
     public TimetableVersionSnapshot findVersionForApproval(long approvalId) {
-        return requireVersion(store.jdbc().query("SELECT " + VERSION_COLUMNS
+        return require(store.jdbc().query("SELECT " + VERSION_COLUMNS
                 + " FROM timetable_versions WHERE approval_request_id=?", VERSION_MAPPER, approvalId));
     }
 
-    private static TimetableVersionSnapshot requireVersion(List<TimetableVersionSnapshot> rows) {
+    private static <T> T require(List<T> rows) {
         if (rows.isEmpty()) {
             throw new ApiFailure(404, "NOT_FOUND", "Không tìm thấy dữ liệu.");
         }
@@ -82,14 +80,15 @@ public class ApprovalRepository {
     }
 
     public long createWorkItem(long actorId) {
-        return ((Number) store.need("INSERT INTO work_items(kind,created_by) VALUES ('TIMETABLE',?) RETURNING id",
-                actorId).get("id")).longValue();
+        return require(store.jdbc().query(
+                "INSERT INTO work_items(kind,created_by) VALUES ('TIMETABLE',?) RETURNING id",
+                (rs, row) -> rs.getLong("id"), actorId));
     }
 
     public long createApproval(long workItemId, long actorId, String snapshotJson) {
-        return ((Number) store.need("""
+        return require(store.jdbc().query("""
                 INSERT INTO approval_requests(work_item_id,requested_by,payload) VALUES (?,?,?::jsonb) RETURNING id
-                """, workItemId, actorId, snapshotJson).get("id")).longValue();
+                """, (rs, row) -> rs.getLong("id"), workItemId, actorId, snapshotJson));
     }
 
     public void submitVersion(long versionId, long sectionCount, long approvalId) {
@@ -112,8 +111,11 @@ public class ApprovalRepository {
         store.jdbc().update("UPDATE timetable_versions SET status='RETURNED' WHERE approval_request_id=?", approvalId);
     }
 
-    public Map<String, Object> priorExecution(long approvalId) {
-        return store.one("SELECT result::text AS result FROM execution_records WHERE approval_request_id=?", approvalId);
+    public String priorExecution(long approvalId) {
+        List<String> rows = store.jdbc().query(
+                "SELECT result::text AS result FROM execution_records WHERE approval_request_id=?",
+                (rs, row) -> rs.getString("result"), approvalId);
+        return rows.isEmpty() ? null : rows.getFirst();
     }
 
     public void insertSession(long sectionId, Long staffId, long roomId, int periodFrom, int periodCount,

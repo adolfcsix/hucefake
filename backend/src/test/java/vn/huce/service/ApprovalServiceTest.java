@@ -92,6 +92,39 @@ class ApprovalServiceTest {
     }
 
     @Test
+    void validSubmissionUsesPersistedIdsAndKeepsSnapshotContract() throws Exception {
+        var section = Map.<String, Object>of("id", 21L, "semester_id", 4L, "status", "DRAFT",
+                "managing_unit_id", 3L, "staff_id", 2L, "sessions_per_week", 1,
+                "code", "HP01", "subject_name", "Toán");
+        var slot = new SchedulingService.Slot(11L, 21L, 2L, 5L, 1, 2, 3,
+                LocalDate.of(2026, 9, 1), LocalDate.of(2026, 12, 31));
+        var context = new SchedulingService.Context(Map.of(21L, section),
+                Map.of(5L, Map.of("code", "P101")), List.of(), List.of(), List.of(), List.of(slot));
+        when(scheduling.context()).thenReturn(context);
+        when(scheduling.check(context, slot, staff, false))
+                .thenReturn(new SchedulingService.Result(true, List.of(), List.of()));
+        when(repository.findVersion(7L)).thenReturn(new TimetableVersionSnapshot(
+                7L, 4L, 1, TimetableVersionStatus.DRAFT, 0, 1L));
+        when(repository.patternVersion(11L)).thenReturn(2);
+        when(repository.createWorkItem(1L)).thenReturn(8L);
+        when(repository.createApproval(eq(8L), eq(1L), anyString())).thenReturn(9L);
+        assertEquals(9L, service.submit(staff, 7L).approvalId());
+        var captured = org.mockito.ArgumentCaptor.forClass(String.class);
+        var order = inOrder(repository, audit, notifications);
+        order.verify(repository).createWorkItem(1L);
+        order.verify(repository).createApproval(eq(8L), eq(1L), captured.capture());
+        order.verify(repository).submitVersion(7L, 1L, 9L);
+        order.verify(audit).record(staff, "SUBMIT", "timetable_versions", 7L);
+        order.verify(notifications).notifyManagers(anyString());
+        var json = new ObjectMapper();
+        assertEquals(json.readTree("""
+                [{"id":11,"section":21,"staff":2,"room":5,"day":1,"first":2,"count":3,
+                "from":"2026-09-01","to":"2026-12-31","version":2,
+                "sectionCode":"HP01","subjectName":"Toán","roomCode":"P101"}]
+                """), json.readTree(captured.getValue()));
+    }
+
+    @Test
     void pendingReadinessKeepsLegacyResponse() {
         when(repository.hasSubmittedVersion(4L)).thenReturn(true);
         assertEquals(Map.of("semesterId", 4L, "pending", true, "ready", false,
@@ -161,7 +194,7 @@ class ApprovalServiceTest {
 
     @Test
     void repeatedPublicationReturnsPriorExecutionWithoutWritingAgain() {
-        when(repository.priorExecution(7L)).thenReturn(Map.of("result", "{\"versionId\":4,\"sessions\":12}"));
+        when(repository.priorExecution(7L)).thenReturn("{\"versionId\":4,\"sessions\":12}");
         assertEquals(Map.of("versionId", 4, "sessions", 12),
                 service.apply(manager, Map.of("id", 7L, "requested_by", 1L, "status", "APPLIED")));
         verify(repository).priorExecution(7L);

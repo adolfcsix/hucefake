@@ -247,9 +247,9 @@ public class ApprovalService {
             forbidden();
         }
         long approvalId = n(approval, "id");
-        Map<String, Object> prior = repository.priorExecution(approvalId);
+        String prior = repository.priorExecution(approvalId);
         if (prior != null) {
-            return decode(prior.get("result"));
+            return decode(prior);
         }
         status(approval, ApprovalStatus.APPROVED);
         TimetableVersionSnapshot version = repository.findVersionForApproval(approvalId);
