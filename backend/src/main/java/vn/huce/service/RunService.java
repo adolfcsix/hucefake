@@ -1,104 +1,184 @@
 package vn.huce.service;
 
-import vn.huce.Accounts;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
+import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
-import vn.huce.repository.SqlStore;
+import vn.huce.repository.ApprovalRepository;
+import vn.huce.repository.AuditRepository;
+import vn.huce.repository.RunRepository;
 
 import static vn.huce.validation.Inputs.*;
 import static vn.huce.service.SchedulingService.*;
-import java.util.*;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.transaction.PlatformTransactionManager;
-import java.sql.Date;
 
 @Service
 public class RunService {
-    private final SqlStore db;
+    private final RunRepository repository;
+    private final ApprovalRepository approvals;
+    private final AuditRepository audit;
     private final SchedulingService scheduling;
     private final GeneticScheduler genetic;
     private final ObjectMapper json;
-    RunService(SqlStore db,SchedulingService scheduling,GeneticScheduler genetic,ObjectMapper json){this.db=db;this.scheduling=scheduling;this.genetic=genetic;this.json=json;}
-    public static final String MANAGER_SCOPE="""
-      EXISTS(SELECT 1 FROM users u JOIN roles r ON r.role_id=u.role_id WHERE u.id=run.requested_by AND r.code='MANAGER')
-      AND NOT EXISTS(SELECT 1 FROM schedule_run_items i JOIN course_sections c ON c.id=i.section_id JOIN subjects s ON s.id=c.subject_id
-        WHERE i.run_id=run.id AND s.managing_unit_id IS DISTINCT FROM ?::bigint)
-      """;
-    public Map<String,Object> get(Accounts.Actor a,long id){
-        role(a,"STAFF","MANAGER");
-        var row=db.need("SELECT *,parameters::text AS parameters_json FROM schedule_runs WHERE id=?",id);
-        if("STAFF".equals(a.role())&&n(row,"requested_by")!=a.id()&&(!Set.of("COMPLETED","APPLIED").contains(row.get("status"))||!db.exists("SELECT 1 FROM schedule_runs run WHERE run.id=? AND "+MANAGER_SCOPE,id,a.unitId())))throw new ApiFailure(403,"FORBIDDEN","Bạn không có quyền trong phạm vi này.");
-        Object raw=row.remove("parameters_json");
-        try{row.put("parameters",json.readValue(raw.toString(),Object.class));}catch(Exception e){throw new IllegalStateException(e);}
-        return row;
-    }
-    public void unlocked(long sem){if(db.exists("SELECT 1 FROM timetable_versions WHERE semester_id=? AND status='SUBMITTED'",sem))throw state("Học kỳ đang chờ duyệt.");}
-    public Object enqueue(Accounts.Actor a,long sem,Object raw){
-        role(a,"STAFF","MANAGER");unlocked(sem);
-        if(db.exists("SELECT 1 FROM schedule_runs WHERE semester_id=? AND status IN ('QUEUED','RUNNING')",sem))throw new ApiFailure(409,"DUPLICATE_REQUEST","Học kỳ đang có một lần chạy xếp lịch.");
-        var params=GeneticScheduler.parameters(raw);genetic.input(a,sem);
-        String encoded;try{encoded=json.writeValueAsString(params);}catch(Exception e){throw new IllegalStateException(e);}
-        var row=db.need("INSERT INTO schedule_runs(semester_id,requested_by,parameters) VALUES (?,?,?::jsonb) RETURNING id",sem,a.id(),encoded);
-        db.audit(a,"QUEUE","schedule_runs",n(row,"id"));return row;
-    }
-    public Object apply(Accounts.Actor a,long id){
-        var run=get(a,id);
-        if("APPLIED".equals(run.get("status")))return Map.of("status","APPLIED");
-        if(!"COMPLETED".equals(run.get("status"))||n(run,"hard_violations")!=0)throw state("Chỉ áp dụng được phương án hoàn tất với 0 vi phạm cứng.");
-        long sem=n(run,"semester_id");unlocked(sem);var ctx=scheduling.context();
-        var expected=genetic.targets(ctx,a,sem);var expectedIds=new HashSet<Long>();for(var row:expected)expectedIds.add(n(row,"id"));
-        var plan=new ArrayList<Slot>();var fixed=new ArrayList<>(ctx.patterns());
-        var stale=new ApiFailure(409,"VERSION_CONFLICT","Dữ liệu đã thay đổi. Hãy tải lại trước khi lưu.",Map.of("runId",id));
-        for(var r:db.rows("SELECT * FROM schedule_run_items WHERE run_id=? ORDER BY id",id)){
-            var section=ctx.sections().get(n(r,"section_id"));if(section==null)throw stale;
-            unit(a,section.get("managing_unit_id"));
-            if(!expectedIds.contains(n(section,"id"))||!Objects.equals(nullableId(section.get("staff_id")),nullableId(r.get("staff_id")))||n(section,"periods_per_session")!=n(r,"period_count"))throw stale;
-            var room=ctx.rooms().get(n(r,"room_id"));if(room==null)throw stale;scheduling.requireCampus(a,n(room,"campus_id"));
-            var slot=GeneticScheduler.make(section,n(room,"id"),(int)n(r,"day_of_week"),(int)n(r,"period_from"));
-            var test=new Context(ctx.sections(),ctx.rooms(),ctx.periods(),ctx.availability(),ctx.holidays(),fixed);
-            var result=scheduling.check(test,slot,a,false);
-            if(!result.valid())throw new ApiFailure(409,"SCHEDULE_CONFLICT","Lịch dự kiến có xung đột.",Map.of("issues",result.issues()));
-            plan.add(slot);fixed.add(slot);
-        }
-        for(var s:expected)if(fixed.stream().filter(p->p.section()==n(s,"id")).count()!=n(s,"sessions_per_week"))throw stale;
-        for(var slot:plan)db.jdbc().update("""
-          INSERT INTO section_schedule_patterns(section_id,staff_id,room_id,day_of_week,period_from,period_count,effective_from,effective_to,source,run_id,created_by)
-          VALUES (?,?,?,?,?,?,?,?,'GENETIC',?,?)
-          """,slot.section(),slot.staff(),slot.room(),slot.day(),slot.first(),slot.count(),Date.valueOf(slot.from()),Date.valueOf(slot.to()),id,a.id());
-        db.jdbc().update("UPDATE schedule_runs SET status='APPLIED' WHERE id=?",id);db.audit(a,"APPLY","schedule_runs",id);
-        return Map.of("status","APPLIED","patterns",plan.size());
-    }
-    public void discard(Accounts.Actor a,long id){
-        var run=get(a,id);
-        if("STAFF".equals(a.role())&&n(run,"requested_by")!=a.id())throw new ApiFailure(403,"FORBIDDEN","Bạn không có quyền trong phạm vi này.");
-        if(!Set.of("QUEUED","COMPLETED","FAILED").contains(run.get("status")))throw state("Lần chạy không thể bỏ ở trạng thái hiện tại.");
-        db.jdbc().update("UPDATE schedule_runs SET status='DISCARDED' WHERE id=?",id);db.audit(a,"DISCARD","schedule_runs",id);
+
+    RunService(RunRepository repository, ApprovalRepository approvals, AuditRepository audit,
+               SchedulingService scheduling, GeneticScheduler genetic, ObjectMapper json) {
+        this.repository = repository;
+        this.approvals = approvals;
+        this.audit = audit;
+        this.scheduling = scheduling;
+        this.genetic = genetic;
+        this.json = json;
     }
 
-    public Object active(Accounts.Actor a, String semesterId){
-        role(a,"STAFF","MANAGER");return Map.of("active",db.exists("SELECT 1 FROM schedule_runs WHERE semester_id=? AND status IN ('QUEUED','RUNNING')",id(semesterId)));
+    public Map<String, Object> get(Actor actor, long runId) {
+        role(actor, "STAFF", "MANAGER");
+        Map<String, Object> row = repository.find(runId);
+        if ("STAFF".equals(actor.role()) && n(row, "requested_by") != actor.id()
+                && (!Set.of("COMPLETED", "APPLIED").contains(row.get("status"))
+                    || !repository.visibleManagerRun(runId, actor.unitId()))) {
+            throw forbidden();
+        }
+        Object raw = row.remove("parameters_json");
+        try {
+            row.put("parameters", json.readValue(raw.toString(), Object.class));
+        } catch (JsonProcessingException error) {
+            throw new IllegalStateException(error);
+        }
+        return row;
     }
-    @Transactional(readOnly=true,isolation=org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
-    public Object list(Accounts.Actor a, Map<String,String> q){
-        role(a,"STAFF","MANAGER");String sql="""
-          SELECT id,status,generations_run,hard_violations,soft_penalty,fitness,message,requested_by,created_at
-          FROM schedule_runs run WHERE semester_id=? AND (? OR requested_by=? OR (status IN ('COMPLETED','APPLIED') AND
-          """+RunService.MANAGER_SCOPE+"))";
-        var args=Arrays.<Object>asList(id(q.get("semesterId")),"MANAGER".equals(a.role()),a.id(),a.unitId());
-        if(!q.containsKey("page")&&!q.containsKey("pageSize"))return db.rows(sql+" ORDER BY id DESC LIMIT 30",args.toArray());
-        return db.paged(q,sql,args,"id DESC");
+
+    public void unlocked(long semesterId) {
+        if (approvals.hasSubmittedVersion(semesterId)) {
+            throw state("Học kỳ đang chờ duyệt.");
+        }
     }
-    public Object detail(Accounts.Actor a, long id){
-        var run=get(a,id);run.put("progress",db.rows("SELECT generation,hard_violations,soft_penalty FROM schedule_run_progress WHERE run_id=? ORDER BY generation",id));return run;
+
+    public Object enqueue(Actor actor, long semesterId, Object rawParameters) {
+        role(actor, "STAFF", "MANAGER");
+        unlocked(semesterId);
+        if (repository.active(semesterId)) {
+            throw new ApiFailure(409, "DUPLICATE_REQUEST", "Học kỳ đang có một lần chạy xếp lịch.");
+        }
+        GeneticScheduler.Parameters parameters = GeneticScheduler.parameters(rawParameters);
+        genetic.input(actor, semesterId);
+        String encoded;
+        try {
+            encoded = json.writeValueAsString(parameters);
+        } catch (JsonProcessingException error) {
+            throw new IllegalStateException(error);
+        }
+        Map<String, Object> row = repository.enqueue(semesterId, actor.id(), encoded);
+        audit.record(actor, "QUEUE", "schedule_runs", n(row, "id"));
+        return row;
     }
-    public Object items(Accounts.Actor a, long id){
-        get(a,id);return db.rows("""
-          SELECT i.*,c.code AS section_code,t.code AS room_code,s.name AS subject_name
-          FROM schedule_run_items i JOIN course_sections c ON c.id=i.section_id JOIN subjects s ON s.id=c.subject_id
-          JOIN teaching_rooms t ON t.id=i.room_id WHERE run_id=? ORDER BY day_of_week,period_from,i.id
-          """,id);
+
+    public Object apply(Actor actor, long runId) {
+        Map<String, Object> run = get(actor, runId);
+        if ("APPLIED".equals(run.get("status"))) {
+            return Map.of("status", "APPLIED");
+        }
+        if (!"COMPLETED".equals(run.get("status")) || n(run, "hard_violations") != 0) {
+            throw state("Chỉ áp dụng được phương án hoàn tất với 0 vi phạm cứng.");
+        }
+        long semesterId = n(run, "semester_id");
+        unlocked(semesterId);
+        Context context = scheduling.context();
+        var expected = genetic.targets(context, actor, semesterId);
+        Set<Long> expectedIds = new HashSet<>();
+        for (Map<String, Object> section : expected) {
+            expectedIds.add(n(section, "id"));
+        }
+        List<Slot> plan = new ArrayList<>();
+        List<Slot> fixed = new ArrayList<>(context.patterns());
+        ApiFailure stale = new ApiFailure(409, "VERSION_CONFLICT",
+                "Dữ liệu đã thay đổi. Hãy tải lại trước khi lưu.", Map.of("runId", runId));
+        for (Map<String, Object> item : repository.rawItems(runId)) {
+            Map<String, Object> section = context.sections().get(n(item, "section_id"));
+            if (section == null) {
+                throw stale;
+            }
+            unit(actor, section.get("managing_unit_id"));
+            if (!expectedIds.contains(n(section, "id"))
+                    || !Objects.equals(nullableId(section.get("staff_id")), nullableId(item.get("staff_id")))
+                    || n(section, "periods_per_session") != n(item, "period_count")) {
+                throw stale;
+            }
+            Map<String, Object> room = context.rooms().get(n(item, "room_id"));
+            if (room == null) {
+                throw stale;
+            }
+            scheduling.requireCampus(actor, n(room, "campus_id"));
+            Slot slot = GeneticScheduler.make(section, n(room, "id"),
+                    (int) n(item, "day_of_week"), (int) n(item, "period_from"));
+            Context test = new Context(context.sections(), context.rooms(), context.periods(),
+                    context.availability(), context.holidays(), fixed);
+            Result result = scheduling.check(test, slot, actor, false);
+            if (!result.valid()) {
+                throw new ApiFailure(409, "SCHEDULE_CONFLICT", "Lịch dự kiến có xung đột.",
+                        Map.of("issues", result.issues()));
+            }
+            plan.add(slot);
+            fixed.add(slot);
+        }
+        for (Map<String, Object> section : expected) {
+            if (fixed.stream().filter(slot -> slot.section() == n(section, "id")).count()
+                    != n(section, "sessions_per_week")) {
+                throw stale;
+            }
+        }
+        for (Slot slot : plan) {
+            repository.insertPattern(runId, actor.id(), slot.section(), slot.staff(), slot.room(),
+                    slot.day(), slot.first(), slot.count(), slot.from(), slot.to());
+        }
+        repository.markApplied(runId);
+        audit.record(actor, "APPLY", "schedule_runs", runId);
+        return Map.of("status", "APPLIED", "patterns", plan.size());
+    }
+
+    public void discard(Actor actor, long runId) {
+        Map<String, Object> run = get(actor, runId);
+        if ("STAFF".equals(actor.role()) && n(run, "requested_by") != actor.id()) {
+            throw forbidden();
+        }
+        if (!Set.of("QUEUED", "COMPLETED", "FAILED").contains(run.get("status"))) {
+            throw state("Lần chạy không thể bỏ ở trạng thái hiện tại.");
+        }
+        repository.discard(runId);
+        audit.record(actor, "DISCARD", "schedule_runs", runId);
+    }
+
+    public Object active(Actor actor, String semesterId) {
+        role(actor, "STAFF", "MANAGER");
+        return Map.of("active", repository.active(id(semesterId)));
+    }
+
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public Object list(Actor actor, Map<String, String> query) {
+        role(actor, "STAFF", "MANAGER");
+        return repository.list(actor, id(query.get("semesterId")), query);
+    }
+
+    public Object detail(Actor actor, long runId) {
+        Map<String, Object> run = get(actor, runId);
+        run.put("progress", repository.progress(runId));
+        return run;
+    }
+
+    public Object items(Actor actor, long runId) {
+        get(actor, runId);
+        return repository.items(runId);
+    }
+
+    private ApiFailure forbidden() {
+        return new ApiFailure(403, "FORBIDDEN", "Bạn không có quyền trong phạm vi này.");
     }
 }

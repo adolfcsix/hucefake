@@ -81,3 +81,8 @@ Kiểm thử source-integrity rà cả import trong mã frontend, unit test và 
 ### Xếp lịch và khung thời gian
 
 `SchedulingRepository` phụ trách đọc dữ liệu xếp lịch, cơ sở được phép và truy vấn xung đột với buổi học thực tế. `ScheduleCalendar` tính ngày xuất hiện định kỳ, ngày nghỉ và khoảng giờ theo phiên bản khung tiết. `SchedulingService` giữ các phương thức nghiệp vụ hiện có cho xếp lịch tay, phê duyệt và Genetic Algorithm. Chưa thay đổi hàm mục tiêu, quy tắc xung đột hay tham số của thuật toán. Các record Slot, Span, Context và Result vẫn ở SchedulingService để tránh thay đổi hàng loạt bên gọi; việc định kiểu context và chuẩn hóa phần ràng buộc còn lại thuộc đợt sau.
+
+
+### Vòng đời lần chạy xếp lịch
+
+`RunRepository` sở hữu truy vấn trạng thái, phạm vi truy cập, phương án, tiến độ và kết quả. `RunService` kiểm tra quyền, điều kiện đưa vào hàng đợi, tính hợp lệ trước khi áp dụng và điều kiện hủy. `RunWorker` điều phối các giao dịch nhận việc, nạp đầu vào, lưu tiến độ và kết quả; thuật toán tiếp tục nằm trong GeneticScheduler. Khóa advisory, FOR UPDATE SKIP LOCKED, xử lý gián đoạn, trạng thái và công thức fitness không thay đổi. Phần đánh giá fitness, dữ liệu đầu vào và phân chia các thành phần nội bộ GeneticScheduler vẫn cần cải tổ riêng.
