@@ -1,11 +1,11 @@
 package vn.huce.service;
-
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+
 import org.springframework.stereotype.Service;
 import vn.huce.Accounts.Actor;
 import vn.huce.dto.TimetablePublicationResponse;
@@ -15,9 +15,13 @@ import vn.huce.model.ApprovalStatus;
 import vn.huce.model.TimetableVersionSnapshot;
 import vn.huce.repository.ApprovalRepository;
 
+import static vn.huce.service.SchedulingService.Context;
+import static vn.huce.service.SchedulingService.Result;
+import static vn.huce.service.SchedulingService.Slot;
+import static vn.huce.service.SchedulingService.Span;
+import static vn.huce.service.SchedulingService.occurrences;
 import static vn.huce.validation.Inputs.id;
 import static vn.huce.validation.Inputs.state;
-import static vn.huce.service.SchedulingService.*;
 
 /** Materializes an approved timetable within the caller's existing write transaction. */
 @Service

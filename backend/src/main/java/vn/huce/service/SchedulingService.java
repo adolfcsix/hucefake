@@ -1,7 +1,4 @@
 package vn.huce.service;
-
-import vn.huce.model.SchedulingSection;
-import vn.huce.model.SchedulingRoom;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -11,15 +8,18 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
 import org.springframework.stereotype.Service;
 import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
-import vn.huce.model.SchedulePatternSnapshot;
-import vn.huce.model.SectionEditSnapshot;
-import vn.huce.model.TeachingPeriod;
-import vn.huce.model.NonTeachingDay;
-import vn.huce.model.StaffAvailability;
 import vn.huce.model.AvailabilityEntry.Kind;
+import vn.huce.model.NonTeachingDay;
+import vn.huce.model.SchedulePatternSnapshot;
+import vn.huce.model.SchedulingRoom;
+import vn.huce.model.SchedulingSection;
+import vn.huce.model.SectionEditSnapshot;
+import vn.huce.model.StaffAvailability;
+import vn.huce.model.TeachingPeriod;
 import vn.huce.repository.SchedulingRepository;
 
 import static vn.huce.validation.Inputs.date;

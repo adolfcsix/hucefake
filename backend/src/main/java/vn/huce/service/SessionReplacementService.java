@@ -1,10 +1,10 @@
 package vn.huce.service;
-
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+
 import org.springframework.stereotype.Service;
 import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
@@ -16,8 +16,13 @@ import vn.huce.model.SessionChangeAction;
 import vn.huce.model.SessionSectionSnapshot;
 import vn.huce.repository.SessionChangeRepository;
 
-import static vn.huce.validation.Inputs.*;
-import static vn.huce.service.SchedulingService.*;
+import static vn.huce.service.SchedulingService.Context;
+import static vn.huce.service.SchedulingService.Slot;
+import static vn.huce.service.SchedulingService.Span;
+import static vn.huce.validation.Inputs.date;
+import static vn.huce.validation.Inputs.id;
+import static vn.huce.validation.Inputs.invalid;
+import static vn.huce.validation.Inputs.number;
 
 /** Validates and inserts replacement sessions within the existing adjustment transaction. */
 @Service

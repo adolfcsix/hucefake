@@ -1,7 +1,4 @@
 package vn.huce.service;
-
-import vn.huce.model.SchedulingSection;
-import vn.huce.model.SchedulingRoom;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -12,13 +9,13 @@ import java.util.Objects;
 import java.util.Set;
 
 import vn.huce.model.AvailabilityEntry.Kind;
+import vn.huce.model.SchedulingRoom;
+import vn.huce.model.SchedulingSection;
 import vn.huce.service.SchedulingService.Context;
 import vn.huce.service.SchedulingService.Slot;
 import vn.huce.service.SchedulingService.Span;
 
 import static vn.huce.service.SchedulingService.day;
-import static vn.huce.service.SchedulingService.ids;
-import static vn.huce.service.SchedulingService.nullableId;
 import static vn.huce.validation.Inputs.n;
 
 /** In-memory constraints shared by manual scheduling and the genetic solver. */

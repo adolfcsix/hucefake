@@ -1,27 +1,29 @@
 package vn.huce.service;
-
 import java.util.List;
 import java.util.Map;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import vn.huce.Accounts.Actor;
-import vn.huce.exception.ApiFailure;
 import vn.huce.dto.ApprovalDecisionRequest;
 import vn.huce.dto.ApprovalDecisionResponse;
 import vn.huce.dto.ApprovalSubmissionResponse;
 import vn.huce.dto.TimetableVersionIdResponse;
-import vn.huce.model.ApprovalRequestSnapshot;
+import vn.huce.exception.ApiFailure;
 import vn.huce.model.ApprovalReadiness;
+import vn.huce.model.ApprovalRequestSnapshot;
 import vn.huce.model.ApprovalStatus;
-import vn.huce.model.TimetableVersionStatus;
 import vn.huce.model.TimetableVersionSnapshot;
+import vn.huce.model.TimetableVersionStatus;
 import vn.huce.repository.ApprovalRepository;
 import vn.huce.repository.AuditRepository;
 
-import static vn.huce.validation.Inputs.*;
+import static vn.huce.validation.Inputs.id;
+import static vn.huce.validation.Inputs.role;
+import static vn.huce.validation.Inputs.state;
 
 @Service
 public class ApprovalService {
