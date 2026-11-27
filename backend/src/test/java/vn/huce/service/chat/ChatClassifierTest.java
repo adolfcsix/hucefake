@@ -40,6 +40,17 @@ class ChatClassifierTest {
     }
 
     @Test
+    void followUpUsesPreviousIntentAfterOwnershipCheck() {
+        when(repository.previousIntent(7L)).thenReturn("SCHEDULE");
+        assertEquals(new ChatClassification("SCHEDULE", false),
+                classifier.classify(student, Map.of("message", "Ngày mai", "conversationId", 7L)));
+        var order = inOrder(repository);
+        order.verify(repository).findOwned(student, 7L);
+        order.verify(repository).previousIntent(7L);
+        verifyNoInteractions(gemini);
+    }
+
+    @Test
     void rejectsGeminiActionOutsideRolePermissions() {
         when(gemini.enabled()).thenReturn(true);
         when(gemini.take(1L)).thenReturn(true);

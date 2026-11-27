@@ -12,6 +12,7 @@ import vn.huce.Accounts.Actor;
 import vn.huce.dto.ChatClassification;
 import vn.huce.model.ChatConversationSnapshot;
 import vn.huce.model.ChatExchangeReceipt;
+import vn.huce.model.ChatExchangeSnapshot;
 import vn.huce.repository.ChatRepository;
 
 import static vn.huce.validation.Inputs.*;
@@ -44,33 +45,23 @@ public class ChatService {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("id", conversation.id());
         result.put("title", conversation.title());
-        List<Map<String, Object>> rows = new ArrayList<>(repository.exchanges(conversationId));
+        List<ChatExchangeSnapshot> rows = new ArrayList<>(repository.exchanges(conversationId));
         Collections.reverse(rows);
         List<Map<String, Object>> exchanges = new ArrayList<>();
-        for (Map<String, Object> row : rows) {
-            Map<String, Object> reply = proposals.decode(row.get("reply"));
+        for (ChatExchangeSnapshot row : rows) {
+            Map<String, Object> reply = proposals.decode(row.replyJson());
             if (reply.get("proposal") instanceof Map<?, ?> raw) {
                 Map<String, Object> proposal = new LinkedHashMap<>();
                 raw.forEach((key, value) -> proposal.put(key.toString(), value));
-                proposal.put("outcome", outcome(row));
-                proposal.put("result", proposals.decode(row.get("result")));
+                proposal.put("outcome", row.outcome());
+                proposal.put("result", proposals.decode(row.resultJson()));
                 reply.put("proposal", proposal);
             }
-            exchanges.add(Map.of("id", row.get("id"), "question", row.get("question"),
-                    "created_at", row.get("created_at"), "reply", reply));
+            exchanges.add(Map.of("id", row.id(), "question", row.question(),
+                    "created_at", row.createdAt(), "reply", reply));
         }
         result.put("exchanges", exchanges);
         return result;
-    }
-
-    private String outcome(Map<String, Object> row) {
-        if (row.get("result") != null) {
-            return "CONFIRMED";
-        }
-        if (row.get("cancelled_at") != null) {
-            return "CANCELLED";
-        }
-        return Boolean.TRUE.equals(row.get("expired")) ? "EXPIRED" : "PENDING";
     }
 
     public ChatClassification classify(Actor actor, Map<String, Object> input) {

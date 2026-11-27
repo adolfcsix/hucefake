@@ -9,6 +9,7 @@ import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
 import vn.huce.model.ChatConversationSnapshot;
 import vn.huce.model.ChatExchangeReceipt;
+import vn.huce.model.ChatExchangeSnapshot;
 
 @Repository
 public class ChatRepository {
@@ -44,18 +45,22 @@ public class ChatRepository {
         return rows.getFirst();
     }
 
-    public List<Map<String, Object>> exchanges(long conversationId) {
-        return store.rows("""
+    public List<ChatExchangeSnapshot> exchanges(long conversationId) {
+        return store.jdbc().query("""
                 SELECT e.id,e.question,e.reply::text AS reply,to_char(e.created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
-                    p.result::text AS result,p.cancelled_at,p.expires_at<=now() AS expired
+                    p.result::text AS result,p.cancelled_at IS NOT NULL AS cancelled,p.expires_at<=now() AS expired
                 FROM chat_exchanges e LEFT JOIN ai_proposals p ON e.proposal_id=p.id
                 WHERE e.conversation_id=? ORDER BY e.id DESC LIMIT 60
-                """, conversationId);
+                """, (rs, row) -> new ChatExchangeSnapshot(rs.getLong("id"), rs.getString("question"),
+                rs.getString("created_at"), rs.getString("reply"), rs.getString("result"),
+                rs.getBoolean("cancelled"), rs.getBoolean("expired")), conversationId);
     }
 
-    public Map<String, Object> previousIntent(long conversationId) {
-        return store.one("SELECT reply->>'intent' AS intent FROM chat_exchanges WHERE conversation_id=? ORDER BY id DESC LIMIT 1",
-                conversationId);
+    public String previousIntent(long conversationId) {
+        List<String> rows = store.jdbc().queryForList(
+                "SELECT reply->>'intent' AS intent FROM chat_exchanges WHERE conversation_id=? ORDER BY id DESC LIMIT 1",
+                String.class, conversationId);
+        return rows.isEmpty() ? null : rows.getFirst();
     }
 
     public ChatSemester semester(long semesterId) {
