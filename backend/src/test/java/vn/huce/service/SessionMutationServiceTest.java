@@ -32,7 +32,7 @@ class SessionMutationServiceTest {
     private final NotificationService notifications = mock(NotificationService.class);
     private final AvailabilityService availability = mock(AvailabilityService.class);
     private final SessionMutationService service = new SessionMutationService(repository, sections, audit,
-            scheduling, notifications, availability);
+            scheduling, notifications, availability, new SessionReplacementService(repository, scheduling));
     private final Actor staff = new Actor(1L, "staff", "STAFF", 2L, 3L);
 
     @Test

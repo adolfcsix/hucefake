@@ -1,14 +1,10 @@
 package vn.huce.service;
 
-import vn.huce.model.SchedulingRoom;
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import org.springframework.stereotype.Service;
-import vn.huce.model.AvailabilityEntry.Kind;
 import vn.huce.Accounts.Actor;
 import vn.huce.dto.SessionChangeRequest;
 import vn.huce.dto.SessionRequestDecision;
@@ -19,7 +15,6 @@ import vn.huce.model.SessionRequestSnapshot;
 import vn.huce.model.SessionRequestResolution;
 import vn.huce.model.SessionAdjustmentSnapshot;
 import vn.huce.model.SessionLecturerScope;
-import vn.huce.model.SemesterDateRange;
 import vn.huce.model.SessionSectionSnapshot;
 import vn.huce.repository.AuditRepository;
 import vn.huce.repository.SectionRepository;
@@ -36,76 +31,28 @@ public class SessionMutationService {
     private final SchedulingService scheduling;
     private final NotificationService notifications;
     private final AvailabilityService availabilityService;
+    private final SessionReplacementService replacements;
 
     SessionMutationService(SessionChangeRepository repository, SectionRepository sectionRepository,
                            AuditRepository audit, SchedulingService scheduling, NotificationService notifications,
-                           AvailabilityService availabilityService) {
+                           AvailabilityService availabilityService, SessionReplacementService replacements) {
         this.repository = repository;
         this.sectionRepository = sectionRepository;
         this.audit = audit;
         this.scheduling = scheduling;
         this.notifications = notifications;
         this.availabilityService = availabilityService;
+        this.replacements = replacements;
     }
 
     private void forbidden() {
         throw new ApiFailure(403, "FORBIDDEN", "Bạn không có quyền trong phạm vi này.");
     }
 
-    private ApiFailure conflict(Object details) {
-        return new ApiFailure(409, "SCHEDULE_CONFLICT", "Lịch dự kiến có xung đột.", details);
-    }
-
-    private void campus(Actor actor, Object campusId) {
+    private void campus(Actor actor, Long campusId) {
         if (campusId != null) {
-            scheduling.requireCampus(actor, id(campusId));
+            scheduling.requireCampus(actor, campusId);
         }
-    }
-
-    private SchedulingRoom room(Context context, long roomId) {
-        SchedulingRoom room = context.rooms().get(roomId);
-        if (room == null) {
-            throw new ApiFailure(404, "NOT_FOUND", "Không tìm thấy dữ liệu.");
-        }
-        return room;
-    }
-
-    private boolean unchanged(Slot slot, Span time, SessionAdjustmentSnapshot original) {
-        return Objects.equals(original.roomId(), slot.room())
-                && time.start().equals(original.startAt());
-    }
-
-    private List<Map<String, Object>> alternatives(Actor actor, Context context, Slot slot,
-            SessionSectionSnapshot section, SessionAdjustmentSnapshot original, SessionChangeAction action, long exclude) {
-        var allowed = scheduling.campuses(actor);
-        List<Map<String, Object>> result = new ArrayList<>();
-        boolean roomChange = action == SessionChangeAction.ROOM_CHANGE;
-        int first = roomChange ? slot.first() : 1;
-        int last = roomChange ? slot.first() : 15;
-        for (int period = first; period <= last; period++) {
-            for (SchedulingRoom room : context.rooms().values()) {
-                long campusId = room.campusId();
-                long roomId = room.id();
-                if (!allowed.contains(campusId) || !scheduling.fits(room, section.capacity(), section.requiredRoomType())
-                        || scheduling.holiday(context, campusId, slot.from())
-                        || (roomChange && Objects.equals(original.roomId(), roomId))) {
-                    continue;
-                }
-                Slot proposed = slot.move(roomId, slot.day(), period);
-                Span time = scheduling.interval(context, proposed, slot.from());
-                if (time == null || scheduling.busy(context, proposed, Kind.BUSY) || unchanged(proposed, time, original)) {
-                    continue;
-                }
-                if (scheduling.actualConflicts(context, proposed, time, exclude).isEmpty()) {
-                    result.add(Map.of("roomId", roomId, "roomCode", room.code(),
-                            "dayOfWeek", slot.day(), "periodFrom", period));
-                }
-                if (result.size() == 5) {
-                    return result;
-                }
-            }
-        }
-        return result;
     }
 
     public Object change(Actor actor, long sessionId, Map<String, Object> body, Long requestId) {
@@ -125,7 +72,7 @@ public class SessionMutationService {
         LocalDate originalDate = original.startAt().toLocalDate();
         Long replacementId = null;
         if (request.action() != SessionChangeAction.CANCEL) {
-            replacementId = createReplacement(actor, sessionId, context, original, section, originalDate, request.action(), body);
+            replacementId = replacements.createReplacement(actor, sessionId, context, original, section, originalDate, request.action(), body);
         }
 
         long exceptionId = repository.insertException(sessionId, originalDate, request.action(),
@@ -141,47 +88,6 @@ public class SessionMutationService {
         response.put("id", exceptionId);
         response.put("replacementId", replacementId);
         return response;
-    }
-
-    private long createReplacement(Actor actor, long sessionId, Context context, SessionAdjustmentSnapshot original,
-            SessionSectionSnapshot section, LocalDate originalDate, SessionChangeAction action, Map<String, Object> body) {
-        SchedulingRoom room = room(context, id(body.get("roomId")));
-        long roomId = room.id();
-        long campusId = room.campusId();
-        scheduling.requireCampus(actor, campusId);
-        boolean roomChange = action == SessionChangeAction.ROOM_CHANGE;
-        LocalDate replacementDate = roomChange ? originalDate : LocalDate.parse(date(body.get("date")));
-        SemesterDateRange semester = repository.semesterDates(section.semesterId());
-        if (!semester.contains(replacementDate)) {
-            throw invalid("Ngày học bù phải nằm trong học kỳ.");
-        }
-        if (scheduling.holiday(context, campusId, replacementDate)) {
-            throw invalid("Ngày đã chọn là ngày không học tại cơ sở.");
-        }
-        int period = roomChange ? original.periodFrom() : (int) number(body.get("periodFrom"), 1, 15);
-        if (!scheduling.fits(room, section.capacity(), section.requiredRoomType())) {
-            throw invalid("Phòng thay thế phải đủ chỗ và phù hợp học phần.");
-        }
-        if (roomChange && Objects.equals(original.roomId(), roomId)) {
-            throw invalid("Cần chọn phòng khác.");
-        }
-        Slot slot = new Slot(0, section.id(), original.staffId(), roomId,
-                replacementDate.getDayOfWeek().getValue(), period, original.periodCount(),
-                replacementDate, replacementDate);
-        Span time = scheduling.interval(context, slot, replacementDate);
-        if (time == null || scheduling.busy(context, slot, Kind.BUSY)) {
-            throw invalid("Tiết thay thế qua ca hoặc rơi vào giờ bận.");
-        }
-        if (unchanged(slot, time, original)) {
-            throw invalid("Giờ hoặc phòng thay thế phải khác buổi ban đầu.");
-        }
-        var issues = scheduling.actualConflicts(context, slot, time, sessionId);
-        if (!issues.isEmpty()) {
-            throw conflict(Map.of("issues", issues, "suggestions",
-                    alternatives(actor, context, slot, section, original, action, sessionId)));
-        }
-        return repository.insertReplacement(slot.section(), slot.staff(), slot.room(), slot.first(), slot.count(),
-                time.start(), time.end(), original.timetableVersionId(), sessionId);
     }
 
     private void closePendingRequests(Actor actor, long sessionId, SessionChangeAction action) {
