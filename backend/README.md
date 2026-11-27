@@ -129,3 +129,8 @@ CatalogMutationController, SectionController, SessionReadController và ChatCont
 ### Kiểu dữ liệu đề xuất HUCEChat
 
 ProposalAction phản ánh bốn hành động lưu trong ai_proposals theo migration V7. ProposalService dùng Preview nội bộ định kiểu và tách xử lý xem trước theo nghiệp vụ. Quyền, phạm vi hội thoại, thời hạn, xác nhận lặp và hợp đồng JSON giữ nguyên. Các payload động vẫn dùng Map vì mỗi hành động có cấu trúc riêng. Bổ sung kiểm thử đề xuất đã hủy, thông báo đã đọc hết và phương án thuộc học kỳ khác.
+
+
+### Gemini adapter và hạn mức
+
+GeminiAdvisor giữ cấu hình, gửi yêu cầu HTTP và phân tích phản hồi JSON theo allowlist. GeminiQuota dùng record Bucket và đồng hồ có thể kiểm thử, giữ nguyên giới hạn 8 yêu cầu/60 giây/tài khoản và tối đa 1500 tài khoản đang hoạt động trong một tiến trình. Giữ nguyên timeout, endpoint, header, cấu trúc request, xử lý gián đoạn và mã lỗi. Bổ sung kiểm thử hạn mức, schema và allowlist không cần gọi dịch vụ Gemini thật. Chưa kiểm chứng kết nối Gemini bằng API key thật trong đợt này.
