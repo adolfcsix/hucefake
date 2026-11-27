@@ -7,6 +7,7 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
+import vn.huce.model.SchedulePatternSnapshot;
 import vn.huce.repository.SchedulingRepository;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -16,6 +17,19 @@ import static vn.huce.service.SchedulingService.*;
 class SchedulingServiceTest {
     private final SchedulingRepository repository = mock(SchedulingRepository.class);
     private final SchedulingService service = new SchedulingService(repository);
+
+    @Test
+    void contextPreservesTypedPatternCoordinatesAndOrder() {
+        LocalDate from = LocalDate.of(2026, 9, 1);
+        LocalDate to = from.plusWeeks(4);
+        when(repository.draftPatterns()).thenReturn(List.of(
+                new SchedulePatternSnapshot(11L, 2L, 3L, 4L, 1, 2, 3, from, to,
+                        "MANUAL", null, 9L, from.atStartOfDay(), 1, null),
+                new SchedulePatternSnapshot(12L, 5L, 6L, 7L, 3, 4, 2, from, to,
+                        "GENETIC", 8L, 9L, from.atStartOfDay(), 2, null)));
+        assertEquals(List.of(new Slot(11L, 2L, 3L, 4L, 1, 2, 3, from, to),
+                new Slot(12L, 5L, 6L, 7L, 3, 4, 2, from, to)), service.context().patterns());
+    }
 
     @Test
     void actualConflictQueryIncludesAssistantsAndExcludesOriginalSession() {

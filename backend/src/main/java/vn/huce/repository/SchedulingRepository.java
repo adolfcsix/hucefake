@@ -11,7 +11,7 @@ import java.util.Set;
 import org.springframework.stereotype.Repository;
 import vn.huce.Accounts.Actor;
 
-import static vn.huce.validation.Inputs.n;
+import vn.huce.model.SchedulePatternSnapshot;
 
 @Repository
 public class SchedulingRepository {
@@ -45,22 +45,20 @@ public class SchedulingRepository {
         return store.rows("SELECT * FROM non_teaching_days");
     }
 
-    public List<Map<String, Object>> draftPatterns() {
-        return store.rows("""
-                SELECT p.* FROM section_schedule_patterns p JOIN course_sections c ON c.id=p.section_id
+    public List<SchedulePatternSnapshot> draftPatterns() {
+        return store.jdbc().query("SELECT " + SchedulePatternRepository.COLUMNS + """
+                FROM section_schedule_patterns p JOIN course_sections c ON c.id=p.section_id
                 WHERE c.status='DRAFT' ORDER BY p.id
-                """);
+                """, (rs, row) -> SchedulePatternRepository.snapshot(rs, null));
     }
 
     public Set<Long> allowedCampuses(Actor actor) {
-        List<Map<String, Object>> rows = "STAFF".equals(actor.role())
-                ? store.rows("SELECT campus_id AS id FROM staff_campuses JOIN campuses c ON c.id=campus_id WHERE staff_id=? AND c.status='ACTIVE'", actor.staffId())
-                : store.rows("SELECT id FROM campuses WHERE status='ACTIVE'");
-        Set<Long> result = new LinkedHashSet<>();
-        for (Map<String, Object> row : rows) {
-            result.add(n(row, "id"));
-        }
-        return result;
+        List<Long> rows = "STAFF".equals(actor.role())
+                ? store.jdbc().query("SELECT campus_id AS id FROM staff_campuses JOIN campuses c ON c.id=campus_id WHERE staff_id=? AND c.status='ACTIVE'",
+                        (rs, row) -> rs.getLong("id"), actor.staffId())
+                : store.jdbc().query("SELECT id FROM campuses WHERE status='ACTIVE'",
+                        (rs, row) -> rs.getLong("id"));
+        return new LinkedHashSet<>(rows);
     }
 
     public List<Map<String, Object>> actualConflicts(long sectionId, long roomId, Set<Long> staffIds,

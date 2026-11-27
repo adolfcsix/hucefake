@@ -18,7 +18,7 @@ public class SchedulePatternRepository {
         this.store = store;
     }
 
-    private static final String COLUMNS = """
+    static final String COLUMNS = """
             p.id,p.section_id,p.staff_id,p.room_id,p.day_of_week,p.period_from,
             p.period_count,p.effective_from,p.effective_to,p.source,p.run_id,
             p.created_by,p.created_at,p.version
@@ -37,7 +37,7 @@ public class SchedulePatternRepository {
                 """, (rs, row) -> snapshot(rs, rs.getObject("campus_id", Long.class)), patternId));
     }
 
-    private static SchedulePatternSnapshot snapshot(ResultSet rs, Long campusId) throws SQLException {
+    static SchedulePatternSnapshot snapshot(ResultSet rs, Long campusId) throws SQLException {
         return new SchedulePatternSnapshot(rs.getLong("id"), rs.getLong("section_id"),
                 rs.getLong("staff_id"), rs.getLong("room_id"), rs.getInt("day_of_week"),
                 rs.getInt("period_from"), rs.getInt("period_count"),

@@ -12,6 +12,7 @@ import java.util.Set;
 import org.springframework.stereotype.Service;
 import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
+import vn.huce.model.SchedulePatternSnapshot;
 import vn.huce.repository.SchedulingRepository;
 
 import static vn.huce.validation.Inputs.date;
@@ -89,10 +90,10 @@ public class SchedulingService {
         return ScheduleCalendar.occurrences(slot);
     }
 
-    public static Slot slot(Map<String, Object> row) {
-        return new Slot(n(row, "id"), n(row, "section_id"), nullableId(row.get("staff_id")),
-                n(row, "room_id"), (int) n(row, "day_of_week"), (int) n(row, "period_from"),
-                (int) n(row, "period_count"), day(row.get("effective_from")), day(row.get("effective_to")));
+    private static Slot slot(SchedulePatternSnapshot pattern) {
+        return new Slot(pattern.id(), pattern.sectionId(), pattern.staffId(), pattern.roomId(),
+                pattern.dayOfWeek(), pattern.periodFrom(), pattern.periodCount(),
+                pattern.effectiveFrom(), pattern.effectiveTo());
     }
 
     public Context context() {
