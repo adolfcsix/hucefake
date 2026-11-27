@@ -61,3 +61,9 @@ for (const path of ['app/Workspace.jsx','app/destinations.js','features/auth/Log
   assert.ok(frontendSource.includes(sourceRoot + path), 'Missing separated frontend module ' + path)
 }
 console.log('PASS: React entry component stays separate from workspace and feature views')
+
+assert.ok(!frontendSource.includes(sourceRoot + 'features/timetable/Timetable.jsx'), 'Do not restore monolithic timetable component')
+for (const name of ['Planning','PatternEditor','Published','SessionEditor','ChangeRequests']) {
+  assert.ok(frontendSource.includes(sourceRoot + 'features/timetable/' + name + '.jsx'), 'Missing timetable feature ' + name)
+}
+console.log('PASS: timetable screens and editors are separate modules')

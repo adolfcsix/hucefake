@@ -327,3 +327,8 @@ VS Code: dừng backend, dùng `Remove-Item Env:GEMINI_API_KEY,Env:GEMINI_MODEL 
 `frontend/src/main.jsx` chỉ khởi động React. Phần ứng dụng, điều hướng và đăng nhập nằm trong `src/app/`. Màn hình nghiệp vụ nằm trong `src/features/` theo danh mục, chatbot, lớp học phần, sinh viên, thời khóa biểu và quy trình. Component dùng chung nằm trong `src/components/`; hook trong `src/hooks/`; gọi API trong `src/services/`; hằng số, tiện ích, ảnh và CSS nằm trong các thư mục tương ứng. Các bài kiểm thử nằm ngoài mã nguồn ứng dụng.
 
 Backend Spring Boot sử dụng các package controller, service, repository, dto, security, config, validation, exception và cli. Xem `backend/README.md` để biết trách nhiệm từng tầng và phần cải tổ chưa hoàn tất.
+
+
+### Tổ chức phân hệ thời khóa biểu ReactJS
+
+Các màn hình trong `frontend/src/features/timetable/` được tách theo nghiệp vụ: `Planning.jsx` xếp lịch thủ công, `PatternEditor.jsx` chỉnh sửa lịch định kỳ và xem trước xung đột, `Published.jsx` lịch đã công bố và xuất CSV/ICS, `SessionEditor.jsx` chi tiết/điều chỉnh buổi học, `ChangeRequests.jsx` xử lý đề nghị đổi lịch. `timetableFilters.js` dùng chung lọc đối tượng và so sánh ID. Không còn file Timetable.jsx cũ. Giữ nguyên JSX, CSS, URL API và luồng xử lý; kiểm thử build và trình duyệt trên commit mới vẫn bắt buộc.

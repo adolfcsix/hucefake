@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { api } from '../../services/api'
 import { sessionInstant } from '../timetable/CalendarExport'
-import { SessionEditor } from '../timetable/Timetable'
+import { SessionEditor } from '../timetable/SessionEditor'
 import { addCalendarDays, formatDate, vietnamToday } from '../../utils/dates'
 import { ErrorBox } from '../../components/common/ErrorBox'
 import { Panel } from '../../components/common/Panel'
