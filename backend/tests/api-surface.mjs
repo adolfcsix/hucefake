@@ -101,3 +101,10 @@ for (const name of ['ChatService', 'ProposalService']) {
 assert.ok(existsSync(new URL('repository/ChatRepository.java', root)))
 assert.ok(existsSync(new URL('repository/ProposalRepository.java', root)))
 console.log('PASS: chat and proposal persistence boundaries')
+
+for (const name of ['ChatClassifier', 'ChatReplyService']) {
+  const source = readFileSync(new URL('service/chat/' + name + '.java', root), 'utf8')
+  assert.doesNotMatch(source, /\b(?:SqlStore|JdbcTemplate|SELECT|INSERT\s+INTO|DELETE\s+FROM|UPDATE\s+\w+\s+SET)\b/)
+}
+assert.ok(existsSync(new URL('dto/ChatClassification.java', root)))
+console.log('PASS: chat classification and reply boundaries')

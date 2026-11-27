@@ -71,3 +71,8 @@ Kiểm thử source-integrity rà cả import trong mã frontend, unit test và 
 ### Lưu hội thoại và đề xuất HUCEChat
 
 `ChatRepository` lưu hội thoại, lịch sử trao đổi và phạm vi người dùng/role/khoa/giảng viên. `ProposalRepository` lưu đề xuất và khóa bản ghi khi xác nhận. `ProposalService` giữ kiểm tra quyền, trạng thái, thời hạn và chống thực thi lặp; `ChatService` điều phối nội dung. Thao tác thông báo sử dụng NotificationRepository. Các hợp đồng JSON và giao dịch MutationService vẫn được giữ; chưa hoàn tất tách lớp điều phối phản hồi và chuẩn hóa DTO.
+
+
+### Phân loại và phản hồi HUCEChat
+
+`ChatClassifier` kiểm tra phạm vi hội thoại, nhận diện ý định bằng quy tắc hoặc Gemini và đối chiếu quyền. `ChatClassification` là DTO kết quả phân loại; không phải giấy phép thực thi. `ChatReplyService` kiểm tra quyền lại và điều phối các phương thức nghiệp vụ theo từng nhóm phản hồi. `ChatService` lưu lịch sử và điều phối luồng tin nhắn. `ProposalService` tiếp tục yêu cầu xác nhận trước khi ghi nghiệp vụ. Cấu trúc JSON phía React không thay đổi; các Map tương thích cũ và việc định kiểu toàn bộ đề xuất vẫn cần rà soát.
