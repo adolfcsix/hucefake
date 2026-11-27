@@ -8,6 +8,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Repository;
+import vn.huce.model.SessionChangeAction;
+import vn.huce.model.SessionRequestStatus;
 
 import static vn.huce.repository.SessionQueries.STAFF_IDS;
 
@@ -44,25 +46,25 @@ public class SessionChangeRepository {
                 Timestamp.valueOf(end), versionId, sourceId).get("id")).longValue();
     }
 
-    public Map<String, Object> insertException(long sessionId, LocalDate occurrenceDate, String action,
+    public Map<String, Object> insertException(long sessionId, LocalDate occurrenceDate, SessionChangeAction action,
                                                 Long replacementId, String reason, long actorId) {
         return store.need("""
                 INSERT INTO session_exceptions(session_id,occurrence_date,action,replacement_id,reason,created_by)
                 VALUES (?,?,?,?,?,?) RETURNING id
-                """, sessionId, Date.valueOf(occurrenceDate), action, replacementId, reason, actorId);
+                """, sessionId, Date.valueOf(occurrenceDate), action.name(), replacementId, reason, actorId);
     }
 
     public void cancelSession(long sessionId) {
         store.jdbc().update("UPDATE class_sessions SET status='CANCELLED',version=version+1 WHERE id=?", sessionId);
     }
 
-    public List<Map<String, Object>> closePendingRequests(long sessionId, String action) {
+    public List<Map<String, Object>> closePendingRequests(long sessionId, SessionChangeAction action) {
         return store.rows("""
                 UPDATE session_change_requests SET status=CASE WHEN action=? THEN 'APPROVED' ELSE 'RETURNED' END,
                 decision_reason=CASE WHEN action=? THEN 'Đề nghị đã được xử lý bằng điều chỉnh trực tiếp. Xem lại thời khóa biểu.'
                     ELSE 'Buổi học có điều chỉnh trực tiếp khác với đề nghị. Xem lại thời khóa biểu.' END
                 WHERE session_id=? AND status='PENDING' RETURNING id,staff_id,status,decision_reason
-                """, action, action, sessionId);
+                """, action.name(), action.name(), sessionId);
     }
 
     public Object findRequests(Map<String, String> query, long semesterId, boolean staff, Long unitId, Long staffId) {
@@ -99,10 +101,10 @@ public class SessionChangeRepository {
         return store.exists("SELECT 1 FROM session_change_requests WHERE session_id=? AND status='PENDING'", sessionId);
     }
 
-    public Map<String, Object> insertRequest(long sessionId, long staffId, String action, String reason) {
+    public Map<String, Object> insertRequest(long sessionId, long staffId, SessionChangeAction action, String reason) {
         return store.need("""
                 INSERT INTO session_change_requests(session_id,staff_id,action,reason) VALUES (?,?,?,?) RETURNING id
-                """, sessionId, staffId, action, reason);
+                """, sessionId, staffId, action.name(), reason);
     }
 
     public Map<String, Object> findRequest(long requestId) {
@@ -113,8 +115,8 @@ public class SessionChangeRepository {
                 """, requestId);
     }
 
-    public void decideRequest(long requestId, String status, String reason) {
+    public void decideRequest(long requestId, SessionRequestStatus status, String reason) {
         store.jdbc().update("UPDATE session_change_requests SET status=?,decision_reason=? WHERE id=?",
-                status, reason, requestId);
+                status.name(), reason, requestId);
     }
 }

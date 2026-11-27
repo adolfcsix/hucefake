@@ -1,43 +1,110 @@
 package vn.huce.controller;
 
-import vn.huce.Accounts;
+import jakarta.servlet.http.HttpServletRequest;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import vn.huce.Accounts.Actor;
+import vn.huce.model.SessionChangeAction;
 import vn.huce.service.MutationService;
 import vn.huce.service.SessionMutationService;
 
-import static vn.huce.validation.Inputs.*;
-import java.util.*;
-import jakarta.servlet.http.HttpServletRequest;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.bind.annotation.*;
+import static vn.huce.validation.Inputs.choice;
+import static vn.huce.validation.Inputs.id;
+import static vn.huce.validation.Inputs.role;
 
 @RestController
 @RequestMapping("/api")
 public class SessionMutationController {
-    private final MutationService writes;private final SessionMutationService sessions;
-    SessionMutationController(MutationService writes,SessionMutationService sessions){this.writes=writes;this.sessions=sessions;}
-    private Accounts.Actor actor(Authentication auth,String... roles){var a=(Accounts.Actor)auth.getPrincipal();role(a,roles);return a;}
-    @PostMapping("/class-sessions") ResponseEntity<?> reschedule(Authentication auth,HttpServletRequest req,@RequestBody Map<String,Object> f){
-        var a=actor(auth,"STAFF");var form=new LinkedHashMap<>(f);form.put("action","RESCHEDULE");
-        return ResponseEntity.status(201).body(writes.write(a,req,f,()->sessions.change(a,id(f.get("sourceSessionId")),form,null)));
+    private final MutationService writes;
+    private final SessionMutationService sessions;
+
+    SessionMutationController(MutationService writes, SessionMutationService sessions) {
+        this.writes = writes;
+        this.sessions = sessions;
     }
-    @PatchMapping("/class-sessions/{id}") Object patch(Authentication auth,HttpServletRequest req,@PathVariable long id,@RequestBody Map<String,Object> f){
-        var a=actor(auth,"STAFF");choice(f.get("action"),"RESCHEDULE","ROOM_CHANGE");return writes.write(a,req,f,()->sessions.change(a,id,f,null));
+
+    private Actor actor(Authentication authentication, String... roles) {
+        Actor actor = (Actor) authentication.getPrincipal();
+        role(actor, roles);
+        return actor;
     }
-    @PostMapping("/class-sessions/{id}/exceptions") Object exception(Authentication auth,HttpServletRequest req,@PathVariable long id,@RequestBody Map<String,Object> f){
-        var a=actor(auth,"STAFF");return writes.write(a,req,f,()->sessions.change(a,id,f,null));
+
+    @PostMapping("/class-sessions")
+    public ResponseEntity<?> reschedule(Authentication authentication, HttpServletRequest request,
+                                        @RequestBody Map<String, Object> body) {
+        Actor actor = actor(authentication, "STAFF");
+        Map<String, Object> form = new LinkedHashMap<>(body);
+        form.put("action", SessionChangeAction.RESCHEDULE.name());
+        return ResponseEntity.status(201).body(writes.write(actor, request, body,
+                () -> sessions.change(actor, id(body.get("sourceSessionId")), form, null)));
     }
-    @GetMapping("/me/availability") Object availability(Authentication auth,@RequestParam String semesterId){return sessions.availability(actor(auth,"LECTURER"),id(semesterId));}
-    @PutMapping("/me/availability") ResponseEntity<?> setAvailability(Authentication auth,HttpServletRequest req,@RequestBody Map<String,Object> f){
-        var a=actor(auth,"LECTURER");writes.write(a,req,f,()->{sessions.setAvailability(a,f);return null;});return ResponseEntity.noContent().build();
+
+    @PatchMapping("/class-sessions/{id}")
+    public Object patch(Authentication authentication, HttpServletRequest request, @PathVariable long id,
+                        @RequestBody Map<String, Object> body) {
+        Actor actor = actor(authentication, "STAFF");
+        choice(body.get("action"), "RESCHEDULE", "ROOM_CHANGE");
+        return writes.write(actor, request, body, () -> sessions.change(actor, id, body, null));
     }
-    @GetMapping("/session-change-requests") @Transactional(readOnly=true,isolation=org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
-    public Object requests(Authentication auth,@RequestParam Map<String,String> q){return sessions.requests(actor(auth,"STAFF","LECTURER"),q);}
-    @PostMapping("/class-sessions/{id}/requests") ResponseEntity<?> request(Authentication auth,HttpServletRequest req,@PathVariable long id,@RequestBody Map<String,Object> f){
-        var a=actor(auth,"LECTURER");return ResponseEntity.status(201).body(writes.write(a,req,f,()->sessions.request(a,id,f)));
+
+    @PostMapping("/class-sessions/{id}/exceptions")
+    public Object exception(Authentication authentication, HttpServletRequest request, @PathVariable long id,
+                            @RequestBody Map<String, Object> body) {
+        Actor actor = actor(authentication, "STAFF");
+        return writes.write(actor, request, body, () -> sessions.change(actor, id, body, null));
     }
-    @PostMapping("/session-change-requests/{id}/decide") ResponseEntity<?> decide(Authentication auth,HttpServletRequest req,@PathVariable long id,@RequestBody Map<String,Object> f){
-        var a=actor(auth,"STAFF");writes.write(a,req,f,()->{sessions.decide(a,id,f);return null;});return ResponseEntity.noContent().build();
+
+    @GetMapping("/me/availability")
+    public Object availability(Authentication authentication, @RequestParam String semesterId) {
+        return sessions.availability(actor(authentication, "LECTURER"), id(semesterId));
+    }
+
+    @PutMapping("/me/availability")
+    public ResponseEntity<Void> setAvailability(Authentication authentication, HttpServletRequest request,
+                                                @RequestBody Map<String, Object> body) {
+        Actor actor = actor(authentication, "LECTURER");
+        writes.write(actor, request, body, () -> {
+            sessions.setAvailability(actor, body);
+            return null;
+        });
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/session-change-requests")
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public Object requests(Authentication authentication, @RequestParam Map<String, String> query) {
+        return sessions.requests(actor(authentication, "STAFF", "LECTURER"), query);
+    }
+
+    @PostMapping("/class-sessions/{id}/requests")
+    public ResponseEntity<?> request(Authentication authentication, HttpServletRequest request, @PathVariable long id,
+                                     @RequestBody Map<String, Object> body) {
+        Actor actor = actor(authentication, "LECTURER");
+        return ResponseEntity.status(201).body(writes.write(actor, request, body,
+                () -> sessions.request(actor, id, body)));
+    }
+
+    @PostMapping("/session-change-requests/{id}/decide")
+    public ResponseEntity<Void> decide(Authentication authentication, HttpServletRequest request, @PathVariable long id,
+                                       @RequestBody Map<String, Object> body) {
+        Actor actor = actor(authentication, "STAFF");
+        writes.write(actor, request, body, () -> {
+            sessions.decide(actor, id, body);
+            return null;
+        });
+        return ResponseEntity.noContent().build();
     }
 }

@@ -109,3 +109,8 @@ AuthController sử dụng LoginRequest, DemoLoginRequest, AuthModeResponse và 
 ### Kiểu dữ liệu và trạng thái phê duyệt
 
 ApprovalStatus và TimetableVersionStatus phản ánh hai vòng đời riêng theo migration PostgreSQL. ApprovalDecisionRequest chuẩn hóa quyết định và lý do trả lại sau kiểm tra quyền/trạng thái; ApprovalSnapshot định kiểu version và tên/mã hiển thị, giữ nguyên JSON đã lưu. ApprovalController dùng tên tham số rõ ràng, bỏ giao dịch đọc trùng lặp với ApprovalService. Các request Map tại biên HTTP vẫn được giữ nguyên cho fingerprint chống lặp và thứ tự kiểm tra hiện có. Chưa chuyển toàn bộ readiness và payload lịch sử thành DTO; cần tiếp tục rà soát tương thích trước khi thay đổi.
+
+
+### Kiểu dữ liệu điều chỉnh buổi học
+
+SessionChangeAction và SessionRequestStatus tách hành động điều chỉnh khỏi trạng thái đề nghị theo migration PostgreSQL. SessionChangeRequest và SessionRequestDecision kiểm tra dữ liệu theo từng vai trò; SessionChangeRepository nhận Enum và ghi giá trị name() như trước. SessionMutationService tách tạo buổi thay thế và đóng đề nghị đang chờ; giữ nguyên thứ tự kiểm tra, quyền, giao dịch và JSON. Controller giữ body gốc cho idempotency. Các Map projection từ PostgreSQL vẫn được giữ trong phạm vi tương thích hiện tại. Bổ sung kiểm thử hủy buổi, loại đề nghị không phù hợp, đề nghị đã xử lý và giới hạn hành động của giảng viên.
