@@ -1,5 +1,6 @@
 package vn.huce.service.chat;
 
+import vn.huce.model.ChatSemester;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -130,7 +131,8 @@ class ProposalServiceTest {
         when(runs.snapshot(staff, 9L)).thenReturn(new ScheduleRunSnapshot(
                 9L, 8L, 2L, ScheduleRunStatus.COMPLETED, 0));
         assertEquals(403, assertThrows(ApiFailure.class, () -> service.prepare(staff, "APPLY",
-                Map.of("id", 7L), Map.of("runId", 9L))).status());
+                new ChatSemester(7L, "HK1", java.time.LocalDate.of(2026, 9, 1),
+                        java.time.LocalDate.of(2026, 12, 31)), Map.of("runId", 9L))).status());
         verifyNoInteractions(repository, audit, sections, notifications);
     }
 
@@ -144,7 +146,8 @@ class ProposalServiceTest {
                 .thenReturn(new SectionSubject(5L, "CS", "Computer Science", "ACTIVE", 4L));
         when(repository.insert(eq(2L), eq(7L), eq("DRAFT"), isNull(), anyString()))
                 .thenReturn(new LinkedHashMap<>(Map.of("id", 11L)));
-        var result = service.prepare(staff, "DRAFT", Map.of("id", 7L, "code", "HK1"),
+        var result = service.prepare(staff, "DRAFT", new ChatSemester(7L, "HK1",
+                java.time.LocalDate.of(2026, 9, 1), java.time.LocalDate.of(2026, 12, 31)),
                 Map.of("draft", Map.of("subjectId", 5L)));
         var stored = ArgumentCaptor.forClass(String.class);
         verify(repository).insert(eq(2L), eq(7L), eq("DRAFT"), isNull(), stored.capture());

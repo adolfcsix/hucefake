@@ -1,5 +1,6 @@
 package vn.huce.service.chat;
 
+import vn.huce.model.ChatSemester;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -82,14 +83,14 @@ public class ChatService {
         if (conversationId != null) {
             owned(actor, conversationId);
         }
-        Map<String, Object> semester = input.get("semesterId") == null ? null
+        ChatSemester semester = input.get("semesterId") == null ? null
                 : repository.semester(id(input.get("semesterId")));
         Map<String, Object> reply = replies.answer(actor, classification.intent(), semester, question, input);
         if (conversationId == null) {
             conversationId = repository.createConversation(actor, question.substring(0, Math.min(80, question.length())));
         }
         reply.put("intent", classification.intent());
-        reply.put("semesterId", semester == null ? null : semester.get("id"));
+        reply.put("semesterId", semester == null ? null : semester.id());
         reply.put("sourceAt", Instant.now().toString());
         reply.put("modelUnavailable", classification.modelUnavailable());
         Object proposalId = reply.get("proposal") instanceof Map<?, ?> proposal ? proposal.get("id") : null;

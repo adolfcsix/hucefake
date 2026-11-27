@@ -1,5 +1,6 @@
 package vn.huce.service.chat;
 
+import vn.huce.model.ChatSemester;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -27,8 +28,20 @@ class ChatReplyServiceTest {
     @Test
     void unauthorizedActionCannotReachDomainService() {
         assertEquals(403, assertThrows(ApiFailure.class,
-                () -> service.answer(student, "APPLY", Map.of(), "áp dụng", Map.of())).status());
+                () -> service.answer(student, "APPLY", null, "áp dụng", Map.of())).status());
         verifyNoInteractions(catalog, proposals, sections, approvals, reads, sessions);
+    }
+
+    @Test
+    void draftPromptRetainsIsoDateStringsAndSemesterIdentifier() {
+        Actor staff = new Actor(2L, "staff", "STAFF", 3L, 4L);
+        var semester = new ChatSemester(7L, "HK1", java.time.LocalDate.of(2026, 9, 1),
+                java.time.LocalDate.of(2026, 12, 31));
+        when(catalog.subjects(false, 4L)).thenReturn(List.of());
+        var result = service.answer(staff, "DRAFT", semester, "Tạo lớp", Map.of());
+        assertEquals(Map.of("semesterId", 7L, "from", "2026-09-01", "to", "2026-12-31",
+                "subjects", List.of()), result.get("draft"));
+        verifyNoInteractions(proposals, sections, approvals, reads, sessions);
     }
 
     @Test

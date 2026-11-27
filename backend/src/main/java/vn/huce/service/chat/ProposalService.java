@@ -1,5 +1,6 @@
 package vn.huce.service.chat;
 
+import vn.huce.model.ChatSemester;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -84,7 +85,7 @@ public class ProposalService {
     private record Preview(Object parameters, Long runId, Map<String, Object> details) {
     }
 
-    public Map<String, Object> prepare(Actor actor, String rawAction, Map<String, Object> semester,
+    public Map<String, Object> prepare(Actor actor, String rawAction, ChatSemester semester,
                                        Map<String, Object> input) {
         permission(actor, rawAction);
         ProposalAction action = action(rawAction);
@@ -100,18 +101,18 @@ public class ProposalService {
         if (preview == null) {
             return null;
         }
-        var result = repository.insert(actor.id(), semester == null ? null : semester.get("id"),
+        var result = repository.insert(actor.id(), semester == null ? null : semester.id(),
                 action.name(), preview.runId(), preview.parameters() == null ? null : encode(preview.parameters()));
         result.put("action", action.name());
-        result.put("semester", semester == null ? null : semester.get("code"));
+        result.put("semester", semester == null ? null : semester.code());
         result.put("preview", preview.details());
         return result;
     }
 
-    private Preview previewApply(Actor actor, Map<String, Object> semester, Map<String, Object> input) {
+    private Preview previewApply(Actor actor, ChatSemester semester, Map<String, Object> input) {
         var run = runs.snapshot(actor, id(input.get("runId")));
         long runId = run.id();
-        if (run.semesterId() != n(semester, "id")) {
+        if (run.semesterId() != semester.id()) {
             throw forbidden();
         }
         if (!run.applicable()) {
@@ -121,13 +122,13 @@ public class ProposalService {
         return new Preview(null, runId, Map.of("runId", runId, "count", count, "hardViolations", 0));
     }
 
-    private Preview previewDraft(Actor actor, Map<String, Object> semester, Map<String, Object> input) {
+    private Preview previewDraft(Actor actor, ChatSemester semester, Map<String, Object> input) {
         if (!(input.get("draft") instanceof Map<?, ?> draft)) {
             throw invalid("Thông tin lớp nháp không hợp lệ.");
         }
         Map<String, Object> form = new LinkedHashMap<>();
         draft.forEach((key, value) -> form.put(key.toString(), value));
-        form.put("semesterId", semester.get("id"));
+        form.put("semesterId", semester.id());
         var normalized = sections.previewDraft(actor, form);
         var subject = sectionRepository.findSubject(normalized.subjectId());
         // Adapt the typed preview only at the heterogeneous proposal response boundary.

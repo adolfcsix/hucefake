@@ -1,6 +1,8 @@
 package vn.huce.repository;
 
+import vn.huce.model.ChatSemester;
 import java.util.List;
+import java.time.LocalDate;
 import java.util.Map;
 import org.springframework.stereotype.Repository;
 import vn.huce.Accounts.Actor;
@@ -56,8 +58,11 @@ public class ChatRepository {
                 conversationId);
     }
 
-    public Map<String, Object> semester(long semesterId) {
-        return store.need("SELECT id,code,start_date,end_date FROM semesters WHERE id=?", semesterId);
+    public ChatSemester semester(long semesterId) {
+        return require(store.jdbc().query("SELECT id,code,start_date,end_date FROM semesters WHERE id=?",
+                (rs, row) -> new ChatSemester(rs.getLong("id"), rs.getString("code"),
+                        rs.getObject("start_date", LocalDate.class), rs.getObject("end_date", LocalDate.class)),
+                semesterId));
     }
 
     public long createConversation(Actor actor, String title) {
