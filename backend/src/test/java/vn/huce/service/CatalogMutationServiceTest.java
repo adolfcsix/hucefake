@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
 import vn.huce.model.RoomDraft;
+import vn.huce.model.SchedulingRoom;
 import vn.huce.repository.AuditRepository;
 import vn.huce.repository.CatalogMutationRepository;
 
@@ -57,6 +58,27 @@ class CatalogMutationServiceTest {
         assertThrows(ApiFailure.class, () -> service.holiday(staff, Map.of("campusId", 4L,
                 "startDate", "2026-12-03", "endDate", "2026-12-01", "name", "Nghỉ"), null));
         verifyNoInteractions(repository, audit);
+    }
+
+    @Test
+    void newPeriodRechecksOnlyAffectedPatternsInItsCampus() {
+        LocalDate from = LocalDate.of(2027, 1, 4);
+        var affected = new SchedulingService.Slot(11L, 7L, 2L, 4L, 1, 1, 2, from, from);
+        var otherCampus = new SchedulingService.Slot(12L, 7L, 2L, 5L, 1, 1, 2, from, from);
+        var otherPeriod = new SchedulingService.Slot(13L, 7L, 2L, 4L, 1, 3, 2, from, from);
+        var context = new SchedulingService.Context(Map.of(), Map.of(
+                4L, new SchedulingRoom(4L, 4L, "P4", 40, "LECTURE", "ACTIVE"),
+                5L, new SchedulingRoom(5L, 5L, "P5", 40, "LECTURE", "ACTIVE")),
+                List.of(), List.of(), List.of(), List.of(affected, otherCampus, otherPeriod));
+        when(scheduling.context()).thenReturn(context);
+        when(repository.insertPeriod(any())).thenReturn(Map.of("id", 9L));
+        assertEquals(Map.of("id", 9L), service.createPeriod(staff, Map.of("campusId", 4L,
+                "periodNo", 2, "effectiveFrom", from.toString(),
+                "startTime", "08:00", "endTime", "08:50", "shift", "MORNING")));
+        verify(scheduling).verify(context, affected, staff);
+        verify(scheduling, never()).verify(context, otherCampus, staff);
+        verify(scheduling, never()).verify(context, otherPeriod, staff);
+        verify(audit).record(staff, "CREATE", "period_definitions", 9L);
     }
 
     @Test

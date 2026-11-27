@@ -121,7 +121,7 @@ public class CatalogMutationService {
         Map<String, Object> result = repository.insertPeriod(draft);
         SchedulingService.Context context = scheduling.context();
         for (SchedulingService.Slot slot : context.patterns()) {
-            if (n(context.rooms().get(slot.room()), "campus_id") == draft.campusId()
+            if (context.rooms().get(slot.room()).campusId() == draft.campusId()
                     && draft.periodNumber() >= slot.first() && draft.periodNumber() <= slot.last()
                     && SchedulingService.occurrences(slot).stream().anyMatch(day -> !day.isBefore(draft.effectiveFrom()))) {
                 scheduling.verify(context, slot, actor);
