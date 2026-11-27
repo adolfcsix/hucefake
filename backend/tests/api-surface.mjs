@@ -47,3 +47,11 @@ for (const name of ['ChatIntent', 'ChatDateRangeParser', 'ChatPermissions', 'Cha
   assert.ok(existsSync(new URL('service/chat/' + name + '.java', root)), name + ' belongs in service/chat')
 }
 console.log('PASS: HUCEChat package organization')
+
+
+// The refactored section application service must not fall back to raw SQL.
+const sectionService = readFileSync(new URL('service/SectionService.java', root), 'utf8')
+assert.doesNotMatch(sectionService, /\b(?:SqlStore|JdbcTemplate|SELECT|INSERT\s+INTO|DELETE\s+FROM|UPDATE\s+\w+\s+SET)\b/)
+assert.ok(existsSync(new URL('repository/SectionRepository.java', root)))
+assert.ok(existsSync(new URL('model/SectionDraft.java', root)))
+console.log('PASS: section domain repository and typed draft model')

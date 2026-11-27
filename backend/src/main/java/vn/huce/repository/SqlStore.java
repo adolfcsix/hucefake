@@ -18,9 +18,17 @@ import vn.huce.validation.Inputs;
 @Repository
 public class SqlStore {
     private final JdbcTemplate jdbc;
+    private final AuditRepository auditRepository;
 
+    // The setup CLI constructs this adapter outside the Spring container.
     public SqlStore(JdbcTemplate jdbc) {
+        this(jdbc, new AuditRepository(jdbc));
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public SqlStore(JdbcTemplate jdbc, AuditRepository auditRepository) {
         this.jdbc = jdbc;
+        this.auditRepository = auditRepository;
     }
 
     public JdbcTemplate jdbc() {
@@ -70,8 +78,7 @@ public class SqlStore {
     }
 
     public void audit(Actor actor, String action, String type, long id) {
-        jdbc.update("INSERT INTO audit_events(actor_id,action,entity_type,entity_id) VALUES (?,?,?,?)",
-                actor.id(), action, type, id);
+        auditRepository.record(actor, action, type, id);
     }
 
     public Object paged(Map<String, String> query, String sql, List<Object> args, String order) {

@@ -22,13 +22,14 @@ for(const key of ['units','campuses','semesters','subjects','groups','enrollment
 assert.equal(JSON.parse(read('frontend/package.json')).devDependencies.vite,JSON.parse(read('frontend/package-lock.json')).packages[''].devDependencies.vite)
 const routes=read('backend/tests/expected-routes.txt').trim().split(/\r?\n/).map(s=>s.split(' ')[1])
 let references=0,imports=0
-for(const file of files.filter(p=>/^frontend\/src\/.*\.(js|jsx)$/.test(p))){
+for(const file of files.filter(p=>/^frontend\/(?:src|test|e2e)\/.*\.(js|jsx|mjs)$/.test(p))){
  const code=read(file)
  for(const [,spec] of code.matchAll(/(?:from\s*|import\s*)['"](\.[^'"]+)['"]/g)){
   const path=resolve(root,dirname(file),spec)
   assert.ok(['','.js','.jsx','.css','/index.js','/index.jsx'].some(s=>existsSync(path+s)),file+' missing import '+spec)
   imports++
  }
+ if (!file.startsWith('frontend/src/')) continue
  // Static first argument only. Dynamic IDs, verbs and assembled paths are covered by integration/browser tests.
  for(const [,literal] of code.matchAll(/\b(?:api|request|usePagedQuery)\(\s*['"](\/[^'"]+)['"]/g)){
   const prefix='/api'+literal.split('?')[0]

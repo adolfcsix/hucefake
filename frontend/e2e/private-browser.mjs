@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
 import { mkdir } from 'node:fs/promises'
-import { navigation } from '../src/navigation.js'
+import { navigation } from '../src/app/navigation.js'
 
 assert.equal(process.env.HUCE_BROWSER_CI,'true')
 const base=process.env.HUCE_TEST_URL

@@ -33,3 +33,14 @@ Luồng chính: React → Controller → Service → Repository → PostgreSQL. 
 Kiểm tra nhanh (từ thư mục backend): `node tests/api-surface.mjs` kiểm kê REST API và kiểm tra ranh giới kiến trúc; `mvn clean verify` biên dịch và chạy unit test. Kiểm thử PostgreSQL, trình duyệt và đóng gói chạy qua GitHub Actions.
 
 Nhóm nghiệp vụ HUCEChat nằm trong `service/chat/` (nhận diện intent, quyền, khoảng ngày, Gemini, hội thoại và đề xuất); unit test tương ứng nằm trong `src/test/java/vn/huce/service/chat/`.
+
+
+### Lớp học phần: phân tầng repository và model
+
+- `model/SectionDraft.java`: dữ liệu nháp đã kiểm tra, với tên thuộc tính nghiệp vụ và ngày kiểu LocalDate.
+- `repository/SectionRepository.java`: truy vấn lớp, lịch định kỳ, học kỳ, học phần, kiểm tra trùng mã và tạo bản ghi.
+- `service/SectionService.java`: kiểm tra quyền, trạng thái, ngày hiệu lực và quy tắc lớp nháp; không trực tiếp thực thi SQL.
+- `repository/AuditRepository.java`: ghi nhật ký thay đổi; adapter SqlStore cũ gọi chung repository này để tránh trùng câu lệnh.
+- `service/SectionMutationService.java`: các thao tác sửa lớp và lịch; còn SQL cần chuyển tiếp sang repository chuyên biệt.
+
+Kiểm thử source-integrity rà cả import trong mã frontend, unit test và E2E để phát hiện đường dẫn cũ khi đổi thư mục.

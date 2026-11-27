@@ -45,14 +45,14 @@ public class SectionMutationService {
     public Object update(Accounts.Actor a, long id, Map<String,Object> f) {
         role(a, "STAFF");
         var row=sections.editable(a,id);version(f.get("version"),row);var v=sections.form(a,f);
-        if(n(row,"semester_id")!=v.sem())throw invalid("Không thể chuyển học kỳ của lớp.");
-        if(n(row,"scheduled")>v.count()||db.exists("""
+        if(n(row,"semester_id")!=v.semesterId())throw invalid("Không thể chuyển học kỳ của lớp.");
+        if(n(row,"scheduled")>v.sessionsPerWeek()||db.exists("""
           SELECT 1 FROM section_schedule_patterns p JOIN teaching_rooms r ON r.id=p.room_id
           WHERE p.section_id=? AND (p.period_count<>? OR p.effective_from<? OR p.effective_to>? OR r.capacity<? OR r.type<>?)
-          """,id,v.length(),Date.valueOf(v.from()),Date.valueOf(v.to()),v.capacity(),v.type()))throw state("Hãy gỡ lịch định kỳ bị ảnh hưởng trước khi sửa lớp.");
+          """,id,v.periodsPerSession(),Date.valueOf(v.startDate()),Date.valueOf(v.endDate()),v.capacity(),v.requiredRoomType()))throw state("Hãy gỡ lịch định kỳ bị ảnh hưởng trước khi sửa lớp.");
         db.jdbc().update("""
           UPDATE course_sections SET subject_id=?,code=?,capacity=?,sessions_per_week=?,periods_per_session=?,required_room_type=?,start_date=?,end_date=?,version=version+1,updated_at=now() WHERE id=?
-          """,v.subject(),v.code(),v.capacity(),v.count(),v.length(),v.type(),Date.valueOf(v.from()),Date.valueOf(v.to()),id);
+          """,v.subjectId(),v.code(),v.capacity(),v.sessionsPerWeek(),v.periodsPerSession(),v.requiredRoomType(),Date.valueOf(v.startDate()),Date.valueOf(v.endDate()),id);
         db.audit(a,"UPDATE","course_sections",id);return Map.of("id",id);
     }
 

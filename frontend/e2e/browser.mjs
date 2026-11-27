@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
 import { mkdir } from 'node:fs/promises'
-import { navigation } from '../src/navigation.js'
+import { navigation } from '../src/app/navigation.js'
 const base=process.env.HUCE_TEST_URL||'http://127.0.0.1:8081'
 const browser=await chromium.launch({headless:true})
 const roles={STAFF:'Nhân viên đào tạo',MANAGER:'Quản lý',LECTURER:'Giảng viên',STUDENT:'Sinh viên'}
