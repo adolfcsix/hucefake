@@ -21,6 +21,7 @@ import vn.huce.dto.ApprovalSubmissionResponse;
 import vn.huce.dto.TimetableVersionIdResponse;
 import vn.huce.dto.TimetablePublicationResponse;
 import vn.huce.model.ApprovalSnapshot;
+import vn.huce.model.ApprovalRequestSnapshot;
 import vn.huce.model.ApprovalReadiness;
 import vn.huce.model.ApprovalReadiness.BlockedSection;
 import vn.huce.model.ApprovalReadiness.PatternConflict;
@@ -67,14 +68,13 @@ public class ApprovalService {
         }
     }
 
-    @SafeVarargs
-    private final <S extends Enum<S>> void status(Map<String, Object> row, S... allowed) {
-        for (S candidate : allowed) {
-            if (candidate.name().equals(row.get("status"))) {
+    private void status(ApprovalRequestSnapshot approval, ApprovalStatus... allowed) {
+        for (ApprovalStatus candidate : allowed) {
+            if (candidate == approval.status()) {
                 return;
             }
         }
-        throw state("Hồ sơ đang ở trạng thái " + row.get("status") + ".");
+        throw state("Hồ sơ đang ở trạng thái " + approval.status() + ".");
     }
 
     private void requireVersionStatus(TimetableVersionSnapshot version, TimetableVersionStatus expected) {
@@ -91,6 +91,10 @@ public class ApprovalService {
         Map<String, Object> row = repository.findApproval(approvalId);
         row.put("payload", decode(row.remove("payload_json")));
         return row;
+    }
+
+    public ApprovalRequestSnapshot approvalForMutation(long approvalId) {
+        return repository.findApprovalForMutation(approvalId);
     }
 
     record Assessment(ApprovalReadiness readiness, List<ApprovalSnapshot> snapshot) {
@@ -216,9 +220,9 @@ public class ApprovalService {
                 "Cần hoàn tất phân công và xếp đủ các buổi trước khi gửi duyệt.", details);
     }
 
-    public ApprovalDecisionResponse decide(Actor actor, Map<String, Object> approval, Map<String, Object> body) {
+    public ApprovalDecisionResponse decide(Actor actor, ApprovalRequestSnapshot approval, Map<String, Object> body) {
         role(actor, "MANAGER");
-        if (n(approval, "requested_by") == actor.id()) {
+        if (approval.requestedBy() == actor.id()) {
             forbidden();
         }
         ApprovalStatus decision = ApprovalDecisionRequest.parseDecision(body);
@@ -230,23 +234,23 @@ public class ApprovalService {
         }
         ApprovalDecisionRequest request = ApprovalDecisionRequest.from(body, decision);
         String reason = request.reason();
-        long approvalId = n(approval, "id");
+        long approvalId = approval.id();
         repository.recordDecision(approvalId, actor.id(), request.decision().name(), reason);
-        repository.changeWorkStatus(n(approval, "work_item_id"), decision.name());
+        repository.changeWorkStatus(approval.workItemId(), decision.name());
         if (returned) {
             repository.returnVersion(approvalId);
-            notifications.notifyUser(n(approval, "requested_by"), "Thời khóa biểu được trả lại. Lý do: " + reason);
+            notifications.notifyUser(approval.requestedBy(), "Thời khóa biểu được trả lại. Lý do: " + reason);
         }
         audit.record(actor, decision.name(), "approval_requests", approvalId);
         return new ApprovalDecisionResponse(decision);
     }
 
-    public Object apply(Actor actor, Map<String, Object> approval) {
+    public Object apply(Actor actor, ApprovalRequestSnapshot approval) {
         role(actor, "MANAGER");
-        if (n(approval, "requested_by") == actor.id()) {
+        if (approval.requestedBy() == actor.id()) {
             forbidden();
         }
-        long approvalId = n(approval, "id");
+        long approvalId = approval.id();
         String prior = repository.priorExecution(approvalId);
         if (prior != null) {
             return decode(prior);
@@ -259,7 +263,7 @@ public class ApprovalService {
         Context context = scheduling.context();
         Set<Long> sections = new LinkedHashSet<>();
         long total = 0;
-        List<?> snapshot = (List<?>) approval.get("payload");
+        List<?> snapshot = (List<?>) decode(approval.payloadJson());
         Map<Long, Slot> current = new HashMap<>();
         for (Slot pattern : context.patterns()) {
             if (n(context.sections().get(pattern.section()), "semester_id") == semesterId) {
@@ -310,7 +314,7 @@ public class ApprovalService {
         repository.supersedePublished(semesterId);
         repository.publishVersion(versionId, actor.id());
         repository.markApplied(approvalId);
-        repository.changeWorkStatus(n(approval, "work_item_id"), ApprovalStatus.APPLIED.name());
+        repository.changeWorkStatus(approval.workItemId(), ApprovalStatus.APPLIED.name());
         var result = new TimetablePublicationResponse(versionId, total, sections.size());
         repository.saveExecution(approvalId, encode(result));
         audit.record(actor, "PUBLISH", "timetable_versions", versionId);
@@ -327,10 +331,10 @@ public class ApprovalService {
 
     public Object publish(Actor actor, long approvalId) {
         role(actor, "MANAGER");
-        Map<String, Object> approval = approval(approvalId);
-        if (ApprovalStatus.PENDING.name().equals(approval.get("status"))) {
+        ApprovalRequestSnapshot approval = approvalForMutation(approvalId);
+        if (approval.status() == ApprovalStatus.PENDING) {
             decide(actor, approval, Map.of("decision", ApprovalStatus.APPROVED.name()));
-            approval = approval(approvalId);
+            approval = approvalForMutation(approvalId);
         }
         return apply(actor, approval);
     }

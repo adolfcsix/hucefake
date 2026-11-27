@@ -10,6 +10,7 @@ import vn.huce.exception.ApiFailure;
 import vn.huce.dto.ApprovalDecisionResponse;
 import vn.huce.dto.TimetableVersionIdResponse;
 import vn.huce.model.ApprovalStatus;
+import vn.huce.model.ApprovalRequestSnapshot;
 import vn.huce.model.TimetableVersionSnapshot;
 import vn.huce.model.TimetableVersionStatus;
 import vn.huce.repository.ApprovalRepository;
@@ -81,8 +82,8 @@ class ApprovalServiceTest {
         when(repository.priorExecution(7L)).thenReturn(null);
         when(repository.findVersionForApproval(7L)).thenReturn(new TimetableVersionSnapshot(
                 4L, 2L, 1, TimetableVersionStatus.RETURNED, 2, 1L));
-        var error = assertThrows(ApiFailure.class, () -> service.apply(manager, Map.of(
-                "id", 7L, "requested_by", 1L, "status", "APPROVED")));
+        var error = assertThrows(ApiFailure.class, () -> service.apply(manager, new ApprovalRequestSnapshot(
+                7L, 1L, 8L, ApprovalStatus.APPROVED, "[]")));
         assertEquals(409, error.status());
         assertEquals("Hồ sơ đang ở trạng thái RETURNED.", error.getMessage());
         verify(repository).priorExecution(7L);
@@ -174,14 +175,13 @@ class ApprovalServiceTest {
     @Test
     void staffCannotApproveEvenWhenCallingServiceDirectly() {
         assertEquals(403, assertThrows(ApiFailure.class,
-                () -> service.decide(staff, Map.of(), Map.of())).status());
+                () -> service.decide(staff, null, Map.of())).status());
         verifyNoInteractions(repository, audit, notifications, scheduling);
     }
 
     @Test
     void returningApprovalUpdatesWorkflowAndNotifiesRequester() {
-        Map<String, Object> approval = Map.of("id", 7L, "requested_by", 1L,
-                "status", "PENDING", "work_item_id", 8L);
+        var approval = new ApprovalRequestSnapshot(7L, 1L, 8L, ApprovalStatus.PENDING, "[]");
         assertEquals(new ApprovalDecisionResponse(ApprovalStatus.RETURNED), service.decide(manager, approval,
                 Map.of("decision", "RETURNED", "reason", "Kiểm tra lại lịch")));
         var order = inOrder(repository, notifications, audit);
@@ -196,16 +196,32 @@ class ApprovalServiceTest {
     void repeatedPublicationReturnsPriorExecutionWithoutWritingAgain() {
         when(repository.priorExecution(7L)).thenReturn("{\"versionId\":4,\"sessions\":12}");
         assertEquals(Map.of("versionId", 4, "sessions", 12),
-                service.apply(manager, Map.of("id", 7L, "requested_by", 1L, "status", "APPLIED")));
+                service.apply(manager, new ApprovalRequestSnapshot(7L, 1L, 8L, ApprovalStatus.APPLIED, "[]")));
         verify(repository).priorExecution(7L);
         verifyNoMoreInteractions(repository);
         verifyNoInteractions(audit, notifications, scheduling);
     }
 
     @Test
+    void publishReloadsTypedApprovalAndReplaysPriorExecution() {
+        var pending = new ApprovalRequestSnapshot(7L, 1L, 8L, ApprovalStatus.PENDING, "[]");
+        var approved = new ApprovalRequestSnapshot(7L, 1L, 8L, ApprovalStatus.APPROVED, "[]");
+        when(repository.findApprovalForMutation(7L)).thenReturn(pending, approved);
+        when(repository.priorExecution(7L)).thenReturn("{\"versionId\":4,\"sessions\":12}");
+        assertEquals(Map.of("versionId", 4, "sessions", 12), service.publish(manager, 7L));
+        var order = inOrder(repository, audit);
+        order.verify(repository).findApprovalForMutation(7L);
+        order.verify(repository).recordDecision(eq(7L), eq(9L), eq("APPROVED"), nullable(String.class));
+        order.verify(repository).changeWorkStatus(8L, "APPROVED");
+        order.verify(audit).record(manager, "APPROVED", "approval_requests", 7L);
+        order.verify(repository).findApprovalForMutation(7L);
+        order.verify(repository).priorExecution(7L);
+        verifyNoInteractions(notifications, scheduling);
+    }
+
+    @Test
     void invalidDecisionDoesNotChangeWorkflow() {
-        Map<String, Object> approval = Map.of("id", 7L, "requested_by", 1L,
-                "status", "PENDING", "work_item_id", 8L);
+        var approval = new ApprovalRequestSnapshot(7L, 1L, 8L, ApprovalStatus.PENDING, "[]");
         assertEquals(400, assertThrows(ApiFailure.class, () -> service.decide(manager, approval,
                 Map.of("decision", "APPLIED"))).status());
         verifyNoInteractions(repository, notifications, audit, scheduling);
@@ -213,8 +229,7 @@ class ApprovalServiceTest {
 
     @Test
     void returnedDecisionRequiresNonBlankReason() {
-        Map<String, Object> approval = Map.of("id", 7L, "requested_by", 1L,
-                "status", "PENDING", "work_item_id", 8L);
+        var approval = new ApprovalRequestSnapshot(7L, 1L, 8L, ApprovalStatus.PENDING, "[]");
         assertEquals(400, assertThrows(ApiFailure.class, () -> service.decide(manager, approval,
                 Map.of("decision", "RETURNED", "reason", "  "))).status());
         verifyNoInteractions(repository, notifications, audit, scheduling);
@@ -222,8 +237,7 @@ class ApprovalServiceTest {
 
     @Test
     void appliedApprovalCannotBeDecidedAgain() {
-        Map<String, Object> approval = Map.of("id", 7L, "requested_by", 1L,
-                "status", "APPLIED", "work_item_id", 8L);
+        var approval = new ApprovalRequestSnapshot(7L, 1L, 8L, ApprovalStatus.APPLIED, "[]");
         assertEquals(409, assertThrows(ApiFailure.class, () -> service.decide(manager, approval,
                 Map.of("decision", "APPROVED"))).status());
         verifyNoInteractions(repository, notifications, audit, scheduling);
@@ -231,8 +245,7 @@ class ApprovalServiceTest {
 
     @Test
     void managerCannotApproveOwnRequest() {
-        Map<String, Object> approval = Map.of("id", 7L, "requested_by", 9L,
-                "status", "PENDING", "work_item_id", 8L);
+        var approval = new ApprovalRequestSnapshot(7L, 9L, 8L, ApprovalStatus.PENDING, "[]");
         assertEquals(403, assertThrows(ApiFailure.class, () -> service.decide(manager, approval,
                 Map.of("decision", "APPROVED"))).status());
         verifyNoInteractions(repository, notifications, audit, scheduling);

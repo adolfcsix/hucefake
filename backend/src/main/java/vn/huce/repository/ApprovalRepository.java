@@ -8,6 +8,8 @@ import java.util.Map;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 import vn.huce.exception.ApiFailure;
+import vn.huce.model.ApprovalRequestSnapshot;
+import vn.huce.model.ApprovalStatus;
 import vn.huce.model.TimetableVersionSnapshot;
 import vn.huce.model.TimetableVersionStatus;
 
@@ -29,6 +31,16 @@ public class ApprovalRepository {
                 SELECT a.*,a.payload::text AS payload_json FROM approval_requests a
                 JOIN timetable_versions t ON t.approval_request_id=a.id WHERE a.id=?
                 """, approvalId);
+    }
+
+    public ApprovalRequestSnapshot findApprovalForMutation(long approvalId) {
+        return require(store.jdbc().query("""
+                SELECT a.id,a.requested_by,a.work_item_id,a.status,a.payload::text AS payload_json
+                FROM approval_requests a JOIN timetable_versions t ON t.approval_request_id=a.id
+                WHERE a.id=?
+                """, (rs, row) -> new ApprovalRequestSnapshot(rs.getLong("id"),
+                rs.getLong("requested_by"), rs.getLong("work_item_id"),
+                ApprovalStatus.valueOf(rs.getString("status")), rs.getString("payload_json")), approvalId));
     }
 
     public int patternVersion(long patternId) {
