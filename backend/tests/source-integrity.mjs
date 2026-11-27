@@ -22,13 +22,14 @@ for(const key of ['units','campuses','semesters','subjects','groups','enrollment
 assert.equal(JSON.parse(read('frontend/package.json')).devDependencies.vite,JSON.parse(read('frontend/package-lock.json')).packages[''].devDependencies.vite)
 const routes=read('backend/tests/expected-routes.txt').trim().split(/\r?\n/).map(s=>s.split(' ')[1])
 let references=0,imports=0
-for(const file of files.filter(p=>/^frontend\/src\/.*\.(js|jsx)$/.test(p))){
+for(const file of files.filter(p=>/^frontend\/(?:src|test|e2e)\/.*\.(js|jsx|mjs)$/.test(p))){
  const code=read(file)
  for(const [,spec] of code.matchAll(/(?:from\s*|import\s*)['"](\.[^'"]+)['"]/g)){
   const path=resolve(root,dirname(file),spec)
   assert.ok(['','.js','.jsx','.css','/index.js','/index.jsx'].some(s=>existsSync(path+s)),file+' missing import '+spec)
   imports++
  }
+ if (!file.startsWith('frontend/src/')) continue
  // Static first argument only. Dynamic IDs, verbs and assembled paths are covered by integration/browser tests.
  for(const [,literal] of code.matchAll(/\b(?:api|request|usePagedQuery)\(\s*['"](\/[^'"]+)['"]/g)){
   const prefix='/api'+literal.split('?')[0]
@@ -38,3 +39,77 @@ for(const file of files.filter(p=>/^frontend\/src\/.*\.(js|jsx)$/.test(p))){
 }
 assert.ok(references>30&&imports>15,'Unexpectedly low coverage')
 console.log('PASS: tracked-file hygiene, blank template, Vite manifest/lock consistency, '+imports+' relative imports, '+references+' static API path references')
+
+
+const sourceRoot = 'frontend/src/'
+const frontendSource = files.filter(p => p.startsWith(sourceRoot))
+assert.deepEqual(frontendSource.filter(p => !p.slice(sourceRoot.length).includes('/')), ['frontend/src/main.jsx'],
+  'Keep only the React entry point at the source root')
+for (const path of frontendSource) {
+  const category = path.slice(sourceRoot.length).split('/')[0]
+  if (category === 'main.jsx') continue
+  assert.ok(['app','assets','components','constants','features','hooks','services','styles','utils'].includes(category),
+    path + ' belongs in a named source folder')
+}
+console.log('PASS: frontend source folder organization')
+
+const appSource = read('frontend/src/app/App.jsx')
+assert.doesNotMatch(appSource, /function\s+(Login|Workspace|Statistics|Notifications)\s*\(/)
+for (const path of ['app/Workspace.jsx','app/destinations.js','features/auth/Login.jsx',
+  'features/statistics/Statistics.jsx','features/notifications/Notifications.jsx',
+  'components/common/Icon.jsx','components/common/Brand.jsx']) {
+  assert.ok(frontendSource.includes(sourceRoot + path), 'Missing separated frontend module ' + path)
+}
+console.log('PASS: React entry component stays separate from workspace and feature views')
+
+assert.ok(!frontendSource.includes(sourceRoot + 'features/timetable/Timetable.jsx'), 'Do not restore monolithic timetable component')
+for (const name of ['Planning','PatternEditor','Published','SessionEditor','ChangeRequests']) {
+  assert.ok(frontendSource.includes(sourceRoot + 'features/timetable/' + name + '.jsx'), 'Missing timetable feature ' + name)
+}
+console.log('PASS: timetable screens and editors are separate modules')
+
+assert.ok(!frontendSource.includes(sourceRoot + 'features/workflow/Workflow.jsx'), 'Do not restore monolithic workflow component')
+for (const name of ['Automatic','RunPlan','CostChart','Approvals','SubmissionReadiness','Availability']) {
+  assert.ok(frontendSource.includes(sourceRoot + 'features/workflow/' + name + '.jsx'), 'Missing workflow feature ' + name)
+}
+console.log('PASS: scheduling, approval and availability workflow modules are separate')
+
+const chatSource = read('frontend/src/features/chat/HuceChat.jsx')
+assert.doesNotMatch(chatSource, /function\s+(DraftFields|Proposal|ChatIcon|ChatHistory|ChatExchange)\s*\(/)
+for (const name of ['DraftFields','Proposal','ChatIcon','ChatHistory','ChatExchange']) {
+  assert.ok(frontendSource.includes(sourceRoot + 'features/chat/' + name + '.jsx'), 'Missing chat component ' + name)
+}
+console.log('PASS: HUCEChat orchestration and presentation components are separate')
+
+const sectionsSource = read('frontend/src/features/sections/Sections.jsx')
+assert.doesNotMatch(sectionsSource, /function\s+(DraftImport|SectionEditor)\s*\(/)
+for (const name of ['DraftImport','SectionEditor']) {
+  assert.ok(frontendSource.includes(sourceRoot + 'features/sections/' + name + '.jsx'), 'Missing section component ' + name)
+}
+console.log('PASS: section list, import and mutation editor are separate')
+
+
+// Check reachability of production modules, not only that individual imports exist.
+// Vite resolves these explicit relative imports without a custom alias.
+const modulePaths = new Set(frontendSource.filter(path => /\.(?:js|jsx|css)$/.test(path)))
+const reached = new Set()
+function visitFrontend(path) {
+  if (reached.has(path)) return
+  reached.add(path)
+  const code = read(path)
+  const imports = path.endsWith('.css')
+    ? [...code.matchAll(/@import\s+['"](\.[^'"]+)['"]/g)].map(match => match[1])
+    : [...code.matchAll(/(?:from\s*|import\s*)['"](\.[^'"]+)['"]|import\(\s*['"](\.[^'"]+)['"]\s*\)/g)]
+        .map(match => match[1] || match[2])
+  for (const spec of imports) {
+    const target = resolve(root, dirname(path), spec.split('?')[0])
+    const relative = files.find(candidate => ['','.js','.jsx','.css','/index.js','/index.jsx']
+      .some(extension => resolve(root, candidate) === target + extension))
+    assert.ok(relative, path + ' imports untracked module ' + spec)
+    if (modulePaths.has(relative)) visitFrontend(relative)
+  }
+}
+visitFrontend(sourceRoot + 'main.jsx')
+assert.deepEqual([...modulePaths].filter(path => !reached.has(path)).sort(), [],
+  'Remove unused production modules or connect them to the application')
+console.log('PASS: all ' + modulePaths.size + ' frontend JS/JSX/CSS modules reachable from main.jsx')

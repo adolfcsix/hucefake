@@ -1,6 +1,6 @@
 # HUCE — Lớp học phần và Thời khóa biểu
 
-Ứng dụng học tập độc lập, không phải cổng chính thức của trường. Frontend ReactJS (Vite, JSX), backend Java 21 / Spring Boot 3.5.8, PostgreSQL 16. Spring Security xác thực, phân quyền và CSRF; JDBC thực hiện truy vấn, Flyway quản lý migration; Spring Session lưu phiên trong PostgreSQL. Node.js chỉ build React và chạy kiểm thử HTTP, không phục vụ backend.
+Ứng dụng học tập độc lập, không phải cổng chính thức của trường. Frontend ReactJS (Vite, JSX), backend Java 21 / Spring Boot 4.0.10, PostgreSQL 16. Spring Security xác thực, phân quyền và CSRF; JDBC thực hiện truy vấn, Flyway quản lý migration; Spring Session lưu phiên trong PostgreSQL. Node.js chỉ build React và chạy kiểm thử HTTP, không phục vụ backend. Khi nâng cấp từ Boot 3.x, sao lưu database và đăng nhập lại; phiên Spring Security tuần tự hóa từ bản cũ không được cam kết tương thích với bản major mới.
 
 Ảnh đăng nhập: [Hướng dẫn cho tân sinh viên HUCE](https://ttcntt.huce.edu.vn/huong-dan-cho-tan-sinh-vien).
 
@@ -100,7 +100,7 @@ cd backend
 mvn clean verify
 mvn spring-boot:run
 ```
-Thay mật khẩu đúng PostgreSQL. Mặc định backend lắng nghe localhost:8080. Chọn DEMO=false và database riêng để chạy bản trắng. Java không tự nạp .env; cần đặt biến môi trường trong terminal. Linux/macOS dùng export thay cho $env:.
+Thay mật khẩu đúng PostgreSQL. Mặc định backend lắng nghe localhost:8080. Chọn DEMO=false và database riêng để chạy bản trắng. Java không tự nạp .env; cần đặt biến môi trường trong terminal. Dùng `DEMO=true` chỉ với database demo mới hoặc đã khởi tạo demo; bản trắng dùng `DEMO=false` với database riêng. Nếu dùng Docker PostgreSQL và thay mật khẩu, phải đặt DB_PASSWORD trước lần tạo volume đầu tiên; đổi biến môi trường không tự đổi mật khẩu role trong volume đã tồn tại. Linux/macOS dùng export thay cho $env:.
 
 **Terminal 2** (mở tại thư mục gốc):
 ```powershell
@@ -140,23 +140,23 @@ CLI hỏi mật khẩu ẩn hai lần (ít nhất 10 ký tự, tối đa 72 byte
 
 ### Dữ liệu riêng bằng Docker
 
-Dừng demo hoặc dùng cổng khác. Bản riêng có project/volume khác:
+Dừng demo hoặc dùng cổng khác. Bản riêng có project/volume và cookie phiên khác. Nếu demo vẫn chạy ở 8081, đặt `$env:FM05_WEB_PORT='8082'` trước các lệnh dưới đây và mở http://localhost:8082. Dùng cùng hostname (không đổi qua lại localhost và 127.0.0.1).
 ```powershell
 docker compose -f compose.share.yaml -f compose.private.yaml up -d --build --wait
 docker compose -f compose.share.yaml -f compose.private.yaml run --rm -v "${PWD}/config:/config:ro" app setup catalog /config/local.json
 docker compose -f compose.share.yaml -f compose.private.yaml run --rm app setup account --username quanly_rieng --email manager@example.test --role MANAGER
 ```
-Lặp lệnh setup account cho ba vai trò còn lại với tham số tương ứng ở trên. Đăng nhập bằng tên riêng. Giữ volume khi dừng. Trường hợp chạy song song đặt FM05_WEB_PORT khác cho bản riêng.
+Lặp lệnh setup account cho ba vai trò còn lại với tham số tương ứng ở trên. Đăng nhập bằng tên riêng. Giữ volume khi dừng. Demo dùng `HUCE_DEMO_SID`, bản riêng dùng `HUCE_PRIVATE_SID`; đăng xuất một bản không xóa phiên của bản còn lại. Sau khi nâng cấp từ phiên bản cookie cũ, đăng nhập lại. Khi chạy nhiều backend native trên cùng hostname, đặt `SESSION_COOKIE_NAME` khác nhau trong từng terminal backend, đồng thời dùng database và cổng riêng. Không cần sửa React.
 
 ## 6. Xóa bốn nút đăng nhập nhanh
 
 **Cách không sửa code:** đặt DEMO=false, dùng database riêng. Bốn nút không được render; API demo-login cũng từ chối. Đây là cách khuyến nghị.
 
-**Cách xóa hẳn giao diện:** mở VS Code → frontend → src → main.jsx. Tìm `const demoRoles = [` và xóa toàn bộ khai báo mảng kết thúc tại dấu `]`. Trong function Login, tìm đoạn:
+**Cách xóa hẳn giao diện:** mở VS Code → frontend → src → features → auth → Login.jsx. Tìm `const demoRoles = [` và xóa toàn bộ khai báo mảng kết thúc tại dấu `]`. Trong function Login, tìm đoạn:
 ```jsx
 {mode?.demo === true && <section className="demo-accounts" aria-label="Tài khoản dùng thử">
 ```
-Xóa từ dòng này đến dấu `</section>}` tương ứng, ngay trước thẻ đóng login-inner. Không xóa form đăng nhập hoặc function signIn. Có thể xóa các selector .demo-accounts, .demo-grid, .demo-choice trong style.css nếu muốn dọn CSS; không xóa selector dùng chung. Nếu không cần đọc trạng thái demo nữa, xóa state mode/modeError, useEffect gọi /auth/mode và đổi ErrorBox thành error={error}.
+Xóa từ dòng này đến dấu `</section>}` tương ứng, ngay trước thẻ đóng login-inner. Không xóa form đăng nhập hoặc function signIn. Có thể xóa các selector .demo-accounts, .demo-grid, .demo-choice trong frontend/src/styles/login.css nếu muốn dọn CSS; không xóa selector dùng chung. Nếu không cần đọc trạng thái demo nữa, xóa state mode/modeError, useEffect gọi /auth/mode và đổi ErrorBox thành error={error}.
 
 Kiểm tra lại trong frontend:
 ```powershell
@@ -319,4 +319,51 @@ Các lệnh trên dành cho hệ thống đã build và PostgreSQL đang chạy.
 
 VS Code: dừng backend, dùng `Remove-Item Env:GEMINI_API_KEY,Env:GEMINI_MODEL -ErrorAction SilentlyContinue` rồi chạy lại Maven. Docker: xóa giá trị hai biến khỏi .env và shell, recreate app theo mục 10.3. Không cần xóa dữ liệu hoặc cài lại thư viện. Khi nghi ngờ lộ khóa, thu hồi/đổi khóa trong AI Studio ngay.
 
-**Vị trí mã nguồn:** `backend/src/main/java/vn/huce/GeminiAdvisor.java` (HTTP, schema, timeout và kiểm tra kết quả), `ChatService.java` (phân loại cục bộ, giới hạn vai trò), `ChatController.java` (API), `frontend/src/HuceChat.jsx` (giao diện), `compose.share.yaml` (biến môi trường). Key chỉ ở backend. CI đã nghiệm thu chatbot cục bộ; chưa có khóa thật để nghiệm thu live Gemini từ môi trường phát triển này. Không có cam kết model mẫu hoạt động trên mọi dự án Google.
+**Vị trí mã nguồn:** `backend/src/main/java/vn/huce/service/chat/GeminiAdvisor.java` (HTTP, schema, timeout và kiểm tra kết quả), `backend/src/main/java/vn/huce/service/chat/ChatService.java` (phân loại cục bộ, giới hạn vai trò), `backend/src/main/java/vn/huce/controller/ChatController.java` (API), `frontend/src/features/chat/HuceChat.jsx` (giao diện), `compose.share.yaml` (biến môi trường). Key chỉ ở backend. CI đã nghiệm thu chatbot cục bộ; chưa có khóa thật để nghiệm thu live Gemini từ môi trường phát triển này. Không có cam kết model mẫu hoạt động trên mọi dự án Google.
+
+
+### Cấu trúc frontend React
+
+`frontend/src/main.jsx` chỉ khởi động React. Phần ứng dụng và điều hướng nằm trong `src/app/`; đăng nhập nằm trong `src/features/auth/`. Màn hình nghiệp vụ nằm trong `src/features/` theo danh mục, chatbot, lớp học phần, sinh viên, thời khóa biểu và quy trình. Component dùng chung nằm trong `src/components/`; hook trong `src/hooks/`; gọi API trong `src/services/`; hằng số, tiện ích, ảnh và CSS nằm trong các thư mục tương ứng. Các bài kiểm thử nằm ngoài mã nguồn ứng dụng.
+
+Backend Spring Boot sử dụng các package controller, service, repository, dto, security, config, validation, exception và cli. Xem `backend/README.md` để biết trách nhiệm từng tầng và phần cải tổ chưa hoàn tất.
+
+
+### Tổ chức phân hệ thời khóa biểu ReactJS
+
+Các màn hình trong `frontend/src/features/timetable/` được tách theo nghiệp vụ: `Planning.jsx` xếp lịch thủ công, `PatternEditor.jsx` chỉnh sửa lịch định kỳ và xem trước xung đột, `Published.jsx` lịch đã công bố và xuất CSV/ICS, `SessionEditor.jsx` chi tiết/điều chỉnh buổi học, `ChangeRequests.jsx` xử lý đề nghị đổi lịch. `timetableFilters.js` dùng chung lọc đối tượng và so sánh ID. Không còn file Timetable.jsx cũ. Giữ nguyên JSX, CSS, URL API và luồng xử lý; kiểm thử build và trình duyệt trên commit mới vẫn bắt buộc.
+
+
+### Tổ chức phân hệ Workflow ReactJS
+
+Trong `frontend/src/features/workflow/`, `Automatic.jsx` quản lý tham số GA, theo dõi tiến độ và thao tác lần chạy; `RunPlan.jsx` hiển thị phương án; `CostChart.jsx` vẽ chi phí theo thế hệ; `Approvals.jsx` quản lý phiên bản và duyệt/công bố; `SubmissionReadiness.jsx` hiển thị điều kiện gửi duyệt; `Availability.jsx` quản lý thời gian bận/ưu tiên tránh xếp lịch. File Workflow.jsx cũ đã được loại bỏ, giữ nguyên logic component, CSS, API, quyền và chu kỳ polling. Cần kiểm thử CI trên commit mới.
+
+
+### Tổ chức HUCEChat ReactJS
+
+HuceChat.jsx điều phối trạng thái hội thoại, gọi API, tìm lịch sử, quản lý đề xuất và focus. ChatHistory.jsx hiển thị lịch sử; ChatExchange.jsx hiển thị câu hỏi, phản hồi, dữ liệu và liên kết nguồn; DraftFields.jsx là biểu mẫu lớp nháp; Proposal.jsx hiển thị đề xuất và nút xác nhận/hủy; ChatIcon.jsx và chatPresentation.js chứa icon, nhãn và gợi ý. Giữ nguyên hợp đồng API, nội dung JSX, CSS, thời hạn, quyền, xác nhận và cơ chế chống thao tác đồng thời. Cần nghiệm thu build và browser trên commit mới.
+
+
+### Tổ chức quản lý lớp học phần ReactJS
+
+Trong `frontend/src/features/sections/`, `Sections.jsx` quản lý danh sách, lọc, phân trang và xuất lớp nháp; `DraftImport.jsx` đọc tệp CSV/JSON, tải mẫu và gửi nhập dữ liệu; `SectionEditor.jsx` xử lý thêm/sửa/hủy lớp, phân công giảng viên và nhóm lớp đối tượng, gồm xử lý lỗi mã lớp và xung đột phiên bản; `SectionTransfer.js` giữ các hàm chuyển đổi tệp. Dùng một editor chung cho các thao tác để tránh lặp form, giữ nguyên JSX, CSS, hợp đồng API và điều kiện quyền. Cần nghiệm thu CI trên commit mới.
+
+
+### Danh mục và kiểm thử lớp API ReactJS
+
+`Catalog.jsx` hiển thị danh mục; `CatalogEditor.jsx` xử lý biểu mẫu phòng, khung tiết và ngày nghỉ; `catalogFields.js` chứa nhãn và xây dựng payload đúng từng nghiệp vụ. Ba test kiểm tra kiểu số, trường gửi API và campusId null cho ngày nghỉ toàn trường. Năm test API dùng fetch giả lập kiểm tra CSRF retry, idempotency khi lỗi 5xx/4xx, preview xung đột và xóa token khi logout; không gọi backend thật. Giữ nguyên useFetch/usePagedQuery và cơ chế API hiện tại trong đợt này, không thêm dependency.
+
+
+### Ổn định Hooks và CSRF đồng thời
+
+useFetch bắt cả lỗi đồng bộ từ loader và lỗi Promise, vẫn bỏ kết quả của effect đã cleanup. API giữ tham chiếu Promise CSRF đã dùng cho mỗi yêu cầu: một phản hồi CSRF_INVALID muộn không xóa token mới đang được yêu cầu khác sử dụng. Khi Promise tải token thất bại chỉ xóa cache nếu chính Promise đó còn hiện hành. Giữ nguyên giới hạn retry một lần, idempotency key và hợp đồng API. Bổ sung test hai mutation nhận lỗi CSRF cũ lệch thời điểm, cùng sử dụng token thay thế. Không đổi giao diện hay thêm dependency.
+
+
+### Tổ chức CSS và kiểm tra module dư thừa
+
+`frontend/src/styles/style.css` là điểm nhập CSS, giữ thứ tự cascade: base, workspace, timetable, dialogs, login, student, responsive, workflow-details, chat. Nội dung các quy tắc được chuyển nguyên văn, không đổi selector, giá trị, media query hoặc thứ tự. Không xóa token hoặc selector chỉ vì chưa thấy trong một màn hình; trạng thái động cần kiểm tra trình duyệt. Source Integrity kiểm tra tất cả module JS/JSX/CSS sản xuất đều có đường dẫn từ main.jsx qua import, phát hiện module bị bỏ lại sau cải tổ. Hướng dẫn xóa CSS nút demo sử dụng login.css. Cần build và nghiệm thu browser để xác nhận cascade sau Vite bundling.
+
+
+### Kiểm toán cài đặt song song demo và dữ liệu riêng
+
+Đối chiếu application.yml, ba Compose, Dockerfile, Vite và cấu hình Spring Security. Cookie không phân biệt cổng trên cùng hostname: tách cookie demo/private và dùng tên được cấu hình khi logout. Bổ sung kiểm thử Chromium cùng browser context đăng nhập hai bản, đọc /api/me độc lập và đăng xuất riêng từng bản. Backend native giữ tên cookie mặc định để tương thích. Không thay đổi database hoặc dữ liệu đã lưu. Cần CI container mới xác nhận trên runtime thật.

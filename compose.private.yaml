@@ -3,3 +3,4 @@ services:
   app:
     environment:
       DEMO: "false"
+      SESSION_COOKIE_NAME: HUCE_PRIVATE_SID

@@ -117,6 +117,17 @@ jobs:
           git rev-parse HEAD > "$RUNNER_TEMP/huce-ci-package/source.sha"
           cd "$RUNNER_TEMP/huce-ci-package"
           sha256sum huce.jar > package.sha256
+      - name: Inventory exact Java runtime dependencies
+        run: |
+          python3 backend/tests/test-runtime-inventory.py
+          mkdir -p "$RUNNER_TEMP/huce-maven-inventory"
+          mvn -B -f backend/pom.xml org.apache.maven.plugins:maven-dependency-plugin:3.8.1:copy-dependencies -DincludeScope=runtime -Dmdep.useRepositoryLayout=true -DoutputDirectory="$RUNNER_TEMP/huce-resolved-runtime"
+          python3 backend/tests/runtime-inventory.py "$RUNNER_TEMP/huce-resolved-runtime" "$RUNNER_TEMP/huce-ci-package/huce.jar" "$RUNNER_TEMP/huce-maven-inventory/huce.cdx.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: huce-maven-inventory
+          path: ${{ runner.temp }}/huce-maven-inventory/
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
           name: huce-ci-package
@@ -216,13 +227,29 @@ jobs:
         run: docker compose -f compose.share.yaml down -v
 
   dependency-audit:
+    needs: smoke
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: huce-maven-inventory
+          path: ${{ runner.temp }}/huce-maven-inventory
+      - name: Audit packaged Maven dependencies against OSV
+        run: |
+          python3 backend/tests/test-audit-runtime.py
+          python3 backend/tests/audit-runtime.py "$RUNNER_TEMP/huce-maven-inventory/huce.cdx.json" "$RUNNER_TEMP/huce-maven-inventory/osv-report.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: huce-java-osv-audit
+          path: ${{ runner.temp }}/huce-maven-inventory/osv-report.json
+          if-no-files-found: error
       - name: Audit all locked frontend dependencies
+        if: always()
         working-directory: frontend
         run: |
           mkdir -p audit-results
