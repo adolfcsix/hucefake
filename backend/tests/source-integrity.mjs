@@ -87,3 +87,29 @@ for (const name of ['DraftImport','SectionEditor']) {
   assert.ok(frontendSource.includes(sourceRoot + 'features/sections/' + name + '.jsx'), 'Missing section component ' + name)
 }
 console.log('PASS: section list, import and mutation editor are separate')
+
+
+// Check reachability of production modules, not only that individual imports exist.
+// Vite resolves these explicit relative imports without a custom alias.
+const modulePaths = new Set(frontendSource.filter(path => /\.(?:js|jsx|css)$/.test(path)))
+const reached = new Set()
+function visitFrontend(path) {
+  if (reached.has(path)) return
+  reached.add(path)
+  const code = read(path)
+  const imports = path.endsWith('.css')
+    ? [...code.matchAll(/@import\s+['"](\.[^'"]+)['"]/g)].map(match => match[1])
+    : [...code.matchAll(/(?:from\s*|import\s*)['"](\.[^'"]+)['"]|import\(\s*['"](\.[^'"]+)['"]\s*\)/g)]
+        .map(match => match[1] || match[2])
+  for (const spec of imports) {
+    const target = resolve(root, dirname(path), spec.split('?')[0])
+    const relative = files.find(candidate => ['','.js','.jsx','.css','/index.js','/index.jsx']
+      .some(extension => resolve(root, candidate) === target + extension))
+    assert.ok(relative, path + ' imports untracked module ' + spec)
+    if (modulePaths.has(relative)) visitFrontend(relative)
+  }
+}
+visitFrontend(sourceRoot + 'main.jsx')
+assert.deepEqual([...modulePaths].filter(path => !reached.has(path)).sort(), [],
+  'Remove unused production modules or connect them to the application')
+console.log('PASS: all ' + modulePaths.size + ' frontend JS/JSX/CSS modules reachable from main.jsx')

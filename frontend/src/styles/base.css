@@ -1,0 +1,66 @@
+:root {
+  font-family: "Be Vietnam Pro", "Segoe UI", sans-serif;
+  font-size: 14px;
+  color: #14223b;
+  background: #f3f5fb;
+  font-synthesis: none;
+  --heading: "Be Vietnam Pro", "Segoe UI", sans-serif;
+  --navy: #142560;
+  --accent: #274bb7;
+  --ink: #14223b;
+  --muted: #4e5f79;
+  --line: #dfe5f0;
+  --rule: #cfd8ea;
+  --surface: #fff;
+  --subtle: #f5f7fc;
+  --paper: #f3f5fb;
+  --royal-light: #a9c0ff;
+  --gutter: clamp(20px, 3.4vw, 54px);
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; }
+h1, h2, h3, p, figure, ul { margin: 0; }
+h1 { font: 700 clamp(1.85rem, 3.1vw, 2.75rem)/1.18 var(--heading); letter-spacing: -.035em; }
+h2 { font-size: 1.16rem; line-height: 1.4; font-weight: 700; letter-spacing: -.025em; }
+h3 { font-size: 1rem; }
+p { line-height: 1.55; }
+small { color: var(--muted); }
+button, input, textarea, select { font: inherit; }
+:focus-visible { outline: 2px solid #3563da; outline-offset: 3px; }
+button {
+  cursor: pointer;
+  min-height: 42px;
+  padding: 8px 15px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: white;
+  background: var(--accent);
+  font-size: .88rem;
+  font-weight: 600;
+}
+button:hover:not(:disabled) { background: #1a398f; }
+button:disabled { cursor: default; opacity: .55; }
+button.quiet { color: var(--ink); background: var(--surface); border-color: var(--rule); }
+button.quiet:hover:not(:disabled) { background: #eef2fb; border-color: #a4b7e4; }
+button.danger { color: #963b34; }
+button.icon-only { width: 42px; padding: 0; display: inline-grid; place-items: center; flex-shrink: 0; }
+button.selected { background: #eaf0ff; border-color: #aec0ef; color: #2446aa; }
+
+input, select, textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  padding: 8px 11px;
+  border: 1px solid var(--rule);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--ink);
+}
+select { padding-right: 20px; }
+input::placeholder { color: #63717c; }
+textarea { resize: vertical; }
+input[type=checkbox] { width: 16px; height: 16px; min-height: 0; accent-color: var(--accent); }
+fieldset { border: 1px solid var(--rule); border-radius: 7px; min-width: 0; }
+legend { color: var(--muted); padding: 0 4px; font-size: .88rem; }
+

@@ -1,0 +1,108 @@
+.week-scroll { border: 1px solid var(--line); margin-bottom: 14px; }
+.week-grid { min-width: 745px; table-layout: fixed; text-align: left; }
+.week-grid th:first-child { width: 57px; }
+.week-grid th small { display: block; font-size: .68rem; }
+.week-grid :is(td,th) { border-right: 1px solid var(--line); }
+.week-grid :is(td,th):last-child { border-right: 0; }
+.week-grid td { position: relative; height: 43px; padding: 4px; vertical-align: top; }
+.week-grid td.placement-conflict { background: #fceae9; box-shadow: inset 0 0 0 2px #b83b38; }
+.placement-conflict-label { display: block; padding: 4px 5px; color: #8d211e; font-weight: 600; overflow-wrap: anywhere; }
+.notice.placement-conflict-summary { color: #8d211e; border-color: #edc1bd; background: #fceae9; }
+.week-grid .shift-start :is(td,th) { border-top: 2px solid var(--rule); }
+.week-grid .schedule-card {
+  width: 100%;
+  min-height: 0;
+  display: grid;
+  gap: 2px;
+  text-align: left;
+  background: #e8efff;
+  border: 1px solid #c6d4fb;
+  border-left: 3px solid #4469cb;
+  border-radius: 3px;
+  color: #1b377c;
+  padding: 5px 6px;
+  margin-bottom: 3px;
+  overflow-wrap: anywhere;
+  font-size: .75rem;
+}
+.week-grid .schedule-card:hover:not(:disabled) { background: #dee8ff; }
+.week-grid .schedule-card.has-violation { background: #fceae9; border-color: #dcaca9; border-left-color: #b83b38; color: #85221f; }
+.week-grid .schedule-card span, .week-grid .schedule-card small { line-height: 1.23; font-weight: 400; }
+.week-grid .schedule-card:disabled { opacity: 1; }
+.week-grid .empty-slot { display: block; width: 100%; padding: 0; min-height: 30px; border-color: transparent; color: #61717d; background: transparent; }
+.week-grid .empty-slot:hover, .week-grid .empty-slot:focus-visible { background: #edf2ff; border-color: #c2d0f9; }
+.calendar-controls { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 9px 13px; margin: 4px 0 12px; }
+.calendar-jump { max-width: 100%; }
+.calendar-jump .field { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; }
+.calendar-jump input { width: auto; max-width: 100%; }
+.run-plan-tools { align-items: center; }
+.inline-choice { display: inline-flex; align-items: center; gap: 7px; }
+.week-nav { display: flex; align-items: center; gap: 6px; font-size: .84rem; font-variant-numeric: tabular-nums; }
+.week-nav > strong { padding: 0 4px; white-space: nowrap; }
+.week-nav > .icon-only { font-size: 1.35rem; }
+.calendar-modes { display: inline-flex; border: 1px solid var(--rule); border-radius: 7px; background: var(--surface); }
+.calendar-modes button { min-height: 40px; border: 0; color: var(--muted); background: transparent; }
+.calendar-modes button + button { border-left: 1px solid var(--rule); }
+.calendar-modes button[aria-pressed=true], .calendar-modes button:hover { color: var(--accent); background: #e8efff; }
+.timetable-scroll { border: 1px solid var(--rule); }
+.timetable { --period-height: 60px; display: grid; }
+.calendar-heading { display: grid; align-content: center; gap: 3px; min-height: 55px; padding: 6px 10px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--rule); background: #edf1f2; font-size: .79rem; font-weight: 700; white-space: nowrap; }
+.calendar-heading time { color: var(--muted); font-size: .76rem; font-weight: 500; }
+.calendar-heading.today { background: #e0ecf3; box-shadow: inset 0 2px var(--accent); }
+.period-heading { text-align: center; }
+.period-axis, .day-column { border-right: 1px solid var(--line); }
+.period-axis { background: #f8f9f9; text-align: center; color: var(--muted); }
+.period-axis > div { display: grid; place-items: center; height: var(--period-height); font-size: .8rem; border-bottom: 1px solid var(--line); }
+.day-column { display: grid; background: var(--surface); min-width: 0; }
+.day-column.today { background: #f7fafc; }
+.period-line { min-width: 0; border-bottom: 1px solid var(--line); }
+.period-axis .after-break, .period-line.after-break { border-top: 2px solid var(--rule); }
+.calendar-session {
+  z-index: 1;
+  min-width: 0;
+  min-height: 0;
+  margin: 3px;
+  padding: 5px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  gap: 1px;
+  text-align: left;
+  background: #e5eff5;
+  color: #173c54;
+  border: 1px solid #c7dbe7;
+  border-left: 3px solid #497995;
+  font-size: .76rem;
+  overflow: hidden;
+}
+.calendar-session:hover:not(:disabled) { background: #d9e9f3; }
+.calendar-session strong { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; line-height: 1.24; }
+.calendar-session span, .calendar-session small { font-size: .72rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.calendar-session.is-cancelled { background: #f4eae8; border-color: #e7cdc9; border-left-color: #a55a50; color: #782f28; }
+.calendar-session.is-replacement { background: #e6efea; border-color: #ccdfd4; border-left-color: #4f826c; color: #215443; }
+.week-agenda { border-block: 1px solid var(--line); }
+.agenda-day + .agenda-day { border-top: 1px solid var(--rule); }
+.agenda-day h3 { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 13px; background: #edf1f2; font-size: .84rem; }
+.agenda-day h3 time { color: var(--muted); font-weight: 500; }
+.agenda-day ul { list-style: none; padding: 0; }
+.agenda-day li + li { border-top: 1px solid var(--line); }
+.agenda-session {
+  display: grid;
+  grid-template-columns: 60px minmax(0,1fr) auto;
+  align-items: start;
+  text-align: left;
+  gap: 4px 10px;
+  width: 100%;
+  padding: 12px;
+  border-radius: 0;
+  border-left: 3px solid transparent;
+  color: var(--ink);
+  background: var(--surface);
+}
+.agenda-session:hover:not(:disabled) { background: #f0f5f7; }
+.agenda-session.is-cancelled { border-left-color: #a55a50; }
+.agenda-session.is-replacement { border-left-color: #4f826c; }
+.agenda-session small { display: block; margin-top: 3px; font-size: .75rem; font-weight: 400; overflow-wrap: anywhere; }
+.agenda-time { color: var(--accent); font-variant-numeric: tabular-nums; }
+.agenda-status { color: #215443; font-size: .76rem; }
+

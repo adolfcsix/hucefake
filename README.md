@@ -156,7 +156,7 @@ Lặp lệnh setup account cho ba vai trò còn lại với tham số tương �
 ```jsx
 {mode?.demo === true && <section className="demo-accounts" aria-label="Tài khoản dùng thử">
 ```
-Xóa từ dòng này đến dấu `</section>}` tương ứng, ngay trước thẻ đóng login-inner. Không xóa form đăng nhập hoặc function signIn. Có thể xóa các selector .demo-accounts, .demo-grid, .demo-choice trong style.css nếu muốn dọn CSS; không xóa selector dùng chung. Nếu không cần đọc trạng thái demo nữa, xóa state mode/modeError, useEffect gọi /auth/mode và đổi ErrorBox thành error={error}.
+Xóa từ dòng này đến dấu `</section>}` tương ứng, ngay trước thẻ đóng login-inner. Không xóa form đăng nhập hoặc function signIn. Có thể xóa các selector .demo-accounts, .demo-grid, .demo-choice trong frontend/src/styles/login.css nếu muốn dọn CSS; không xóa selector dùng chung. Nếu không cần đọc trạng thái demo nữa, xóa state mode/modeError, useEffect gọi /auth/mode và đổi ErrorBox thành error={error}.
 
 Kiểm tra lại trong frontend:
 ```powershell
@@ -324,7 +324,7 @@ VS Code: dừng backend, dùng `Remove-Item Env:GEMINI_API_KEY,Env:GEMINI_MODEL 
 
 ### Cấu trúc frontend React
 
-`frontend/src/main.jsx` chỉ khởi động React. Phần ứng dụng, điều hướng và đăng nhập nằm trong `src/app/`. Màn hình nghiệp vụ nằm trong `src/features/` theo danh mục, chatbot, lớp học phần, sinh viên, thời khóa biểu và quy trình. Component dùng chung nằm trong `src/components/`; hook trong `src/hooks/`; gọi API trong `src/services/`; hằng số, tiện ích, ảnh và CSS nằm trong các thư mục tương ứng. Các bài kiểm thử nằm ngoài mã nguồn ứng dụng.
+`frontend/src/main.jsx` chỉ khởi động React. Phần ứng dụng và điều hướng nằm trong `src/app/`; đăng nhập nằm trong `src/features/auth/`. Màn hình nghiệp vụ nằm trong `src/features/` theo danh mục, chatbot, lớp học phần, sinh viên, thời khóa biểu và quy trình. Component dùng chung nằm trong `src/components/`; hook trong `src/hooks/`; gọi API trong `src/services/`; hằng số, tiện ích, ảnh và CSS nằm trong các thư mục tương ứng. Các bài kiểm thử nằm ngoài mã nguồn ứng dụng.
 
 Backend Spring Boot sử dụng các package controller, service, repository, dto, security, config, validation, exception và cli. Xem `backend/README.md` để biết trách nhiệm từng tầng và phần cải tổ chưa hoàn tất.
 
@@ -357,3 +357,8 @@ Trong `frontend/src/features/sections/`, `Sections.jsx` quản lý danh sách, l
 ### Ổn định Hooks và CSRF đồng thời
 
 useFetch bắt cả lỗi đồng bộ từ loader và lỗi Promise, vẫn bỏ kết quả của effect đã cleanup. API giữ tham chiếu Promise CSRF đã dùng cho mỗi yêu cầu: một phản hồi CSRF_INVALID muộn không xóa token mới đang được yêu cầu khác sử dụng. Khi Promise tải token thất bại chỉ xóa cache nếu chính Promise đó còn hiện hành. Giữ nguyên giới hạn retry một lần, idempotency key và hợp đồng API. Bổ sung test hai mutation nhận lỗi CSRF cũ lệch thời điểm, cùng sử dụng token thay thế. Không đổi giao diện hay thêm dependency.
+
+
+### Tổ chức CSS và kiểm tra module dư thừa
+
+`frontend/src/styles/style.css` là điểm nhập CSS, giữ thứ tự cascade: base, workspace, timetable, dialogs, login, student, responsive, workflow-details, chat. Nội dung các quy tắc được chuyển nguyên văn, không đổi selector, giá trị, media query hoặc thứ tự. Không xóa token hoặc selector chỉ vì chưa thấy trong một màn hình; trạng thái động cần kiểm tra trình duyệt. Source Integrity kiểm tra tất cả module JS/JSX/CSS sản xuất đều có đường dẫn từ main.jsx qua import, phát hiện module bị bỏ lại sau cải tổ. Hướng dẫn xóa CSS nút demo sử dụng login.css. Cần build và nghiệm thu browser để xác nhận cascade sau Vite bundling.
