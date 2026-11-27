@@ -21,6 +21,9 @@ import vn.huce.dto.ApprovalSubmissionResponse;
 import vn.huce.dto.TimetableVersionIdResponse;
 import vn.huce.dto.TimetablePublicationResponse;
 import vn.huce.model.ApprovalSnapshot;
+import vn.huce.model.ApprovalReadiness;
+import vn.huce.model.ApprovalReadiness.BlockedSection;
+import vn.huce.model.ApprovalReadiness.PatternConflict;
 import vn.huce.model.ApprovalStatus;
 import vn.huce.model.TimetableVersionStatus;
 import vn.huce.model.TimetableVersionSnapshot;
@@ -90,7 +93,7 @@ public class ApprovalService {
         return row;
     }
 
-    record Assessment(Map<String, Object> readiness, List<ApprovalSnapshot> snapshot) {
+    record Assessment(ApprovalReadiness readiness, List<ApprovalSnapshot> snapshot) {
     }
 
     Assessment assess(Actor actor, long semesterId) {
@@ -100,22 +103,16 @@ public class ApprovalService {
                         && "DRAFT".equals(section.get("status"))).toList();
         boolean eligible = drafts.stream().anyMatch(section ->
                 Objects.equals(actor.unitId(), nullableId(section.get("managing_unit_id"))));
-        List<Map<String, Object>> blocked = new ArrayList<>();
+        List<BlockedSection> blocked = new ArrayList<>();
         List<ApprovalSnapshot> snapshot = new ArrayList<>();
-        Map<String, Object> readiness = new LinkedHashMap<>();
-        readiness.put("semesterId", semesterId);
-        readiness.put("draftCount", drafts.size());
-        readiness.put("blockedSections", blocked);
-        readiness.put("eligible", eligible);
-        readiness.put("ready", false);
         if (drafts.isEmpty() || !eligible) {
-            return new Assessment(readiness, snapshot);
+            return new Assessment(new ApprovalReadiness(semesterId, drafts.size(), eligible, false, blocked), snapshot);
         }
         for (Map<String, Object> section : drafts) {
             List<Slot> slots = context.patterns().stream()
                     .filter(pattern -> pattern.section() == n(section, "id")).toList();
             List<Map<String, Object>> missing = new ArrayList<>();
-            List<Map<String, Object>> conflicts = new ArrayList<>();
+            List<PatternConflict> conflicts = new ArrayList<>();
             if (section.get("staff_id") == null) {
                 missing.add(Map.of("rule", "BR02", "message", "Chưa có giảng viên chính."));
             }
@@ -126,13 +123,8 @@ public class ApprovalService {
                 Result result = scheduling.check(context, slot, actor, false);
                 Map<String, Object> room = context.rooms().get(slot.room());
                 if (!result.valid()) {
-                    Map<String, Object> conflict = new LinkedHashMap<>();
-                    conflict.put("id", slot.id());
-                    conflict.put("dayOfWeek", slot.day());
-                    conflict.put("periodFrom", slot.first());
-                    conflict.put("roomCode", room == null ? null : room.get("code"));
-                    conflict.put("issues", result.issues());
-                    conflicts.add(conflict);
+                    conflicts.add(new PatternConflict(slot.id(), slot.day(), slot.first(),
+                            room == null ? null : (String) room.get("code"), result.issues()));
                 } else {
                     snapshot.add(new ApprovalSnapshot(slot.id(), slot.section(), slot.staff(), slot.room(),
                             slot.day(), slot.first(), slot.count(), slot.from().toString(), slot.to().toString(),
@@ -141,20 +133,14 @@ public class ApprovalService {
                 }
             }
             if (!missing.isEmpty() || !conflicts.isEmpty()) {
-                Map<String, Object> block = new LinkedHashMap<>();
-                block.put("id", section.get("id"));
-                block.put("code", section.get("code"));
-                block.put("subjectName", section.get("subject_name"));
-                block.put("editable", Objects.equals(actor.unitId(), nullableId(section.get("managing_unit_id"))));
-                block.put("scheduled", slots.size());
-                block.put("required", section.get("sessions_per_week"));
-                block.put("missing", missing);
-                block.put("conflicts", conflicts);
-                blocked.add(block);
+                blocked.add(new BlockedSection(n(section, "id"), (String) section.get("code"),
+                        (String) section.get("subject_name"),
+                        Objects.equals(actor.unitId(), nullableId(section.get("managing_unit_id"))),
+                        slots.size(), n(section, "sessions_per_week"), missing, conflicts));
             }
         }
-        readiness.put("ready", blocked.isEmpty());
-        return new Assessment(readiness, snapshot);
+        return new Assessment(new ApprovalReadiness(semesterId, drafts.size(), eligible, blocked.isEmpty(), blocked),
+                snapshot);
     }
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
@@ -164,7 +150,7 @@ public class ApprovalService {
         if (repository.hasSubmittedVersion(semesterId)) {
             return Map.of("semesterId", semesterId, "pending", true, "ready", false, "blockedSections", List.of());
         }
-        return assess(actor, semesterId).readiness();
+        return assess(actor, semesterId).readiness().toResponse();
     }
 
     public TimetableVersionIdResponse create(Actor actor, long semesterId) {
@@ -190,47 +176,44 @@ public class ApprovalService {
             throw new ApiFailure(409, "DUPLICATE_REQUEST", "Học kỳ đã có thời khóa biểu chờ duyệt.");
         }
         Assessment assessment = assess(actor, semesterId);
-        Map<String, Object> ready = assessment.readiness();
-        if (n(ready, "draftCount") == 0) {
+        ApprovalReadiness ready = assessment.readiness();
+        if (ready.draftCount() == 0) {
             throw state("Học kỳ chưa có lớp nháp để gửi duyệt.");
         }
-        if (!Boolean.TRUE.equals(ready.get("eligible"))) {
+        if (!ready.eligible()) {
             forbidden();
         }
-        if (!Boolean.TRUE.equals(ready.get("ready"))) {
+        if (!ready.ready()) {
             rejectIncomplete(ready);
         }
         long workItemId = repository.createWorkItem(actor.id());
         long approvalId = repository.createApproval(workItemId, actor.id(), encode(assessment.snapshot()));
-        repository.submitVersion(versionId, n(ready, "draftCount"), approvalId);
+        repository.submitVersion(versionId, ready.draftCount(), approvalId);
         audit.record(actor, "SUBMIT", "timetable_versions", versionId);
         notifications.notifyManagers("Thời khóa biểu bản " + version.versionNo()
                 + " đang chờ duyệt. Mở Duyệt thời khóa biểu để xem phương án.");
         return new ApprovalSubmissionResponse(approvalId);
     }
 
-    private void rejectIncomplete(Map<String, Object> ready) {
+    private void rejectIncomplete(ApprovalReadiness ready) {
         List<Map<String, Object>> issues = new ArrayList<>();
-        for (Object rawSection : (List<?>) ready.get("blockedSections")) {
-            Map<?, ?> section = (Map<?, ?>) rawSection;
-            for (Object rawSlot : (List<?>) section.get("conflicts")) {
-                Map<?, ?> slot = (Map<?, ?>) rawSlot;
-                for (Object rawIssue : (List<?>) slot.get("issues")) {
-                    Map<String, Object> issue = new LinkedHashMap<>();
-                    ((Map<?, ?>) rawIssue).forEach((key, value) -> issue.put(key.toString(), value));
-                    issue.putIfAbsent("patternId", slot.get("id"));
-                    issue.put("candidateSectionCode", section.get("code"));
+        for (BlockedSection section : ready.blockedSections()) {
+            for (PatternConflict slot : section.conflicts()) {
+                for (Map<String, Object> rawIssue : slot.issues()) {
+                    Map<String, Object> issue = new LinkedHashMap<>(rawIssue);
+                    issue.putIfAbsent("patternId", slot.id());
+                    issue.put("candidateSectionCode", section.code());
                     issues.add(issue);
                 }
             }
         }
+        Map<String, Object> details = ready.toResponse();
         if (!issues.isEmpty()) {
-            Map<String, Object> details = new LinkedHashMap<>(ready);
             details.put("issues", issues);
             throw new ApiFailure(409, "SCHEDULE_CONFLICT", "Lịch dự kiến có xung đột.", details);
         }
         throw new ApiFailure(409, "INVALID_STATE",
-                "Cần hoàn tất phân công và xếp đủ các buổi trước khi gửi duyệt.", ready);
+                "Cần hoàn tất phân công và xếp đủ các buổi trước khi gửi duyệt.", details);
     }
 
     public ApprovalDecisionResponse decide(Actor actor, Map<String, Object> approval, Map<String, Object> body) {

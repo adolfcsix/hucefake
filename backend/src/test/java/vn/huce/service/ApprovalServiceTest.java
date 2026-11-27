@@ -2,6 +2,8 @@ package vn.huce.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
+import java.util.List;
+import java.time.LocalDate;
 import org.junit.jupiter.api.Test;
 import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
@@ -87,6 +89,53 @@ class ApprovalServiceTest {
         verify(repository).findVersionForApproval(7L);
         verifyNoMoreInteractions(repository);
         verifyNoInteractions(audit, notifications, scheduling);
+    }
+
+    @Test
+    void pendingReadinessKeepsLegacyResponse() {
+        when(repository.hasSubmittedVersion(4L)).thenReturn(true);
+        assertEquals(Map.of("semesterId", 4L, "pending", true, "ready", false,
+                "blockedSections", List.of()), service.readiness(staff, 4L));
+        verifyNoInteractions(scheduling);
+    }
+
+    @Test
+    void emptySemesterReadinessKeepsLegacyResponse() {
+        when(scheduling.context()).thenReturn(new SchedulingService.Context(
+                Map.of(), Map.of(), List.of(), List.of(), List.of(), List.of()));
+        assertEquals(Map.of("semesterId", 4L, "draftCount", 0, "eligible", false,
+                "ready", false, "blockedSections", List.of()), service.readiness(staff, 4L));
+    }
+
+    @Test
+    void conflictDetailsKeepNullRoomAndExistingPatternIdWithoutMutation() throws Exception {
+        var section = Map.<String, Object>of("id", 21L, "semester_id", 4L, "status", "DRAFT",
+                "managing_unit_id", 3L, "staff_id", 2L, "sessions_per_week", 1,
+                "code", "HP01", "subject_name", "Toán");
+        var slot = new SchedulingService.Slot(11L, 21L, 2L, 5L, 1, 2, 3,
+                LocalDate.of(2026, 9, 1), LocalDate.of(2026, 12, 31));
+        var issue = Map.<String, Object>of("rule", "BR05", "message", "Xung đột", "patternId", 99L);
+        var context = new SchedulingService.Context(Map.of(21L, section), Map.of(),
+                List.of(), List.of(), List.of(), List.of(slot));
+        when(scheduling.context()).thenReturn(context);
+        when(scheduling.check(context, slot, staff, false))
+                .thenReturn(new SchedulingService.Result(false, List.of(issue), List.of()));
+        when(repository.findVersion(7L)).thenReturn(new TimetableVersionSnapshot(
+                7L, 4L, 1, TimetableVersionStatus.DRAFT, 0, 1L));
+        var error = assertThrows(ApiFailure.class, () -> service.submit(staff, 7L));
+        assertEquals(409, error.status());
+        assertEquals("SCHEDULE_CONFLICT", error.code());
+        var json = new ObjectMapper();
+        var details = json.readTree(json.writeValueAsString(error.details()));
+        assertEquals(json.readTree("""
+                {"semesterId":4,"draftCount":1,"eligible":true,"ready":false,
+                 "blockedSections":[{"id":21,"code":"HP01","subjectName":"Toán","editable":true,
+                 "scheduled":1,"required":1,"missing":[],"conflicts":[{"id":11,"dayOfWeek":1,
+                 "periodFrom":2,"roomCode":null,"issues":[{"rule":"BR05","message":"Xung đột","patternId":99}]}]}],
+                 "issues":[{"rule":"BR05","message":"Xung đột","patternId":99,"candidateSectionCode":"HP01"}]}
+                """), details);
+        verify(repository, never()).createWorkItem(anyLong());
+        verifyNoInteractions(audit, notifications);
     }
 
     @Test
