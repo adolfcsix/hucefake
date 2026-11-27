@@ -2,6 +2,9 @@ package vn.huce.repository;
 
 import java.sql.Timestamp;
 import java.sql.Date;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.Arrays;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
@@ -12,6 +15,7 @@ import org.springframework.stereotype.Repository;
 import vn.huce.Accounts.Actor;
 
 import vn.huce.model.SchedulePatternSnapshot;
+import vn.huce.model.PublishedSession;
 
 @Repository
 public class SchedulingRepository {
@@ -80,12 +84,27 @@ public class SchedulingRepository {
                 Timestamp.valueOf(end), Timestamp.valueOf(start), roomId, staffArray, sectionId, sectionId);
     }
 
-    public List<Map<String, Object>> publishedSessions(LocalDate from, LocalDate to) {
-        return store.rows("""
+    public List<PublishedSession> publishedSessions(LocalDate from, LocalDate to) {
+        return store.jdbc().query("""
           SELECT x.section_id,x.room_id,x.start_at,x.end_at,
           ARRAY[x.staff_id] || ARRAY(SELECT a.staff_id FROM section_assignments a WHERE a.section_id=x.section_id AND a.role='ASSISTANT' AND a.valid_to IS NULL) AS staff_ids,
           ARRAY(SELECT g.group_id FROM section_target_groups g WHERE g.section_id=x.section_id) AS group_ids
           FROM class_sessions x WHERE x.start_at<?::date+1 AND x.end_at>=?::date AND x.status<>'CANCELLED'
-          """, Date.valueOf(to), Date.valueOf(from));
+          """, (rs, row) -> new PublishedSession(rs.getLong("section_id"),
+                rs.getObject("room_id", Long.class), rs.getTimestamp("start_at").toLocalDateTime(),
+                rs.getTimestamp("end_at").toLocalDateTime(), readIds(rs, "staff_ids"),
+                readIds(rs, "group_ids")), Date.valueOf(to), Date.valueOf(from));
+    }
+
+    private static Set<Long> readIds(ResultSet rs, String column) throws SQLException {
+        var array = rs.getArray(column);
+        if (array == null) {
+            return new LinkedHashSet<>();
+        }
+        try {
+            return new LinkedHashSet<>(Arrays.asList((Long[]) array.getArray()));
+        } finally {
+            array.free();
+        }
     }
 }

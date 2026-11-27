@@ -8,6 +8,7 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
+import vn.huce.model.PublishedSession;
 import vn.huce.repository.SchedulingRepository;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -68,6 +69,43 @@ class GeneticSchedulerTest {
         assertEquals(first, second);
         assertEquals(firstProgress, secondProgress);
         assertEquals(0, first.score().hard());
+    }
+
+    @Test
+    void publishedAssistantConflictBlocksOverlapButNotAdjacentTime() {
+        Actor staff = new Actor(1L, "staff", "STAFF", 2L, 6L);
+        Map<String, Object> section = Map.ofEntries(Map.entry("id", 1L),
+                Map.entry("semester_id", 4L), Map.entry("status", "DRAFT"),
+                Map.entry("managing_unit_id", 6L), Map.entry("scheduled", 0),
+                Map.entry("sessions_per_week", 1), Map.entry("staff_id", 2L),
+                Map.entry("assistant_ids", new Long[]{8L}), Map.entry("group_ids", new Long[]{10L}),
+                Map.entry("start_date", monday.toString()), Map.entry("end_date", monday.plusDays(1).toString()),
+                Map.entry("periods_per_session", 1));
+        var context = new Context(Map.of(1L, section),
+                Map.of(3L, Map.of("id", 3L, "campus_id", 5L)),
+                List.of(), List.of(), List.of(), List.of());
+        SchedulingService mockScheduling = mock(SchedulingService.class);
+        when(mockScheduling.context()).thenReturn(context);
+        when(mockScheduling.campuses(staff)).thenReturn(Set.of(5L));
+        when(mockScheduling.fits(anyMap(), anyMap())).thenReturn(true);
+        when(mockScheduling.staff(eq(context), any(Slot.class))).thenReturn(Set.of(2L, 8L));
+        when(mockScheduling.interval(eq(context), any(Slot.class), any(LocalDate.class))).thenAnswer(call -> {
+            Slot candidate = call.getArgument(1);
+            LocalDate date = call.getArgument(2);
+            if (candidate.first() != 1 || candidate.day() > 2) {
+                return null;
+            }
+            return new Span(date.atTime(7, 0), date.atTime(8, 0));
+        });
+        when(repository.publishedSessions(monday, monday.plusDays(1))).thenReturn(List.of(
+                new PublishedSession(99L, null, monday.atTime(7, 30), monday.atTime(9, 0),
+                        Set.of(8L), Set.of()),
+                new PublishedSession(98L, 3L, monday.plusDays(1).atTime(8, 0),
+                        monday.plusDays(1).atTime(9, 0), Set.of(2L), Set.of(10L))));
+        var input = new GeneticInputBuilder(mockScheduling, repository).build(staff, 4L);
+        assertEquals(1, input.genes().size());
+        assertEquals(List.of(new Slot(0, 1L, 2L, 3L, 2, 1, 1, monday, monday.plusDays(1))),
+                input.genes().getFirst());
     }
 
     @Test

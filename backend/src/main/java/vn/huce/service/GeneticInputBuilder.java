@@ -13,6 +13,7 @@ import java.util.concurrent.TimeUnit;
 import org.springframework.stereotype.Service;
 import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
+import vn.huce.model.PublishedSession;
 import vn.huce.repository.SchedulingRepository;
 
 import static vn.huce.service.SchedulingService.*;
@@ -56,7 +57,7 @@ class GeneticInputBuilder {
                 .min(LocalDate::compareTo).orElseThrow();
         LocalDate to = sections.stream().map(section -> day(section.get("end_date")))
                 .max(LocalDate::compareTo).orElseThrow();
-        Map<LocalDate, List<Map<String, Object>>> published = indexByDay(repository.publishedSessions(from, to));
+        Map<LocalDate, List<PublishedSession>> published = indexByDay(repository.publishedSessions(from, to));
         List<List<Slot>> genes = new ArrayList<>();
         List<Map<String, Object>> issues = new ArrayList<>();
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(60);
@@ -83,11 +84,11 @@ class GeneticInputBuilder {
         return new GeneticScheduler.Input(context, List.copyOf(genes));
     }
 
-    private Map<LocalDate, List<Map<String, Object>>> indexByDay(List<Map<String, Object>> published) {
-        Map<LocalDate, List<Map<String, Object>>> result = new HashMap<>();
-        for (Map<String, Object> row : published) {
-            LocalDateTime start = LocalDateTime.parse(s(row, "start_at"));
-            LocalDateTime end = LocalDateTime.parse(s(row, "end_at"));
+    private Map<LocalDate, List<PublishedSession>> indexByDay(List<PublishedSession> published) {
+        Map<LocalDate, List<PublishedSession>> result = new HashMap<>();
+        for (PublishedSession row : published) {
+            LocalDateTime start = row.start();
+            LocalDateTime end = row.end();
             for (LocalDate date = start.toLocalDate(); !date.isAfter(end.toLocalDate()); date = date.plusDays(1)) {
                 result.computeIfAbsent(date, key -> new ArrayList<>()).add(row);
             }
@@ -96,7 +97,7 @@ class GeneticInputBuilder {
     }
 
     private List<Slot> domain(Context context, Map<String, Object> section, Set<Long> allowedCampuses,
-                              Map<LocalDate, List<Map<String, Object>>> published, long deadline) {
+                              Map<LocalDate, List<PublishedSession>> published, long deadline) {
         List<Slot> domain = new ArrayList<>();
         for (Map<String, Object> room : context.rooms().values()) {
             long campusId = n(room, "campus_id");
@@ -119,7 +120,7 @@ class GeneticInputBuilder {
     }
 
     private boolean feasible(Context context, Map<String, Object> section, Slot slot, long campusId,
-                             Map<LocalDate, List<Map<String, Object>>> published) {
+                             Map<LocalDate, List<PublishedSession>> published) {
         Set<Long> staff = scheduling.staff(context, slot);
         Set<Long> groups = ids(section.get("group_ids"));
         boolean teaching = false;
@@ -132,13 +133,13 @@ class GeneticInputBuilder {
                 continue;
             }
             teaching = true;
-            for (Map<String, Object> row : published.getOrDefault(date, List.of())) {
-                if (time.start().isBefore(LocalDateTime.parse(s(row, "end_at")))
-                        && LocalDateTime.parse(s(row, "start_at")).isBefore(time.end())
-                        && (Objects.equals(nullableId(row.get("room_id")), slot.room())
-                            || n(row, "section_id") == slot.section()
-                            || !Collections.disjoint(staff, ids(row.get("staff_ids")))
-                            || !Collections.disjoint(groups, ids(row.get("group_ids"))))) {
+            for (PublishedSession row : published.getOrDefault(date, List.of())) {
+                if (time.start().isBefore(row.end())
+                        && row.start().isBefore(time.end())
+                        && (Objects.equals(row.roomId(), slot.room())
+                            || row.sectionId() == slot.section()
+                            || !Collections.disjoint(staff, row.staffIds())
+                            || !Collections.disjoint(groups, row.groupIds()))) {
                     return false;
                 }
             }
