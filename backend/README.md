@@ -60,4 +60,9 @@ Kiểm thử source-integrity rà cả import trong mã frontend, unit test và 
 
 ### Điều chỉnh buổi học và lịch rảnh giảng viên
 
-`SessionMutationService` giữ nghiệp vụ đổi phòng, nghỉ học, học bù và xử lý đề nghị. `SessionChangeRepository` sở hữu truy vấn và thao tác ghi tương ứng. `AvailabilityService` kiểm tra quyền, học kỳ, định kiểu các khoảng lịch rảnh thành `AvailabilityEntry` và kiểm tra xung đột; `AvailabilityRepository` thực hiện truy vấn. Thông báo sử dụng NotificationService. Các thao tác ghi tiếp tục nằm trong giao dịch MutationService để rollback khi phát hiện xung đột. SessionReadService và phần truy vấn lịch trong HUCEChat vẫn cần cải tổ tiếp.
+`SessionMutationService` giữ nghiệp vụ đổi phòng, nghỉ học, học bù và xử lý đề nghị. `SessionChangeRepository` sở hữu truy vấn và thao tác ghi tương ứng. `AvailabilityService` kiểm tra quyền, học kỳ, định kiểu các khoảng lịch rảnh thành `AvailabilityEntry` và kiểm tra xung đột; `AvailabilityRepository` thực hiện truy vấn. Thông báo sử dụng NotificationService. Các thao tác ghi tiếp tục nằm trong giao dịch MutationService để rollback khi phát hiện xung đột. SessionReadService sử dụng SessionReadRepository; HUCEChat gọi phương thức nghiệp vụ thay vì nhận SQL.
+
+
+### Truy vấn lịch và thông báo
+
+`ScheduleFilter` biểu diễn bộ lọc đã kiểm tra bằng LocalDate và enum View. `SessionReadService` kiểm tra quyền và đầu vào, `SessionReadRepository` xây dựng và thực hiện SQL có tham số theo phạm vi tài khoản. Cả HTTP và HUCEChat dùng chung service cho lịch cá nhân, danh sách lớp và buổi tiếp theo. NotificationRepository phụ trách đọc và đánh dấu thông báo theo tài khoản. Các projection động và hợp đồng JSON cũ được giữ nguyên trong đợt này; phần lưu hội thoại và đề xuất của HUCEChat vẫn cần cải tổ riêng.

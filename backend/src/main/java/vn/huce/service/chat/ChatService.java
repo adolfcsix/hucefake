@@ -103,8 +103,7 @@ public class ChatService {
                 if(w.from().compareTo(w.to())>0)return report("Chưa có buổi sắp tới trong học kỳ "+code,"schedule");
                 q.put("from",w.from());q.put("to",w.to());
                 boolean next="NEXT".equals(action);if(next)q.put("pageSize","1");
-                var scoped=reads.scheduleQuery(a,q);String sql="SELECT * FROM ("+scoped.sql()+") scoped"+(next?" WHERE scoped.status='PLANNED' AND scoped.start_at::timestamp > LOCALTIMESTAMP":"");
-                var p=page(db.paged(q,sql,scoped.args(),"start_at,section_code,id"));
+                var p=page(next ? reads.nextSession(a,q) : reads.schedule(a,q));
                 var rows=items(p).stream().map(r->item(s(r,"subject_name"),s(r,"section_code")+" · "+shortDate(r.get("start_at"))+" · "+s(r,"start_at").substring(11,16)+"–"+s(r,"end_at").substring(11,16)+" · "+Objects.toString(r.get("room_code"),"Chưa gán phòng")+" · "+(r.get("source_session_id")==null?label(r.get("status")):"Buổi thay thế"))).toList();
                 String heading=next?(rows.isEmpty()?"Chưa có buổi sắp tới trong học kỳ ":"Buổi tiếp theo trong học kỳ ")+code:(rows.isEmpty()?"Chưa có buổi trong khoảng ":n(p,"total")+" buổi trong khoảng ")+shortDate(w.from())+" – "+shortDate(w.to());
                 return report(heading,"schedule",rows,next?rows.size():n(p,"total"));

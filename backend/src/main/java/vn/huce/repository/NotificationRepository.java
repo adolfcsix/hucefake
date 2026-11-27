@@ -1,14 +1,18 @@
 package vn.huce.repository;
 
+import java.util.List;
+import java.util.Map;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 @Repository
 public class NotificationRepository {
     private final JdbcTemplate jdbc;
+    private final SqlStore store;
 
-    public NotificationRepository(JdbcTemplate jdbc) {
+    public NotificationRepository(JdbcTemplate jdbc, SqlStore store) {
         this.jdbc = jdbc;
+        this.store = store;
     }
 
     public void notifyManagers(String message) {
@@ -47,5 +51,22 @@ public class NotificationRepository {
                     SELECT 1 FROM teaching_rooms t JOIN staff_campuses sc ON sc.campus_id=t.campus_id
                     JOIN campuses c ON c.id=t.campus_id WHERE t.id=? AND sc.staff_id=p.id AND c.status='ACTIVE'))
                 """, message, unitId, roomId, roomId);
+    }
+
+    public Object findForUser(long userId, Map<String, String> page) {
+        String sql = "SELECT * FROM notifications WHERE user_id=?";
+        if (!page.containsKey("page") && !page.containsKey("pageSize")) {
+            return store.rows(sql + " ORDER BY id DESC LIMIT 100", userId);
+        }
+        return store.paged(page, sql, List.of(userId), "id DESC");
+    }
+
+    public int markAll(long userId) {
+        return jdbc.update("UPDATE notifications SET read_at=now() WHERE user_id=? AND read_at IS NULL", userId);
+    }
+
+    public void markRead(long userId, long notificationId) {
+        jdbc.update("UPDATE notifications SET read_at=COALESCE(read_at,now()) WHERE id=? AND user_id=?",
+                notificationId, userId);
     }
 }

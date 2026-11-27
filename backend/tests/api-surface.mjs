@@ -85,3 +85,11 @@ for (const name of ['SessionMutationService', 'AvailabilityService']) {
 assert.ok(existsSync(new URL('repository/SessionChangeRepository.java', root)))
 assert.ok(existsSync(new URL('repository/AvailabilityRepository.java', root)))
 console.log('PASS: session change and lecturer availability persistence boundaries')
+
+const sessionReadService = readFileSync(new URL('service/SessionReadService.java', root), 'utf8')
+assert.doesNotMatch(sessionReadService, /\b(?:SqlStore|JdbcTemplate|SELECT|INSERT\s+INTO|DELETE\s+FROM|UPDATE\s+\w+\s+SET)\b/)
+assert.ok(existsSync(new URL('repository/SessionReadRepository.java', root)))
+assert.ok(existsSync(new URL('model/ScheduleFilter.java', root)))
+const chatService = readFileSync(new URL('service/chat/ChatService.java', root), 'utf8')
+assert.doesNotMatch(chatService, /scheduleQuery\(|scoped\.sql\(|scoped\.args\(/)
+console.log('PASS: typed schedule filters and shared read boundaries')
