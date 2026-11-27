@@ -13,6 +13,8 @@ import org.springframework.stereotype.Service;
 import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
 import vn.huce.model.SchedulePatternSnapshot;
+import vn.huce.model.TeachingPeriod;
+import vn.huce.model.NonTeachingDay;
 import vn.huce.repository.SchedulingRepository;
 
 import static vn.huce.validation.Inputs.date;
@@ -45,8 +47,8 @@ public class SchedulingService {
     }
 
     public record Context(Map<Long, Map<String, Object>> sections, Map<Long, Map<String, Object>> rooms,
-                          List<Map<String, Object>> periods, List<Map<String, Object>> availability,
-                          List<Map<String, Object>> holidays, List<Slot> patterns) {
+                          List<TeachingPeriod> periods, List<Map<String, Object>> availability,
+                          List<NonTeachingDay> holidays, List<Slot> patterns) {
     }
 
     public record Result(boolean valid, List<Map<String, Object>> issues, List<Map<String, Object>> suggestions) {

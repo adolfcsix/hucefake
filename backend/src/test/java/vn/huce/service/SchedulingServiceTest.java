@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
 import vn.huce.model.SchedulePatternSnapshot;
+import vn.huce.model.NonTeachingDay;
 import vn.huce.repository.SchedulingRepository;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -91,8 +92,7 @@ class SchedulingServiceTest {
     @Test
     void allHolidayOccurrencesReturnBr14WithoutQueryingPublishedSessions() {
         Context context = new Context(Map.of(2L, section()), Map.of(4L, Map.of("campus_id", 5L)),
-                List.of(), List.of(), List.of(Map.of("campus_id", 5L,
-                        "start_date", monday.toString(), "end_date", monday.plusWeeks(2).toString())), List.of());
+                List.of(), List.of(), List.of(new NonTeachingDay(5L, monday, monday.plusWeeks(2))), List.of());
         Slot slot = new Slot(1L, 2L, 3L, 4L, 1, 1, 2, monday, monday.plusWeeks(2));
         assertEquals("BR14", service.actual(context, slot).getFirst().get("rule"));
         verifyNoInteractions(repository);

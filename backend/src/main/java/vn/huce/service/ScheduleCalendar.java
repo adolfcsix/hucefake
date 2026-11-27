@@ -6,10 +6,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import vn.huce.model.TeachingPeriod;
 
 import static vn.huce.service.SchedulingService.*;
 import static vn.huce.validation.Inputs.n;
-import static vn.huce.validation.Inputs.s;
 
 /** Calendar calculations shared by manual scheduling and the genetic solver. */
 final class ScheduleCalendar {
@@ -30,9 +30,9 @@ final class ScheduleCalendar {
 
     static boolean holiday(Context context, long campusId, LocalDate date) {
         return context.holidays().stream().anyMatch(row ->
-                (row.get("campus_id") == null || n(row, "campus_id") == campusId)
-                        && !day(row.get("start_date")).isAfter(date)
-                        && !day(row.get("end_date")).isBefore(date));
+                (row.campusId() == null || row.campusId() == campusId)
+                        && !row.startDate().isAfter(date)
+                        && !row.endDate().isBefore(date));
     }
 
     static Span interval(Context context, Slot slot, LocalDate date) {
@@ -45,13 +45,10 @@ final class ScheduleCalendar {
         LocalTime end = null;
         String shift = null;
         for (int period = slot.first(); period <= slot.last(); period++) {
-            Map<String, Object> selected = null;
-            for (Map<String, Object> definition : context.periods()) {
-                if (n(definition, "campus_id") == n(room, "campus_id")
-                        && n(definition, "period_no") == period
-                        && !day(definition.get("effective_from")).isAfter(date)
-                        && (definition.get("effective_to") == null
-                            || !day(definition.get("effective_to")).isBefore(date))) {
+            TeachingPeriod selected = null;
+            for (TeachingPeriod definition : context.periods()) {
+                if (definition.campusId() == n(room, "campus_id")
+                        && definition.periodNo() == period && definition.effectiveOn(date)) {
                     selected = definition;
                     break;
                 }
@@ -59,16 +56,16 @@ final class ScheduleCalendar {
             if (selected == null) {
                 return null;
             }
-            LocalTime periodStart = LocalTime.parse(s(selected, "start_time"));
-            LocalTime periodEnd = LocalTime.parse(s(selected, "end_time"));
-            if (end != null && (!Objects.equals(shift, selected.get("shift")) || end.isAfter(periodStart))) {
+            LocalTime periodStart = selected.startTime();
+            LocalTime periodEnd = selected.endTime();
+            if (end != null && (!Objects.equals(shift, selected.shift()) || end.isAfter(periodStart))) {
                 return null;
             }
             if (start == null) {
                 start = periodStart;
             }
             end = periodEnd;
-            shift = s(selected, "shift");
+            shift = selected.shift();
         }
         return new Span(date.atTime(start), date.atTime(end));
     }

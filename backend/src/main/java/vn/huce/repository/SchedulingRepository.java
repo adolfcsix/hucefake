@@ -16,6 +16,8 @@ import vn.huce.Accounts.Actor;
 
 import vn.huce.model.SchedulePatternSnapshot;
 import vn.huce.model.PublishedSession;
+import vn.huce.model.TeachingPeriod;
+import vn.huce.model.NonTeachingDay;
 
 @Repository
 public class SchedulingRepository {
@@ -37,16 +39,24 @@ public class SchedulingRepository {
                 """);
     }
 
-    public List<Map<String, Object>> activePeriods() {
-        return store.rows("SELECT * FROM period_definitions WHERE status='ACTIVE' ORDER BY effective_from DESC");
+    public List<TeachingPeriod> activePeriods() {
+        return store.jdbc().query("""
+                SELECT campus_id,period_no,start_time,end_time,shift,effective_from,effective_to
+                FROM period_definitions WHERE status='ACTIVE' ORDER BY effective_from DESC
+                """, (rs, row) -> new TeachingPeriod(rs.getLong("campus_id"), rs.getInt("period_no"),
+                rs.getTime("start_time").toLocalTime(), rs.getTime("end_time").toLocalTime(),
+                rs.getString("shift"), rs.getObject("effective_from", LocalDate.class),
+                rs.getObject("effective_to", LocalDate.class)));
     }
 
     public List<Map<String, Object>> availability() {
         return store.rows("SELECT * FROM staff_availability ORDER BY id");
     }
 
-    public List<Map<String, Object>> holidays() {
-        return store.rows("SELECT * FROM non_teaching_days");
+    public List<NonTeachingDay> holidays() {
+        return store.jdbc().query("SELECT campus_id,start_date,end_date FROM non_teaching_days",
+                (rs, row) -> new NonTeachingDay(rs.getObject("campus_id", Long.class),
+                        rs.getObject("start_date", LocalDate.class), rs.getObject("end_date", LocalDate.class)));
     }
 
     public List<SchedulePatternSnapshot> draftPatterns() {

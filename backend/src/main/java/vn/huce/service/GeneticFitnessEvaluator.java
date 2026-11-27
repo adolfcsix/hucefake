@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 
+import vn.huce.model.TeachingPeriod;
 import vn.huce.service.GeneticScheduler.Input;
 import vn.huce.service.GeneticScheduler.Score;
 import static vn.huce.service.SchedulingService.*;
@@ -80,11 +81,9 @@ final class GeneticFitnessEvaluator {
                     + 10.0 * (n(room, "capacity") - n(section, "capacity")) / n(room, "capacity");
             LocalDate date = firstDay(slot.from(), slot.day());
             String shift = context.periods().stream()
-                    .filter(period -> n(period, "campus_id") == n(room, "campus_id")
-                            && n(period, "period_no") == slot.first()
-                            && !day(period.get("effective_from")).isAfter(date)
-                            && (period.get("effective_to") == null || !day(period.get("effective_to")).isBefore(date)))
-                    .findFirst().map(period -> s(period, "shift")).orElse("");
+                    .filter(period -> period.campusId() == n(room, "campus_id")
+                            && period.periodNo() == slot.first() && period.effectiveOn(date))
+                    .findFirst().map(TeachingPeriod::shift).orElse("");
             return new Base(hard, soft, scheduling.staff(context, slot), shift);
         });
     }

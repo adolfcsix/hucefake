@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import vn.huce.model.NonTeachingDay;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static vn.huce.service.SchedulingService.*;
@@ -22,7 +23,7 @@ class ScheduleConstraintsTest {
                 "start_date", monday.toString(), "end_date", monday.toString());
     }
 
-    private Context context(List<Map<String, Object>> holidays, List<Map<String, Object>> availability) {
+    private Context context(List<NonTeachingDay> holidays, List<Map<String, Object>> availability) {
         return new Context(Map.of(1L, section("A"), 2L, section("B")),
                 Map.of(4L, Map.of("code", "P1", "campus_id", 5L, "status", "ACTIVE",
                         "capacity", 40, "type", "THEORY")),
@@ -47,8 +48,7 @@ class ScheduleConstraintsTest {
 
     @Test
     void campusHolidayRemovesPairConflicts() {
-        var holidays = List.of(Map.<String, Object>of("campus_id", 5L,
-                "start_date", monday.toString(), "end_date", monday.toString()));
+        var holidays = List.of(new NonTeachingDay(5L, monday, monday));
         assertTrue(ScheduleConstraints.pair(context(holidays, List.of()),
                 slot(1, 1, 4, 1, 2), slot(2, 2, 4, 1, 2)).isEmpty());
     }
