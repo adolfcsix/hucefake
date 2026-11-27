@@ -3,7 +3,7 @@ package vn.huce.service;
 import vn.huce.Accounts;
 import vn.huce.exception.ApiFailure;
 import vn.huce.repository.SqlStore;
-import vn.huce.controller.SectionController;
+import vn.huce.repository.SectionQueries;
 
 import static vn.huce.validation.Inputs.*;
 import java.util.*;
@@ -40,7 +40,7 @@ public class SchedulingService {
     }
     public static Slot slot(Map<String,Object> r){return new Slot(n(r,"id"),n(r,"section_id"),nullableId(r.get("staff_id")),n(r,"room_id"),(int)n(r,"day_of_week"),(int)n(r,"period_from"),(int)n(r,"period_count"),day(r.get("effective_from")),day(r.get("effective_to")));}
     public Context context(){
-        return new Context(index(db.rows(SectionController.SECTION_SQL+" WHERE c.status IN ('OPEN','DRAFT') ORDER BY c.id")),
+        return new Context(index(db.rows(SectionQueries.SECTION_SQL+" WHERE c.status IN ('OPEN','DRAFT') ORDER BY c.id")),
           index(db.rows("""
             SELECT r.id,r.campus_id,r.code,r.capacity,r.type,CASE WHEN c.status='ACTIVE' THEN r.status ELSE 'INACTIVE' END AS status
             FROM teaching_rooms r JOIN campuses c ON c.id=r.campus_id ORDER BY r.id

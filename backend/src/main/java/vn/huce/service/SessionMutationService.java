@@ -3,8 +3,7 @@ package vn.huce.service;
 import vn.huce.Accounts;
 import vn.huce.exception.ApiFailure;
 import vn.huce.repository.SqlStore;
-import vn.huce.controller.SectionController;
-import vn.huce.controller.SessionReadController;
+import vn.huce.repository.SectionQueries;
 
 import static vn.huce.validation.Inputs.*;
 import static vn.huce.service.SchedulingService.*;
@@ -22,7 +21,7 @@ public class SessionMutationService {
     SessionMutationService(SqlStore db,SchedulingService scheduling,ApprovalService approvals){this.db=db;this.scheduling=scheduling;this.approvals=approvals;}
     private void forbidden(){throw new ApiFailure(403,"FORBIDDEN","Bạn không có quyền trong phạm vi này.");}
     private ApiFailure conflict(Object details){return new ApiFailure(409,"SCHEDULE_CONFLICT","Lịch dự kiến có xung đột.",details);}
-    private Map<String,Object> section(long id){return db.need(SectionController.SECTION_SQL+" WHERE c.id=?",id);}
+    private Map<String,Object> section(long id){return db.need(SectionQueries.SECTION_SQL+" WHERE c.id=?",id);}
     private void campus(Accounts.Actor a,Object campus){if(campus!=null)scheduling.requireCampus(a,id(campus));}
     private Map<String,Object> room(Context ctx,long id){
         var room=ctx.rooms().get(id);if(room==null)throw new ApiFailure(404,"NOT_FOUND","Không tìm thấy dữ liệu.");return room;
@@ -116,7 +115,7 @@ public class SessionMutationService {
           JOIN staff_availability a ON a.staff_id=? AND a.semester_id=c.semester_id AND a.kind='BUSY'
             AND a.day_of_week=EXTRACT(ISODOW FROM x.start_at) AND a.period_from<=x.period_from+x.period_count-1 AND a.period_to>=x.period_from
           WHERE ?=ANY(
-          """+SessionReadController.STAFF_IDS+") AND c.semester_id=? AND x.status='PLANNED' AND x.start_at>=CURRENT_DATE",a.staffId(),a.staffId(),sem);
+          """+SessionReadService.STAFF_IDS+") AND c.semester_id=? AND x.status='PLANNED' AND x.start_at>=CURRENT_DATE",a.staffId(),a.staffId(),sem);
         if(!actual.isEmpty())throw conflict(Map.of("issues",actual));db.audit(a,"SET_AVAILABILITY","semesters",sem);
     }
     public Object requests(Accounts.Actor a,Map<String,String> q){
@@ -137,7 +136,7 @@ public class SessionMutationService {
     }
     public Object request(Accounts.Actor a,long id,Map<String,Object> f){
         role(a,"LECTURER");
-        var session=db.need("SELECT x.*,"+SessionReadController.STAFF_IDS+" AS staff_ids FROM class_sessions x WHERE x.id=?",id);
+        var session=db.need("SELECT x.*,"+SessionReadService.STAFF_IDS+" AS staff_ids FROM class_sessions x WHERE x.id=?",id);
         if(a.staffId()==null||!ids(session.get("staff_ids")).contains(a.staffId()))forbidden();
         var section=section(n(session,"section_id"));
         if(!"PLANNED".equals(session.get("status"))||!"OPEN".equals(section.get("status")))throw state("Buổi học không còn ở trạng thái đã lên lịch.");

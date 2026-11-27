@@ -3,7 +3,6 @@ package vn.huce.service;
 import vn.huce.Accounts;
 import vn.huce.exception.ApiFailure;
 import vn.huce.repository.SqlStore;
-import vn.huce.controller.SectionController;
 
 import static vn.huce.validation.Inputs.*;
 import java.util.*;
@@ -13,8 +12,8 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class ProposalService {
-    private final SqlStore db;private final ObjectMapper json;private final RunService runs;private final SectionController sections;
-    ProposalService(SqlStore db,ObjectMapper json,RunService runs,SectionController sections){this.db=db;this.json=json;this.runs=runs;this.sections=sections;}
+    private final SqlStore db;private final ObjectMapper json;private final RunService runs;private final SectionService sections;
+    ProposalService(SqlStore db,ObjectMapper json,RunService runs,SectionService sections){this.db=db;this.json=json;this.runs=runs;this.sections=sections;}
     public String encode(Object value){try{return json.writeValueAsString(value);}catch(Exception e){throw new IllegalStateException(e);}}
     public Map<String,Object> decode(Object value){if(value==null)return null;try{return json.readValue(value.toString(),new TypeReference<Map<String,Object>>(){});}catch(Exception e){throw new IllegalStateException(e);}}
     private void permission(Accounts.Actor a,String action){if(!ChatPermissions.allowed(a.role()).contains(action))throw new ApiFailure(403,"FORBIDDEN","Bạn không có quyền trong phạm vi này.");}

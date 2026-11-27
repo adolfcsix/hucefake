@@ -1,7 +1,6 @@
 package vn.huce.controller;
 
 import vn.huce.Accounts;
-import vn.huce.repository.SqlStore;
 import vn.huce.service.ApprovalService;
 import vn.huce.service.MutationService;
 
@@ -16,17 +15,15 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api")
 public class ApprovalController {
-    private final SqlStore db;private final MutationService writes;private final ApprovalService approvals;
-    ApprovalController(SqlStore db,MutationService writes,ApprovalService approvals){this.db=db;this.writes=writes;this.approvals=approvals;}
+    private final MutationService writes;private final ApprovalService approvals;
+    ApprovalController(MutationService writes, ApprovalService approvals) {
+        this.writes = writes;
+        this.approvals = approvals;
+    }
     private Accounts.Actor actor(Authentication auth,String... roles){var a=(Accounts.Actor)auth.getPrincipal();role(a,roles);return a;}
-    @GetMapping("/timetable-versions") @Transactional(readOnly=true,isolation=org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
-    public Object versions(Authentication auth,@RequestParam Map<String,String> q){
-        actor(auth,"STAFF","MANAGER");String status=q.get("filterStatus");
-        return db.paged(q,"""
-          SELECT t.*,a.status AS decision_status,a.decision_reason,u.username AS created_by_name
-          FROM timetable_versions t JOIN users u ON u.id=t.created_by LEFT JOIN approval_requests a ON a.id=t.approval_request_id
-          WHERE t.semester_id=? AND (?::text IS NULL OR t.status=?)
-          """,Arrays.asList(id(q.get("semesterId")),status,status),"version_no DESC,id DESC");
+    @GetMapping("/timetable-versions")
+    public Object versions(Authentication auth, @RequestParam Map<String,String> q) {
+        return approvals.versions(actor(auth, "STAFF", "MANAGER"), q);
     }
     @GetMapping("/approvals/{id}") Object get(Authentication auth,@PathVariable long id){actor(auth,"STAFF","MANAGER");return approvals.approval(id);}
     @GetMapping("/timetable-versions/readiness") @Transactional(readOnly=true,isolation=org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)

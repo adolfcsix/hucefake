@@ -3,10 +3,6 @@ package vn.huce.service;
 import vn.huce.Accounts;
 import vn.huce.exception.ApiFailure;
 import vn.huce.repository.SqlStore;
-import vn.huce.controller.ApprovalController;
-import vn.huce.controller.SectionController;
-import vn.huce.controller.SessionReadController;
-import vn.huce.config.SecurityConfig;
 
 import static vn.huce.validation.Inputs.*;
 import java.util.*;
@@ -16,8 +12,8 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class ChatService {
-    private final SqlStore db;private final ProposalService proposals;private final SectionController sections;private final ApprovalController approvals;private final SessionReadController reads;private final SessionMutationService sessions;private final GeminiAdvisor gemini;
-    ChatService(SqlStore db,ProposalService proposals,SectionController sections,ApprovalController approvals,SessionReadController reads,SessionMutationService sessions,GeminiAdvisor gemini){
+    private final SqlStore db;private final ProposalService proposals;private final SectionService sections;private final ApprovalService approvals;private final SessionReadService reads;private final SessionMutationService sessions;private final GeminiAdvisor gemini;
+    ChatService(SqlStore db,ProposalService proposals,SectionService sections,ApprovalService approvals,SessionReadService reads,SessionMutationService sessions,GeminiAdvisor gemini){
         this.db=db;this.proposals=proposals;this.sections=sections;this.approvals=approvals;this.reads=reads;this.sessions=sessions;this.gemini=gemini;
     }
     static final String OWNER="user_id=? AND role=? AND staff_id IS NOT DISTINCT FROM ?::bigint AND unit_id IS NOT DISTINCT FROM ?::bigint";
@@ -83,12 +79,12 @@ public class ChatService {
         return report(switch(a.role()){case "STAFF"->"Tạo lớp nháp, phân công, xếp lịch và gửi quản lý duyệt.";case "MANAGER"->"Kiểm tra hồ sơ và công bố lịch; xem thống kê sử dụng.";case "LECTURER"->"Xem lịch giảng, khai báo giờ bận và gửi đề nghị đổi lịch.";default->"Xem lịch học đã công bố, buổi tiếp theo và thông báo."; },"schedule");
     }
     Map<String,Object> answer(Accounts.Actor a,String action,Map<String,Object> sem,String question,Map<String,Object> body){
-        var auth=SecurityConfig.authentication(a);String empty="Chưa tìm thấy dữ liệu trong phạm vi đã chọn.";
+        String empty="Chưa tìm thấy dữ liệu trong phạm vi đã chọn.";
         if("GUIDE".equals(action))return guide(a,question);
         if("UNRELATED".equals(action))return report("Bạn có thể chọn một câu gợi ý để tra cứu hoặc cho tôi biết mục cần mở.","schedule");
         if("DENIED".equals(action))return report("Tài khoản hiện tại không có quyền dùng chức năng này.","schedule");
         if("NOTICES".equals(action)){
-            var p=page(reads.notifications(auth,Map.of("page","1","pageSize","8")));
+            var p=page(reads.notifications(a,Map.of("page","1","pageSize","8")));
             return report(n(p,"total")>0?"Thông báo gần đây của bạn":"Bạn chưa có thông báo.","notifications",items(p).stream().map(r->item(s(r,"message"),shortDate(r.get("created_at"))+(r.get("read_at")==null?" · Chưa đọc":" · Đã đọc"))).toList(),n(p,"total"));
         }
         if("READ_NOTICES".equals(action)){
@@ -111,11 +107,11 @@ public class ChatService {
             case "SECTIONS" -> {
                 var m=Pattern.compile("(?:mã|ma)\\s+([\\w.-]+)",Pattern.CASE_INSENSITIVE|Pattern.UNICODE_CASE).matcher(question);if(m.find())q.put("search",m.group(1));
                 if(ChatIntent.normalize(question).contains("lop nhap"))q.put("status","DRAFT");
-                var p=page(sections.sections(auth,q));return report(n(p,"total")>0?n(p,"total")+" lớp học phần · "+code:empty,"sections",items(p).stream().map(r->item(s(r,"code")+" · "+s(r,"subject_name"),label(r.get("status"))+" · "+r.get("scheduled")+"/"+r.get("sessions_per_week")+" buổi/tuần")).toList(),n(p,"total"));
+                var p=page(sections.sections(a,q));return report(n(p,"total")>0?n(p,"total")+" lớp học phần · "+code:empty,"sections",items(p).stream().map(r->item(s(r,"code")+" · "+s(r,"subject_name"),label(r.get("status"))+" · "+r.get("scheduled")+"/"+r.get("sessions_per_week")+" buổi/tuần")).toList(),n(p,"total"));
             }
             case "APPROVALS" -> {
                 boolean pending=ChatIntent.normalize(question).contains("cho duyet");if(pending)q.put("filterStatus","SUBMITTED");
-                var p=page(approvals.versions(auth,q));return report(n(p,"total")>0?(pending?"Hồ sơ đang chờ duyệt":"Hồ sơ thời khóa biểu")+" · "+code:pending?"Học kỳ không có hồ sơ đang chờ duyệt.":"Học kỳ chưa có hồ sơ thời khóa biểu.","approvals",items(p).stream().map(r->item("Phiên bản "+r.get("version_no"),label(r.get("status"))+" · "+r.get("section_count")+" lớp")).toList(),n(p,"total"));
+                var p=page(approvals.versions(a,q));return report(n(p,"total")>0?(pending?"Hồ sơ đang chờ duyệt":"Hồ sơ thời khóa biểu")+" · "+code:pending?"Học kỳ không có hồ sơ đang chờ duyệt.":"Học kỳ chưa có hồ sơ thời khóa biểu.","approvals",items(p).stream().map(r->item("Phiên bản "+r.get("version_no"),label(r.get("status"))+" · "+r.get("section_count")+" lớp")).toList(),n(p,"total"));
             }
             case "REQUESTS" -> {
                 var p=page(sessions.requests(a,q));return report(n(p,"total")>0?"Đề nghị đổi lịch · "+code:"Chưa có đề nghị đổi lịch trong học kỳ.","requests",items(p).stream().map(r->item(s(r,"section_code")+" · "+s(r,"subject_name"),shortDate(r.get("session_time"))+" · "+label(r.get("status")))).toList(),n(p,"total"));
@@ -124,7 +120,7 @@ public class ChatService {
                 var rows=sessions.availability(a,n(sem,"id"));return report(rows.isEmpty()?"Bạn chưa khai báo thời gian bận.":"Thời gian bận đã khai báo · "+code,"availability",rows.stream().limit(8).map(r->item((n(r,"day_of_week")==7?"Chủ nhật":"Thứ "+(n(r,"day_of_week")+1))+" · tiết "+r.get("period_from")+"–"+r.get("period_to"),"BUSY".equals(r.get("kind"))?"Bận":"Hạn chế xếp")).toList(),rows.size());
             }
             case "STATS" -> {
-                var stats=page(reads.stats(auth,s(sem,"id")));var rooms=items(Map.of("items",stats.get("rooms")));var lecturers=items(Map.of("items",stats.get("lecturers")));var list=new ArrayList<Map<String,Object>>();
+                var stats=page(reads.stats(a,s(sem,"id")));var rooms=items(Map.of("items",stats.get("rooms")));var lecturers=items(Map.of("items",stats.get("lecturers")));var list=new ArrayList<Map<String,Object>>();
                 rooms.stream().limit(4).forEach(r->list.add(item("Phòng "+Objects.toString(r.get("code"),"chưa gán"),r.get("sessions")+" buổi · "+r.get("periods")+" tiết")));
                 lecturers.stream().limit(4).forEach(r->list.add(item("Giảng viên "+r.get("code"),r.get("sessions")+" buổi · "+r.get("periods")+" tiết")));
                 return report(list.isEmpty()?"Chưa có lịch công bố để tổng hợp.":"Mức sử dụng theo lịch công bố · "+code,"statistics",list,rooms.size()+lecturers.size());

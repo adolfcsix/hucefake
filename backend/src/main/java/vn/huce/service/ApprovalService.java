@@ -175,4 +175,14 @@ public class ApprovalService {
     public Object publish(Accounts.Actor actor,long id){
         var a=approval(id);if("PENDING".equals(a.get("status"))){decide(actor,a,Map.of("decision","APPROVED"));a=approval(id);}return apply(actor,a);
     }
+
+    @org.springframework.transaction.annotation.Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
+    public Object versions(Accounts.Actor actor, Map<String,String> q){
+        role(actor,"STAFF","MANAGER");String status=q.get("filterStatus");
+        return db.paged(q,"""
+          SELECT t.*,a.status AS decision_status,a.decision_reason,u.username AS created_by_name
+          FROM timetable_versions t JOIN users u ON u.id=t.created_by LEFT JOIN approval_requests a ON a.id=t.approval_request_id
+          WHERE t.semester_id=? AND (?::text IS NULL OR t.status=?)
+          """,Arrays.asList(id(q.get("semesterId")),status,status),"version_no DESC,id DESC");
+    }
 }
