@@ -5,6 +5,8 @@ import java.time.LocalDateTime;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Repository;
@@ -13,6 +15,8 @@ import vn.huce.model.SessionRequestStatus;
 import vn.huce.model.SessionRequestSnapshot;
 import vn.huce.model.SessionRequestResolution;
 import vn.huce.model.SessionAdjustmentSnapshot;
+import vn.huce.model.SessionLecturerScope;
+import vn.huce.model.SemesterDateRange;
 import vn.huce.exception.ApiFailure;
 
 import static vn.huce.repository.SessionQueries.STAFF_IDS;
@@ -48,8 +52,10 @@ public class SessionChangeRepository {
         return store.exists("SELECT 1 FROM session_exceptions WHERE session_id=?", sessionId);
     }
 
-    public Map<String, Object> semesterDates(long semesterId) {
-        return store.need("SELECT start_date,end_date FROM semesters WHERE id=?", semesterId);
+    public SemesterDateRange semesterDates(long semesterId) {
+        return require(store.jdbc().query("SELECT start_date,end_date FROM semesters WHERE id=?",
+                (rs, row) -> new SemesterDateRange(rs.getObject("start_date", LocalDate.class),
+                        rs.getObject("end_date", LocalDate.class)), semesterId));
     }
 
     public long insertReplacement(long sectionId, Long staffId, long roomId, int periodFrom, int periodCount,
@@ -112,18 +118,31 @@ public class SessionChangeRepository {
         return store.paged(query, sql, args, "id DESC");
     }
 
-    public Map<String, Object> findSessionWithStaff(long sessionId) {
-        return store.need("SELECT x.*," + STAFF_IDS + " AS staff_ids FROM class_sessions x WHERE x.id=?", sessionId);
+    public SessionLecturerScope findSessionWithStaff(long sessionId) {
+        return require(store.jdbc().query("SELECT x.section_id,x.room_id,x.status," + STAFF_IDS
+                + " AS staff_ids FROM class_sessions x WHERE x.id=?", (rs, row) -> {
+            var array = rs.getArray("staff_ids");
+            var staffIds = new LinkedHashSet<Long>();
+            if (array != null) {
+                try {
+                    staffIds.addAll(Arrays.asList((Long[]) array.getArray()));
+                } finally {
+                    array.free();
+                }
+            }
+            return new SessionLecturerScope(rs.getLong("section_id"), rs.getObject("room_id", Long.class),
+                    rs.getString("status"), staffIds);
+        }, sessionId));
     }
 
     public boolean hasPendingRequest(long sessionId) {
         return store.exists("SELECT 1 FROM session_change_requests WHERE session_id=? AND status='PENDING'", sessionId);
     }
 
-    public Map<String, Object> insertRequest(long sessionId, long staffId, SessionChangeAction action, String reason) {
-        return store.need("""
+    public long insertRequest(long sessionId, long staffId, SessionChangeAction action, String reason) {
+        return require(store.jdbc().query("""
                 INSERT INTO session_change_requests(session_id,staff_id,action,reason) VALUES (?,?,?,?) RETURNING id
-                """, sessionId, staffId, action.name(), reason);
+                """, (rs, row) -> rs.getLong("id"), sessionId, staffId, action.name(), reason));
     }
 
     public SessionRequestSnapshot findRequest(long requestId) {

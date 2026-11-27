@@ -3,6 +3,8 @@ package vn.huce.service;
 import java.util.Map;
 import java.time.LocalDateTime;
 import vn.huce.model.SessionAdjustmentSnapshot;
+import vn.huce.model.SessionLecturerScope;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
@@ -81,10 +83,36 @@ class SessionMutationServiceTest {
     }
 
     @Test
+    void unrelatedLecturerCannotRequestChange() {
+        Actor lecturer = new Actor(5L, "lecturer", "LECTURER", 8L, 3L);
+        when(repository.findSessionWithStaff(9L)).thenReturn(new SessionLecturerScope(
+                10L, 4L, "PLANNED", Set.of(12L, 13L)));
+        assertEquals(403, assertThrows(ApiFailure.class, () -> service.request(lecturer, 9L,
+                Map.of("action", "CANCEL", "reason", "Nghỉ học"))).status());
+        verifyNoInteractions(sections, audit, notifications);
+        verify(repository, never()).insertRequest(anyLong(), anyLong(), any(), anyString());
+    }
+
+    @Test
+    void assignedAssistantMayRequestChangeAndKeepsIdResponse() {
+        Actor lecturer = new Actor(5L, "lecturer", "LECTURER", 8L, 3L);
+        when(repository.findSessionWithStaff(9L)).thenReturn(new SessionLecturerScope(
+                10L, 4L, "PLANNED", Set.of(12L, 8L)));
+        when(sections.findSection(10L)).thenReturn(Map.of("status", "OPEN",
+                "managing_unit_id", 3L, "code", "HP01"));
+        when(repository.insertRequest(9L, 8L, SessionChangeAction.CANCEL, "Nghỉ học")).thenReturn(17L);
+        assertEquals(Map.of("id", 17L), service.request(lecturer, 9L,
+                Map.of("action", "CANCEL", "reason", "Nghỉ học")));
+        verify(audit).record(lecturer, "REQUEST_CHANGE", "class_sessions", 9L);
+        verify(notifications).notifyScopedStaff(3L, 4L,
+                "Có đề nghị đổi lịch cho lớp HP01. Mở Đề nghị đổi lịch để xử lý.");
+    }
+
+    @Test
     void lecturerCannotRequestRoomChange() {
         Actor lecturer = new Actor(5L, "lecturer", "LECTURER", 8L, 3L);
-        when(repository.findSessionWithStaff(9L)).thenReturn(Map.of("staff_ids", new Long[]{8L},
-                "section_id", 10L, "status", "PLANNED"));
+        when(repository.findSessionWithStaff(9L)).thenReturn(new SessionLecturerScope(
+                10L, null, "PLANNED", Set.of(8L)));
         when(sections.findSection(10L)).thenReturn(Map.of("status", "OPEN"));
         assertEquals(400, assertThrows(ApiFailure.class, () -> service.request(lecturer, 9L,
                 Map.of("action", "ROOM_CHANGE", "reason", "Đổi phòng"))).status());
