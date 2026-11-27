@@ -8,6 +8,9 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
+import vn.huce.dto.SectionIdResponse;
+import vn.huce.model.SectionSemester;
+import vn.huce.model.SectionSubject;
 import vn.huce.model.SectionDraft;
 import vn.huce.repository.AuditRepository;
 import vn.huce.repository.SectionRepository;
@@ -58,18 +61,18 @@ public class SectionService {
         return section;
     }
 
-    public SectionDraft values(Map<String, Object> semester, Map<String, Object> subject,
+    public SectionDraft values(SectionSemester semester, SectionSubject subject,
                                Map<String, Object> input) {
-        if (!"ACTIVE".equals(semester.get("status")) || !"ACTIVE".equals(subject.get("status"))) {
+        if (!"ACTIVE".equals(semester.status()) || !"ACTIVE".equals(subject.status())) {
             throw invalid("Học kỳ và học phần phải đang hoạt động.");
         }
         LocalDate startDate = LocalDate.parse(date(input.get("startDate")));
         LocalDate endDate = LocalDate.parse(date(input.get("endDate")));
-        if (startDate.isAfter(endDate) || startDate.isBefore(LocalDate.parse(s(semester, "start_date")))
-                || endDate.isAfter(LocalDate.parse(s(semester, "end_date")))) {
+        if (startDate.isAfter(endDate) || startDate.isBefore(semester.startDate())
+                || endDate.isAfter(semester.endDate())) {
             throw invalid("Khoảng ngày phải nằm trong học kỳ.");
         }
-        return new SectionDraft(n(semester, "id"), n(subject, "id"),
+        return new SectionDraft(semester.id(), subject.id(),
                 text(input.get("code"), 40).toUpperCase(Locale.ROOT),
                 number(input.get("capacity"), 1, 10000),
                 number(input.get("sessionsPerWeek"), 1, 6),
@@ -79,9 +82,9 @@ public class SectionService {
     }
 
     public SectionDraft form(Actor actor, Map<String, Object> input) {
-        Map<String, Object> semester = sections.findSemester(id(input.get("semesterId")));
-        Map<String, Object> subject = sections.findSubject(id(input.get("subjectId")));
-        unit(actor, subject.get("managing_unit_id"));
+        SectionSemester semester = sections.findSemester(id(input.get("semesterId")));
+        SectionSubject subject = sections.findSubject(id(input.get("subjectId")));
+        unit(actor, subject.managingUnitId());
         return values(semester, subject, input);
     }
 
@@ -95,17 +98,17 @@ public class SectionService {
                 "startDate", draft.startDate().toString(), "endDate", draft.endDate().toString());
     }
 
-    public Object saveDraft(Actor actor, Map<String, Object> input) {
+    public SectionIdResponse saveDraft(Actor actor, Map<String, Object> input) {
         role(actor, "STAFF");
         return create(actor, form(actor, input));
     }
 
-    public Object create(Actor actor, SectionDraft draft) {
+    public SectionIdResponse create(Actor actor, SectionDraft draft) {
         role(actor, "STAFF");
         checkNewDraft(draft);
-        Map<String, Object> row = sections.insertDraft(draft, actor.id());
-        audit.record(actor, "CREATE", "course_sections", n(row, "id"));
-        return row;
+        long sectionId = sections.insertDraft(draft, actor.id());
+        audit.record(actor, "CREATE", "course_sections", sectionId);
+        return new SectionIdResponse(sectionId);
     }
 
     private void checkNewDraft(SectionDraft draft) {

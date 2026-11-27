@@ -12,6 +12,10 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
+import vn.huce.dto.SectionIdResponse;
+import vn.huce.dto.SectionImportResponse;
+import vn.huce.model.SectionSemester;
+import vn.huce.model.SectionSubject;
 import vn.huce.model.PatternDraft;
 import vn.huce.model.SectionDraft;
 import vn.huce.repository.AuditRepository;
@@ -38,10 +42,10 @@ public class SectionMutationService {
     }
 
     // Write operations participate in MutationService's transaction and advisory lock.
-    public Object importSections(Actor actor, Map<String, Object> input) {
+    public SectionImportResponse importSections(Actor actor, Map<String, Object> input) {
         role(actor, "STAFF");
-        Map<String, Object> semester = repository.findSemester(id(input.get("semesterId")));
-        sections.unlocked(n(semester, "id"));
+        SectionSemester semester = repository.findSemester(id(input.get("semesterId")));
+        sections.unlocked(semester.id());
         if (!(input.get("rows") instanceof List<?> rows) || rows.isEmpty() || rows.size() > 200) {
             throw invalid("Mỗi tệp cần có từ 1 đến 200 lớp.");
         }
@@ -54,11 +58,11 @@ public class SectionMutationService {
                 }
                 @SuppressWarnings("unchecked")
                 Map<String, Object> row = (Map<String, Object>) raw;
-                if (!Objects.equals(row.get("semesterCode"), semester.get("code"))) {
+                if (!Objects.equals(row.get("semesterCode"), semester.code())) {
                     throw invalid("Mã học kỳ trong tệp khác học kỳ đang chọn.");
                 }
                 String code = text(row.get("subjectCode"), 40);
-                Map<String, Object> subject = repository.findActiveSubjectByCode(actor.unitId(), code);
+                SectionSubject subject = repository.findActiveSubjectByCode(actor.unitId(), code);
                 if (subject == null) {
                     throw invalid("Mã học phần chưa có hoặc nằm ngoài phạm vi khoa.");
                 }
@@ -68,10 +72,10 @@ public class SectionMutationService {
                         "Dòng dữ liệu " + index + " · " + failure.getMessage(), failure.details());
             }
         }
-        return Map.of("imported", rows.size());
+        return new SectionImportResponse(rows.size());
     }
 
-    public Object update(Actor actor, long sectionId, Map<String, Object> input) {
+    public SectionIdResponse update(Actor actor, long sectionId, Map<String, Object> input) {
         role(actor, "STAFF");
         Map<String, Object> current = sections.editable(actor, sectionId);
         version(input.get("version"), current);
@@ -85,7 +89,7 @@ public class SectionMutationService {
         }
         repository.updateDraft(sectionId, draft);
         audit.record(actor, "UPDATE", "course_sections", sectionId);
-        return Map.of("id", sectionId);
+        return new SectionIdResponse(sectionId);
     }
 
     public Object cancel(Actor actor, long sectionId, String expectedVersion) {

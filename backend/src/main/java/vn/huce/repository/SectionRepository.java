@@ -6,7 +6,11 @@ import java.util.Locale;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
+import vn.huce.exception.ApiFailure;
+import vn.huce.model.SectionSemester;
+import vn.huce.model.SectionSubject;
 import vn.huce.model.SectionDraft;
 
 import static vn.huce.repository.SectionQueries.PATTERN_SQL;
@@ -14,6 +18,12 @@ import static vn.huce.repository.SectionQueries.SECTION_SQL;
 
 @Repository
 public class SectionRepository {
+    private static final RowMapper<SectionSemester> SEMESTER_MAPPER = (rs, row) ->
+            new SectionSemester(rs.getLong("id"), rs.getString("code"), rs.getString("status"),
+                    rs.getObject("start_date", LocalDate.class), rs.getObject("end_date", LocalDate.class));
+    private static final RowMapper<SectionSubject> SUBJECT_MAPPER = (rs, row) ->
+            new SectionSubject(rs.getLong("id"), rs.getString("code"), rs.getString("name"),
+                    rs.getString("status"), rs.getObject("managing_unit_id", Long.class));
     private final SqlStore store;
 
     public SectionRepository(SqlStore store) {
@@ -44,12 +54,23 @@ public class SectionRepository {
         return store.need(SECTION_SQL + " WHERE c.id=?", sectionId);
     }
 
-    public Map<String, Object> findSemester(long semesterId) {
-        return store.need("SELECT * FROM semesters WHERE id=?", semesterId);
+    public SectionSemester findSemester(long semesterId) {
+        return require(store.jdbc().query(
+                "SELECT id,code,status,start_date,end_date FROM semesters WHERE id=?",
+                SEMESTER_MAPPER, semesterId));
     }
 
-    public Map<String, Object> findSubject(long subjectId) {
-        return store.need("SELECT * FROM subjects WHERE id=?", subjectId);
+    public SectionSubject findSubject(long subjectId) {
+        return require(store.jdbc().query(
+                "SELECT id,code,name,status,managing_unit_id FROM subjects WHERE id=?",
+                SUBJECT_MAPPER, subjectId));
+    }
+
+    private static <T> T require(List<T> rows) {
+        if (rows.isEmpty()) {
+            throw new ApiFailure(404, "NOT_FOUND", "Không tìm thấy dữ liệu.");
+        }
+        return rows.getFirst();
     }
 
     public boolean codeExists(long semesterId, String code) {
@@ -57,21 +78,23 @@ public class SectionRepository {
                 semesterId, code);
     }
 
-    public Map<String, Object> insertDraft(SectionDraft draft, long creatorId) {
-        return store.need("""
+    public long insertDraft(SectionDraft draft, long creatorId) {
+        return require(store.jdbc().query("""
                 INSERT INTO course_sections(semester_id,subject_id,code,capacity,sessions_per_week,
                     periods_per_session,required_room_type,start_date,end_date,created_by)
                 VALUES (?,?,?,?,?,?,?,?,?,?) RETURNING id
-                """, draft.semesterId(), draft.subjectId(), draft.code(), draft.capacity(),
-                draft.sessionsPerWeek(), draft.periodsPerSession(), draft.requiredRoomType(),
-                Date.valueOf(draft.startDate()), Date.valueOf(draft.endDate()), creatorId);
+                """, (rs, row) -> rs.getLong("id"), draft.semesterId(), draft.subjectId(),
+                draft.code(), draft.capacity(), draft.sessionsPerWeek(), draft.periodsPerSession(),
+                draft.requiredRoomType(), Date.valueOf(draft.startDate()),
+                Date.valueOf(draft.endDate()), creatorId));
     }
 
-    public Map<String, Object> findActiveSubjectByCode(Long unitId, String code) {
-        return store.one("""
-                SELECT * FROM subjects WHERE managing_unit_id=? AND status='ACTIVE'
+    public SectionSubject findActiveSubjectByCode(Long unitId, String code) {
+        List<SectionSubject> rows = store.jdbc().query("""
+                SELECT id,code,name,status,managing_unit_id FROM subjects WHERE managing_unit_id=? AND status='ACTIVE'
                 AND (code=? OR code=?) ORDER BY CASE WHEN code=? THEN 0 ELSE 1 END LIMIT 1
-                """, unitId, code, code.toUpperCase(Locale.ROOT), code);
+                """, SUBJECT_MAPPER, unitId, code, code.toUpperCase(Locale.ROOT), code);
+        return rows.isEmpty() ? null : rows.getFirst();
     }
 
     public boolean hasIncompatiblePatterns(long sectionId, SectionDraft draft) {

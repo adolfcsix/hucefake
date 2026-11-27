@@ -1,6 +1,8 @@
 package vn.huce.service;
 
+import java.time.LocalDate;
 import java.util.List;
+import vn.huce.model.SectionSemester;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import vn.huce.Accounts.Actor;
@@ -43,7 +45,8 @@ class SectionMutationServiceTest {
 
     @Test
     void invalidImportIsRejectedBeforeCreatingSections() {
-        when(repository.findSemester(4L)).thenReturn(Map.of("id", 4L, "code", "HK1"));
+        when(repository.findSemester(4L)).thenReturn(new SectionSemester(4L, "HK1", "ACTIVE",
+                LocalDate.of(2026, 9, 1), LocalDate.of(2026, 12, 31)));
         assertThrows(ApiFailure.class, () -> service.importSections(staff,
                 Map.of("semesterId", 4L, "rows", List.of(Map.of("semesterCode", "HK2")))));
         verify(sections, never()).create(any(), any());

@@ -132,7 +132,7 @@ public class ProposalService {
         var normalized = sections.previewDraft(actor, form);
         var subject = sectionRepository.findSubject(id(normalized.get("subjectId")));
         Map<String, Object> details = new LinkedHashMap<>(normalized);
-        details.put("subject", subject.get("code") + " · " + subject.get("name"));
+        details.put("subject", subject.code() + " · " + subject.name());
         return new Preview(normalized, null, details);
     }
 
@@ -185,7 +185,7 @@ public class ProposalService {
                 result.put("id", proposal.get("run_id"));
             }
             case DRAFT -> {
-                result.putAll((Map<String, Object>) sections.saveDraft(actor, parameters));
+                result.put("id", sections.saveDraft(actor, parameters).id());
                 result.put("code", parameters.get("code"));
             }
             case READ_NOTICES -> result.put("marked", notifications.markThrough(actor.id(), id(parameters.get("lastId"))));

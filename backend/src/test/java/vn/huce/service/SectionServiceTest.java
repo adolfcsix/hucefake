@@ -6,6 +6,9 @@ import org.junit.jupiter.api.Test;
 import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
 import vn.huce.model.SectionDraft;
+import vn.huce.model.SectionSemester;
+import vn.huce.model.SectionSubject;
+import vn.huce.dto.SectionIdResponse;
 import vn.huce.repository.AuditRepository;
 import vn.huce.repository.SectionRepository;
 
@@ -17,10 +20,9 @@ class SectionServiceTest {
     private final AuditRepository audit = mock(AuditRepository.class);
     private final SectionService service = new SectionService(repository, audit);
     private final Actor staff = new Actor(1L, "staff", "STAFF", 2L, 3L);
-    private final Map<String, Object> semester = Map.of("id", 4L, "status", "ACTIVE",
-            "start_date", "2026-09-01", "end_date", "2026-12-31");
-    private final Map<String, Object> subject = Map.of("id", 5L, "status", "ACTIVE",
-            "managing_unit_id", 3L);
+    private final SectionSemester semester = new SectionSemester(4L, "HK1", "ACTIVE",
+            LocalDate.of(2026, 9, 1), LocalDate.of(2026, 12, 31));
+    private final SectionSubject subject = new SectionSubject(5L, "CS", "Computer Science", "ACTIVE", 3L);
 
     private Map<String, Object> input(String start) {
         return Map.of("semesterId", 4L, "subjectId", 5L, "code", " cs01 ",
@@ -56,16 +58,15 @@ class SectionServiceTest {
     void savesAndAuditsDraft() {
         when(repository.findSemester(4L)).thenReturn(semester);
         when(repository.findSubject(5L)).thenReturn(subject);
-        when(repository.insertDraft(any(), eq(1L))).thenReturn(Map.of("id", 9L));
-        assertEquals(Map.of("id", 9L), service.saveDraft(staff, input("2026-09-10")));
+        when(repository.insertDraft(any(), eq(1L))).thenReturn(9L);
+        assertEquals(new SectionIdResponse(9L), service.saveDraft(staff, input("2026-09-10")));
         verify(audit).record(staff, "CREATE", "course_sections", 9L);
     }
 
     @Test
     void staffCannotCreateDraftForAnotherUnit() {
         when(repository.findSemester(4L)).thenReturn(semester);
-        when(repository.findSubject(5L)).thenReturn(Map.of("id", 5L, "status", "ACTIVE",
-                "managing_unit_id", 99L));
+        when(repository.findSubject(5L)).thenReturn(new SectionSubject(5L, "CS", "Computer Science", "ACTIVE", 99L));
         assertEquals(403, assertThrows(ApiFailure.class,
                 () -> service.saveDraft(staff, input("2026-09-10"))).status());
         verify(repository, never()).insertDraft(any(), anyLong());
