@@ -146,7 +146,7 @@ public class GeneticScheduler {
                     }
                 }
             }
-            if (evaluator.busy(slot, Kind.BUSY > 0) {
+            if (evaluator.busy(slot, Kind.BUSY) > 0) {
                 messages.add("Giảng viên bận trong khung tiết.");
             }
             String message = String.join(" ", messages);
