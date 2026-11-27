@@ -1,4 +1,4 @@
-package vn.huce.service;
+package vn.huce.service.chat;
 
 import java.time.LocalDate;
 import java.util.ArrayList;

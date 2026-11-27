@@ -152,7 +152,7 @@ Lặp lệnh setup account cho ba vai trò còn lại với tham số tương �
 
 **Cách không sửa code:** đặt DEMO=false, dùng database riêng. Bốn nút không được render; API demo-login cũng từ chối. Đây là cách khuyến nghị.
 
-**Cách xóa hẳn giao diện:** mở VS Code → frontend → src → main.jsx. Tìm `const demoRoles = [` và xóa toàn bộ khai báo mảng kết thúc tại dấu `]`. Trong function Login, tìm đoạn:
+**Cách xóa hẳn giao diện:** mở VS Code → frontend → src → app → App.jsx. Tìm `const demoRoles = [` và xóa toàn bộ khai báo mảng kết thúc tại dấu `]`. Trong function Login, tìm đoạn:
 ```jsx
 {mode?.demo === true && <section className="demo-accounts" aria-label="Tài khoản dùng thử">
 ```
@@ -319,4 +319,11 @@ Các lệnh trên dành cho hệ thống đã build và PostgreSQL đang chạy.
 
 VS Code: dừng backend, dùng `Remove-Item Env:GEMINI_API_KEY,Env:GEMINI_MODEL -ErrorAction SilentlyContinue` rồi chạy lại Maven. Docker: xóa giá trị hai biến khỏi .env và shell, recreate app theo mục 10.3. Không cần xóa dữ liệu hoặc cài lại thư viện. Khi nghi ngờ lộ khóa, thu hồi/đổi khóa trong AI Studio ngay.
 
-**Vị trí mã nguồn:** `backend/src/main/java/vn/huce/GeminiAdvisor.java` (HTTP, schema, timeout và kiểm tra kết quả), `ChatService.java` (phân loại cục bộ, giới hạn vai trò), `ChatController.java` (API), `frontend/src/HuceChat.jsx` (giao diện), `compose.share.yaml` (biến môi trường). Key chỉ ở backend. CI đã nghiệm thu chatbot cục bộ; chưa có khóa thật để nghiệm thu live Gemini từ môi trường phát triển này. Không có cam kết model mẫu hoạt động trên mọi dự án Google.
+**Vị trí mã nguồn:** `backend/src/main/java/vn/huce/service/chat/GeminiAdvisor.java` (HTTP, schema, timeout và kiểm tra kết quả), `backend/src/main/java/vn/huce/service/chat/ChatService.java` (phân loại cục bộ, giới hạn vai trò), `backend/src/main/java/vn/huce/controller/ChatController.java` (API), `frontend/src/features/chat/HuceChat.jsx` (giao diện), `compose.share.yaml` (biến môi trường). Key chỉ ở backend. CI đã nghiệm thu chatbot cục bộ; chưa có khóa thật để nghiệm thu live Gemini từ môi trường phát triển này. Không có cam kết model mẫu hoạt động trên mọi dự án Google.
+
+
+### Cấu trúc frontend React
+
+`frontend/src/main.jsx` chỉ khởi động React. Phần ứng dụng, điều hướng và đăng nhập nằm trong `src/app/`. Màn hình nghiệp vụ nằm trong `src/features/` theo danh mục, chatbot, lớp học phần, sinh viên, thời khóa biểu và quy trình. Component dùng chung nằm trong `src/components/`; hook trong `src/hooks/`; gọi API trong `src/services/`; hằng số, tiện ích, ảnh và CSS nằm trong các thư mục tương ứng. Các bài kiểm thử nằm ngoài mã nguồn ứng dụng.
+
+Backend Spring Boot sử dụng các package controller, service, repository, dto, security, config, validation, exception và cli. Xem `backend/README.md` để biết trách nhiệm từng tầng và phần cải tổ chưa hoàn tất.

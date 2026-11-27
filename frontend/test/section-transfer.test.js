@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { decodeDraftFile, encodeDraftCsv, encodeDraftJson } from '../src/SectionTransfer.js'
+import { decodeDraftFile, encodeDraftCsv, encodeDraftJson } from '../src/features/sections/SectionTransfer.js'
 
 const draft={semesterCode:'2026-2027.1',subjectCode:'KTPM',code:'=Mã "lớp",01',capacity:40,
   sessionsPerWeek:1,periodsPerSession:2,requiredRoomType:'LECTURE',startDate:'2026-09-01',endDate:'2026-12-01'}

@@ -1,4 +1,7 @@
-import { days, formatDate, Tag, values } from './ui'
+import { days } from '../../constants/domain'
+import { formatDate } from '../../utils/dates'
+import { Tag } from '../../components/common/Tag'
+import { values } from '../../utils/forms'
 
 function periodEnd(row) {
   return row.period_from + row.period_count

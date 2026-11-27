@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { api } from './api'
-import { ErrorBox, Field, Select, roomTypes, useFetch } from './ui'
+import { api } from '../../services/api'
+import { ErrorBox } from '../../components/common/ErrorBox'
+import { Field, Select } from '../../components/forms/FormFields'
+import { roomTypes } from '../../constants/domain'
+import { useFetch } from '../../hooks/useFetch'
 
 const topics = {
   STAFF:['Tra lớp nháp','Tạo lớp học phần','Chạy xếp lịch tự động','Hồ sơ chờ duyệt','Đề nghị đổi lịch'],

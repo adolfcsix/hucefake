@@ -1,9 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
-import { api, checkScheduleConflicts, downloadCsv, downloadFile } from './api'
+import { api, checkScheduleConflicts, downloadCsv, downloadFile } from '../../services/api'
 import { PublishedWeek, WeekAgenda } from './Calendar'
 import { makeCalendar } from './CalendarExport'
-import { Pagination, usePagedQuery } from './Pagination'
-import { addCalendarDays as move, builder, codes, days, dayOptions, Editor, ErrorBox, Field, formatDate, numeric, Options, Panel, Select, statuses, Table, Tag, useFetch, values, vietnamToday, WeekGrid } from './ui'
+import { Pagination } from '../../components/common/Pagination'
+import { usePagedQuery } from '../../hooks/usePagedQuery'
+import { addCalendarDays as move, formatDate, vietnamToday } from '../../utils/dates'
+import { builder, codes, numeric, values } from '../../utils/forms'
+import { days, dayOptions, statuses } from '../../constants/domain'
+import { Editor } from '../../components/forms/Editor'
+import { ErrorBox } from '../../components/common/ErrorBox'
+import { Field, Options, Select } from '../../components/forms/FormFields'
+import { Panel } from '../../components/common/Panel'
+import { Table } from '../../components/common/Table'
+import { Tag } from '../../components/common/Tag'
+import { useFetch } from '../../hooks/useFetch'
+import { WeekGrid } from './WeekGrid'
 
 const same = (a, b) => Number(a) === Number(b)
 const toDate = value => new Date(value + 'T12:00:00Z')

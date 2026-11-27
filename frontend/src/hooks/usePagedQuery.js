@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { api } from './api'
-import { useFetch } from './ui'
+import { api } from '../services/api'
+import { useFetch } from './useFetch'
 
 export function usePagedQuery(path, revision, pageSize = 25) {
   const [selection, setSelection] = useState(null)
@@ -16,14 +16,3 @@ export function usePagedQuery(path, revision, pageSize = 25) {
   return { data, total, error:result.error, page, lastPage, move:next=>setSelection({ path,page:next }) }
 }
 
-export function Pagination({ query, itemName }) {
-  const { data,total,page,lastPage,move } = query
-  if (!total || lastPage === 1) return null
-  return <nav className="table-pagination" aria-label={'Phân trang ' + itemName}>
-    <p aria-live="polite">Trang {page}/{lastPage} · {total} {itemName}</p>
-    <div className="button-row">
-      <button type="button" className="quiet" disabled={!data || page<=1} onClick={()=>move(page-1)}>Trang trước</button>
-      <button type="button" className="quiet" disabled={!data || page>=lastPage} onClick={()=>move(page+1)}>Trang sau</button>
-    </div>
-  </nav>
-}

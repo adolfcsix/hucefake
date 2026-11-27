@@ -2,10 +2,10 @@ package vn.huce.controller;
 
 import vn.huce.Accounts;
 import vn.huce.exception.ApiFailure;
-import vn.huce.service.ChatService;
-import vn.huce.service.GeminiAdvisor;
+import vn.huce.service.chat.ChatService;
+import vn.huce.service.chat.GeminiAdvisor;
 import vn.huce.service.MutationService;
-import vn.huce.service.ProposalService;
+import vn.huce.service.chat.ProposalService;
 
 import static vn.huce.validation.Inputs.*;
 import java.util.*;

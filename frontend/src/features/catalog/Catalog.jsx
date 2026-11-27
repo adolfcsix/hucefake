@@ -1,6 +1,13 @@
 import { useState } from 'react'
-import { api } from './api'
-import { builder, codes, Editor, Field, formatDate, numeric, Options, Panel, roomTypes, Select, Table, Tag, vietnamToday } from './ui'
+import { api } from '../../services/api'
+import { builder, codes, numeric } from '../../utils/forms'
+import { Editor } from '../../components/forms/Editor'
+import { Field, Options, Select } from '../../components/forms/FormFields'
+import { formatDate, vietnamToday } from '../../utils/dates'
+import { Panel } from '../../components/common/Panel'
+import { roomTypes } from '../../constants/domain'
+import { Table } from '../../components/common/Table'
+import { Tag } from '../../components/common/Tag'
 
 const roomStatuses = { ACTIVE:'Hoạt động', MAINTENANCE:'Bảo trì', INACTIVE:'Ngừng sử dụng' }
 const shifts = { MORNING:'Ca sáng', AFTERNOON:'Ca chiều', EVENING:'Ca tối' }

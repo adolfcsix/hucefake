@@ -1,6 +1,15 @@
 import { useEffect, useState } from 'react'
-import { api } from './api'
-import { builder, days, dayOptions, Editor, ErrorBox, Field, numeric, Options, Panel, Select, statuses, Table, Tag, useFetch, WeekGrid } from './ui'
+import { api } from '../../services/api'
+import { builder, numeric } from '../../utils/forms'
+import { days, dayOptions, statuses } from '../../constants/domain'
+import { Editor } from '../../components/forms/Editor'
+import { ErrorBox } from '../../components/common/ErrorBox'
+import { Field, Options, Select } from '../../components/forms/FormFields'
+import { Panel } from '../../components/common/Panel'
+import { Table } from '../../components/common/Table'
+import { Tag } from '../../components/common/Tag'
+import { useFetch } from '../../hooks/useFetch'
+import { WeekGrid } from '../timetable/WeekGrid'
 
 const defaults = { population:100, generations:500, crossover:0.9, mutation:0.02, seed:42 }
 const activeRun = status => status === 'QUEUED' || status === 'RUNNING'

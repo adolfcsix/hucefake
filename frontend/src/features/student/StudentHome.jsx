@@ -1,8 +1,11 @@
 import { useState } from 'react'
-import { api } from './api'
-import { sessionInstant } from './CalendarExport'
-import { SessionEditor } from './Timetable'
-import { addCalendarDays, ErrorBox, formatDate, Panel, useFetch, vietnamToday } from './ui'
+import { api } from '../../services/api'
+import { sessionInstant } from '../timetable/CalendarExport'
+import { SessionEditor } from '../timetable/Timetable'
+import { addCalendarDays, formatDate, vietnamToday } from '../../utils/dates'
+import { ErrorBox } from '../../components/common/ErrorBox'
+import { Panel } from '../../components/common/Panel'
+import { useFetch } from '../../hooks/useFetch'
 
 const details = row => [row.section_code, row.room_code || 'Chưa gán phòng'].join(' · ')
 const hours = row => row.start_at.slice(11,16) + ' – ' + row.end_at.slice(11,16)

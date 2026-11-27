@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { makeCalendar } from '../src/CalendarExport.js'
+import { makeCalendar } from '../src/features/timetable/CalendarExport.js'
 
 const lesson = {
   id:13, section_code:'CSDL.01', status:'PLANNED', room_code:'H1;301', staff_code:'GV01',

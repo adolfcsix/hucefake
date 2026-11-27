@@ -31,3 +31,5 @@ Luồng chính: React → Controller → Service → Repository → PostgreSQL. 
 `SqlStore` là lớp tương thích cho các truy vấn động cũ. Một số service vẫn chứa SQL và các projection kiểu Map; các phần này cần được chuyển dần sang repository theo nghiệp vụ và kiểu dữ liệu cụ thể, giữ nguyên hợp đồng API và kiểm thử hồi quy. Không coi việc chia package là đã hoàn tất toàn bộ cải tổ.
 
 Kiểm tra nhanh (từ thư mục backend): `node tests/api-surface.mjs` kiểm kê REST API và kiểm tra ranh giới kiến trúc; `mvn clean verify` biên dịch và chạy unit test. Kiểm thử PostgreSQL, trình duyệt và đóng gói chạy qua GitHub Actions.
+
+Nhóm nghiệp vụ HUCEChat nằm trong `service/chat/` (nhận diện intent, quyền, khoảng ngày, Gemini, hội thoại và đề xuất); unit test tương ứng nằm trong `src/test/java/vn/huce/service/chat/`.

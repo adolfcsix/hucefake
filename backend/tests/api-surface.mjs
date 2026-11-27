@@ -42,3 +42,8 @@ for (const name of javaFiles) {
 assert.deepEqual(javaFiles.filter(name => !name.includes('/') && !name.includes('\\')).sort(),
   ['Accounts.java', 'HuceApplication.java'])
 console.log('PASS: package layout, controller boundaries, reverse dependency and exception placement checks')
+
+for (const name of ['ChatIntent', 'ChatDateRangeParser', 'ChatPermissions', 'ChatService', 'GeminiAdvisor', 'ProposalService']) {
+  assert.ok(existsSync(new URL('service/chat/' + name + '.java', root)), name + ' belongs in service/chat')
+}
+console.log('PASS: HUCEChat package organization')

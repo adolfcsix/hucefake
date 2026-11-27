@@ -38,3 +38,16 @@ for(const file of files.filter(p=>/^frontend\/src\/.*\.(js|jsx)$/.test(p))){
 }
 assert.ok(references>30&&imports>15,'Unexpectedly low coverage')
 console.log('PASS: tracked-file hygiene, blank template, Vite manifest/lock consistency, '+imports+' relative imports, '+references+' static API path references')
+
+
+const sourceRoot = 'frontend/src/'
+const frontendSource = files.filter(p => p.startsWith(sourceRoot))
+assert.deepEqual(frontendSource.filter(p => !p.slice(sourceRoot.length).includes('/')), ['frontend/src/main.jsx'],
+  'Keep only the React entry point at the source root')
+for (const path of frontendSource) {
+  const category = path.slice(sourceRoot.length).split('/')[0]
+  if (category === 'main.jsx') continue
+  assert.ok(['app','assets','components','constants','features','hooks','services','styles','utils'].includes(category),
+    path + ' belongs in a named source folder')
+}
+console.log('PASS: frontend source folder organization')

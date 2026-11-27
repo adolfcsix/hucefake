@@ -16,12 +16,12 @@ public class GeneticScheduler {
     private final SchedulingService scheduling;
     private final SqlStore db;
     GeneticScheduler(SchedulingService scheduling,SqlStore db){this.scheduling=scheduling;this.db=db;}
-    record Parameters(int population,int generations,double crossover,double mutation,int seed){}
+    public record Parameters(int population,int generations,double crossover,double mutation,int seed){}
     record Input(Context ctx,List<List<Slot>> genes){}
     record Score(List<Slot> slots,int hard,double soft){}
     record Progress(int generation,int hard,double soft){}
     record Outcome(Score score,int generation,List<String> notes){}
-    static Parameters parameters(Object raw){
+    public static Parameters parameters(Object raw){
         if(raw!=null&&!(raw instanceof Map<?,?>))throw invalid("Tham số không hợp lệ.");
         Map<?,?> p=raw==null?Map.of():(Map<?,?>)raw;
         return new Parameters((int)number(or(p,"population",100),8,200),(int)number(or(p,"generations",500),1,1000),rate(or(p,"crossover",.9)),rate(or(p,"mutation",.02)),(int)number(or(p,"seed",new java.security.SecureRandom().nextInt()),Integer.MIN_VALUE,Integer.MAX_VALUE));
