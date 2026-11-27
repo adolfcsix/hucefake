@@ -162,10 +162,6 @@ public class SchedulingService {
         return ScheduleConstraints.issue(rule, message, section);
     }
 
-    public Map<String, Object> pairIssue(Context context, Slot other, String rule, String message) {
-        return ScheduleConstraints.pairIssue(context, other, rule, message);
-    }
-
     public List<Map<String, Object>> pair(Context context, Slot first, Slot second) {
         return ScheduleConstraints.pair(context, first, second);
     }

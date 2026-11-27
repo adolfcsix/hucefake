@@ -169,3 +169,7 @@ assert.match(setupSource, /new RuntimeMode\(new RuntimeModeRepository\(/)
 assert.doesNotMatch(setupSource, /pg_advisory_xact_lock/)
 assert.match(setupSource, /new MutationRepository\(db\.jdbc\(\)\)\.lock\(\)/)
 console.log('PASS: CLI shares runtime-mode protection and mutation lock')
+
+const sqlAdapterSource = readFileSync(new URL('repository/SqlStore.java', root), 'utf8')
+assert.doesNotMatch(sqlAdapterSource, /\bAuditRepository\b|\bvoid\s+audit\s*\(/)
+console.log('PASS: SqlStore no longer owns audit dependencies')

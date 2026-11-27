@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
-import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
 import vn.huce.validation.Inputs;
 
@@ -18,17 +17,8 @@ import vn.huce.validation.Inputs;
 @Repository
 public class SqlStore {
     private final JdbcTemplate jdbc;
-    private final AuditRepository auditRepository;
-
-    // The setup CLI constructs this adapter outside the Spring container.
     public SqlStore(JdbcTemplate jdbc) {
-        this(jdbc, new AuditRepository(jdbc));
-    }
-
-    @org.springframework.beans.factory.annotation.Autowired
-    public SqlStore(JdbcTemplate jdbc, AuditRepository auditRepository) {
         this.jdbc = jdbc;
-        this.auditRepository = auditRepository;
     }
 
     public JdbcTemplate jdbc() {
@@ -75,10 +65,6 @@ public class SqlStore {
 
     public boolean exists(String sql, Object... args) {
         return one(sql, args) != null;
-    }
-
-    public void audit(Actor actor, String action, String type, long id) {
-        auditRepository.record(actor, action, type, id);
     }
 
     public Object paged(Map<String, String> query, String sql, List<Object> args, String order) {

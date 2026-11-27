@@ -159,3 +159,8 @@ SetupCommand tạo RuntimeModeRepository và MutationRepository từ JdbcTemplat
 ### Kiểm tra tương thích trước/sau cải tổ
 
 Đối chiếu với main gốc affdb91: SqlStore/Inputs (ánh xạ JDBC, phân trang, giới hạn số, ngày, version, phạm vi khoa), Accounts/AccountService (BCrypt, dummy hash, trạng thái và hồ sơ), ApiFailure/GlobalExceptionHandler (HTTP status, mã lỗi, request_id), ChatIntent/ChatPermissions/ChatDateRangeParser (thứ tự nhận diện, quyền, khoảng ngày). Kiểm tra truy vấn môn học cho biểu mẫu nháp vẫn chỉ lấy id/code/name của môn ACTIVE thuộc khoa. Bổ sung 12 kiểm thử hồi quy cho Inputs, AccountService và GlobalExceptionHandler; không thay đổi hành vi sản xuất trong đợt này. Các kết quả đối chiếu tĩnh không thay thế kiểm thử CI.
+
+
+### Loại bỏ cầu nối cũ sau cải tổ
+
+Rà soát các repository, service, controller, CLI và toàn bộ 31 file Java test tại d08205e. Không còn nơi gọi SqlStore.audit(); audit nghiệp vụ sử dụng AuditRepository.record. Bỏ phương thức cũ, dependency AuditRepository và constructor thừa trong SqlStore. Bỏ wrapper SchedulingService.pairIssue không còn caller; ScheduleConstraints vẫn giữ xử lý nội bộ. Bổ sung bốn kiểm thử hợp đồng truy vấn, phân trang và mã lỗi. Giữ SqlStore vì các projection và CLI vẫn cần JDBC adapter; không xóa các dependency Maven đang phục vụ runtime.
