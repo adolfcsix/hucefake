@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
+import vn.huce.dto.SectionDraftPreview;
 import vn.huce.dto.SectionIdResponse;
 import vn.huce.model.SectionSemester;
 import vn.huce.model.SectionSubject;
@@ -88,14 +89,11 @@ public class SectionService {
         return values(semester, subject, input);
     }
 
-    public Map<String, Object> previewDraft(Actor actor, Map<String, Object> input) {
+    public SectionDraftPreview previewDraft(Actor actor, Map<String, Object> input) {
         role(actor, "STAFF");
         SectionDraft draft = form(actor, input);
         checkNewDraft(draft);
-        return Map.of("semesterId", draft.semesterId(), "subjectId", draft.subjectId(),
-                "code", draft.code(), "capacity", draft.capacity(), "sessionsPerWeek", draft.sessionsPerWeek(),
-                "periodsPerSession", draft.periodsPerSession(), "requiredRoomType", draft.requiredRoomType(),
-                "startDate", draft.startDate().toString(), "endDate", draft.endDate().toString());
+        return SectionDraftPreview.from(draft);
     }
 
     public SectionIdResponse saveDraft(Actor actor, Map<String, Object> input) {

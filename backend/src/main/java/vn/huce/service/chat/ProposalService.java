@@ -130,8 +130,9 @@ public class ProposalService {
         draft.forEach((key, value) -> form.put(key.toString(), value));
         form.put("semesterId", semester.get("id"));
         var normalized = sections.previewDraft(actor, form);
-        var subject = sectionRepository.findSubject(id(normalized.get("subjectId")));
-        Map<String, Object> details = new LinkedHashMap<>(normalized);
+        var subject = sectionRepository.findSubject(normalized.subjectId());
+        // Adapt the typed preview only at the heterogeneous proposal response boundary.
+        Map<String, Object> details = json.convertValue(normalized, new TypeReference<Map<String, Object>>() {});
         details.put("subject", subject.code() + " · " + subject.name());
         return new Preview(normalized, null, details);
     }
