@@ -121,8 +121,8 @@ jobs:
         run: |
           python3 backend/tests/test-runtime-inventory.py
           mkdir -p "$RUNNER_TEMP/huce-maven-inventory"
-          mvn -B -f backend/pom.xml org.apache.maven.plugins:maven-dependency-plugin:3.8.1:tree -Dscope=runtime -DoutputType=json -DoutputFile="$RUNNER_TEMP/huce-maven-inventory/dependency-tree.json"
-          python3 backend/tests/runtime-inventory.py "$RUNNER_TEMP/huce-maven-inventory/dependency-tree.json" "$RUNNER_TEMP/huce-ci-package/huce.jar" "$RUNNER_TEMP/huce-maven-inventory/huce.cdx.json"
+          mvn -B -f backend/pom.xml org.apache.maven.plugins:maven-dependency-plugin:3.8.1:copy-dependencies -DincludeScope=runtime -Dmdep.useRepositoryLayout=true -DoutputDirectory="$RUNNER_TEMP/huce-resolved-runtime"
+          python3 backend/tests/runtime-inventory.py "$RUNNER_TEMP/huce-resolved-runtime" "$RUNNER_TEMP/huce-ci-package/huce.jar" "$RUNNER_TEMP/huce-maven-inventory/huce.cdx.json"
       - uses: actions/upload-artifact@v4
         with:
           name: huce-maven-inventory

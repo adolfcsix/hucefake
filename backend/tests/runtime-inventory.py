@@ -1,4 +1,4 @@
-"""Reconcile resolved Maven runtime dependencies with the verified Boot JAR."""
+"""Reconcile resolved Maven runtime JARs and SHA-256 with the verified Boot JAR."""
 import hashlib
 import json
 import pathlib
@@ -7,55 +7,63 @@ import zipfile
 from urllib.parse import quote
 
 
-def runtime_components(tree):
+def component(group, artifact, version, classifier=""):
+    purl = "pkg:maven/" + quote(group, safe="") + "/" + quote(artifact, safe="") + "@" + quote(version, safe="")
+    if classifier:
+        purl += "?classifier=" + quote(classifier, safe="")
+    return {"type": "library", "group": group, "name": artifact, "version": version, "purl": purl}
+
+
+def runtime_components(root):
     components = {}
-    def visit(node):
-        for dependency in node.get("children", []):
-            if dependency.get("scope") not in ("compile", "runtime"):
-                continue
-            assert dependency["type"] == "jar", "Unexpected runtime artifact type"
-            group, artifact, version = (dependency[key] for key in ("groupId", "artifactId", "version"))
-            classifier = dependency.get("classifier", "")
-            filename = artifact + "-" + version + ("-" + classifier if classifier else "") + ".jar"
-            purl = "pkg:maven/" + quote(group, safe="") + "/" + quote(artifact, safe="") + "@" + quote(version, safe="")
-            if classifier:
-                purl += "?classifier=" + quote(classifier, safe="")
-            component = {"type": "library", "group": group, "name": artifact,
-                         "version": version, "purl": purl}
-            assert filename not in components or components[filename] == component, "Ambiguous JAR name: " + filename
-            components[filename] = component
-            visit(dependency)
-    visit(tree)
+    for jar in sorted(root.rglob("*.jar")):
+        parts = jar.relative_to(root).parts
+        assert len(parts) >= 4, "Invalid Maven repository path: " + str(jar)
+        group, artifact, version = ".".join(parts[:-3]), parts[-3], parts[-2]
+        prefix = artifact + "-" + version
+        stem = jar.stem
+        assert stem == prefix or stem.startswith(prefix + "-"), "Invalid Maven artifact filename: " + jar.name
+        classifier = stem[len(prefix) + 1:] if stem != prefix else ""
+        entry = component(group, artifact, version, classifier)
+        digest = hashlib.sha256(jar.read_bytes()).hexdigest()
+        assert jar.name not in components, "Ambiguous resolved JAR name: " + jar.name
+        components[jar.name] = (entry, digest)
     assert components, "Maven runtime inventory is empty"
     return components
 
 
-def inventory(tree, jar_path):
-    components = runtime_components(tree)
+def inventory(root, jar_path):
+    components = runtime_components(root)
     with zipfile.ZipFile(jar_path) as archive:
-        libraries = {pathlib.PurePosixPath(name).name: name for name in archive.namelist()
-                     if name.startswith("BOOT-INF/lib/") and name.endswith(".jar")}
+        libraries = {}
+        for name in archive.namelist():
+            if name.startswith("BOOT-INF/lib/") and name.endswith(".jar"):
+                filename = pathlib.PurePosixPath(name).name
+                assert filename not in libraries, "Duplicate packaged JAR: " + filename
+                libraries[filename] = name
         missing = sorted(components.keys() - libraries.keys())
-        # Spring Boot adds its own jarmode tools during repackaging.
-        extra = sorted(libraries.keys() - components.keys())
-        for name in extra:
-            prefix = "spring-boot-jarmode-tools-"
-            assert name.startswith(prefix), "Unresolved packaged dependency: " + name
-            version = name[len(prefix):-4]
-            assert version, "Missing jarmode tools version"
-            components[name] = {"type": "library", "group": "org.springframework.boot",
-                                "name": "spring-boot-jarmode-tools", "version": version,
-                                "purl": "pkg:maven/org.springframework.boot/spring-boot-jarmode-tools@" + quote(version, safe="")}
         assert not missing, "Resolved runtime JARs missing from package: " + ", ".join(missing)
-        for name, component in components.items():
-            component["hashes"] = [{"alg": "SHA-256", "content": hashlib.sha256(archive.read(libraries[name])).hexdigest()}]
-        return {"bomFormat": "CycloneDX", "specVersion": "1.5", "version": 1,
-                "components": [components[name] for name in sorted(components)]}
+        result = []
+        for name in sorted(libraries):
+            digest = hashlib.sha256(archive.read(libraries[name])).hexdigest()
+            if name in components:
+                entry, expected_digest = components[name]
+                assert digest == expected_digest, "Packaged JAR differs from resolved dependency: " + name
+            else:
+                # Boot injects its own jarmode tools during repackage, at the Boot version.
+                prefix = "spring-boot-jarmode-tools-"
+                assert name.startswith(prefix), "Unresolved packaged dependency: " + name
+                version = name[len(prefix):-4]
+                assert version and "spring-boot-" + version + ".jar" in components, "Jarmode version does not match Spring Boot"
+                entry = component("org.springframework.boot", "spring-boot-jarmode-tools", version)
+            entry["hashes"] = [{"alg": "SHA-256", "content": digest}]
+            result.append(entry)
+        return {"bomFormat": "CycloneDX", "specVersion": "1.5", "version": 1, "components": result}
 
 
 def main():
-    tree_path, jar_path, output_path = sys.argv[1:]
-    report = inventory(json.loads(pathlib.Path(tree_path).read_text(encoding="utf-8")), jar_path)
+    resolved, jar_path, output_path = sys.argv[1:]
+    report = inventory(pathlib.Path(resolved), jar_path)
     pathlib.Path(output_path).write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print("PASS: " + str(len(report["components"])) + " runtime JARs reconciled with Maven and hashed")
 
