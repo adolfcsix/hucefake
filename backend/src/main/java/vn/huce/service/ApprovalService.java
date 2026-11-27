@@ -16,6 +16,9 @@ import org.springframework.transaction.annotation.Transactional;
 import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
 import vn.huce.dto.ApprovalDecisionRequest;
+import vn.huce.dto.ApprovalDecisionResponse;
+import vn.huce.dto.ApprovalSubmissionResponse;
+import vn.huce.dto.TimetableVersionIdResponse;
 import vn.huce.model.ApprovalSnapshot;
 import vn.huce.model.ApprovalStatus;
 import vn.huce.model.TimetableVersionStatus;
@@ -156,17 +159,18 @@ public class ApprovalService {
         return assess(actor, semesterId).readiness();
     }
 
-    public Object create(Actor actor, long semesterId) {
+    public TimetableVersionIdResponse create(Actor actor, long semesterId) {
         role(actor, "STAFF");
         repository.requireSemester(semesterId);
         if (repository.hasSubmittedVersion(semesterId)) {
             throw state("Học kỳ đang chờ duyệt. Hãy xử lý hồ sơ trước khi chỉnh lịch.");
         }
-        Map<String, Object> existing = repository.findDraft(semesterId, actor.id());
-        return existing != null ? existing : repository.createDraft(semesterId, actor.id());
+        Long existing = repository.findDraft(semesterId, actor.id());
+        long versionId = existing != null ? existing : repository.createDraft(semesterId, actor.id());
+        return new TimetableVersionIdResponse(versionId);
     }
 
-    public Object submit(Actor actor, long versionId) {
+    public ApprovalSubmissionResponse submit(Actor actor, long versionId) {
         role(actor, "STAFF");
         Map<String, Object> version = repository.findVersion(versionId);
         if (n(version, "created_by") != actor.id()) {
@@ -194,7 +198,7 @@ public class ApprovalService {
         audit.record(actor, "SUBMIT", "timetable_versions", versionId);
         notifications.notifyManagers("Thời khóa biểu bản " + version.get("version_no")
                 + " đang chờ duyệt. Mở Duyệt thời khóa biểu để xem phương án.");
-        return Map.of("approvalId", approvalId);
+        return new ApprovalSubmissionResponse(approvalId);
     }
 
     private void rejectIncomplete(Map<String, Object> ready) {
@@ -221,7 +225,7 @@ public class ApprovalService {
                 "Cần hoàn tất phân công và xếp đủ các buổi trước khi gửi duyệt.", ready);
     }
 
-    public Object decide(Actor actor, Map<String, Object> approval, Map<String, Object> body) {
+    public ApprovalDecisionResponse decide(Actor actor, Map<String, Object> approval, Map<String, Object> body) {
         role(actor, "MANAGER");
         if (n(approval, "requested_by") == actor.id()) {
             forbidden();
@@ -243,7 +247,7 @@ public class ApprovalService {
             notifications.notifyUser(n(approval, "requested_by"), "Thời khóa biểu được trả lại. Lý do: " + reason);
         }
         audit.record(actor, decision.name(), "approval_requests", approvalId);
-        return Map.of("status", decision.name());
+        return new ApprovalDecisionResponse(decision);
     }
 
     public Object apply(Actor actor, Map<String, Object> approval) {

@@ -5,6 +5,9 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
+import vn.huce.dto.ApprovalDecisionResponse;
+import vn.huce.dto.TimetableVersionIdResponse;
+import vn.huce.model.ApprovalStatus;
 import vn.huce.repository.ApprovalRepository;
 import vn.huce.repository.AuditRepository;
 
@@ -29,6 +32,24 @@ class ApprovalServiceTest {
     }
 
     @Test
+    void existingDraftReturnsTypedIdWithoutCreatingAnotherVersion() {
+        when(repository.findDraft(4L, 1L)).thenReturn(7L);
+        assertEquals(new TimetableVersionIdResponse(7L), service.create(staff, 4L));
+        verify(repository, never()).createDraft(anyLong(), anyLong());
+    }
+
+    @Test
+    void newDraftReturnsPersistedVersionId() {
+        when(repository.createDraft(4L, 1L)).thenReturn(8L);
+        assertEquals(new TimetableVersionIdResponse(8L), service.create(staff, 4L));
+        var order = inOrder(repository);
+        order.verify(repository).requireSemester(4L);
+        order.verify(repository).hasSubmittedVersion(4L);
+        order.verify(repository).findDraft(4L, 1L);
+        order.verify(repository).createDraft(4L, 1L);
+    }
+
+    @Test
     void staffCannotApproveEvenWhenCallingServiceDirectly() {
         assertEquals(403, assertThrows(ApiFailure.class,
                 () -> service.decide(staff, Map.of(), Map.of())).status());
@@ -39,7 +60,7 @@ class ApprovalServiceTest {
     void returningApprovalUpdatesWorkflowAndNotifiesRequester() {
         Map<String, Object> approval = Map.of("id", 7L, "requested_by", 1L,
                 "status", "PENDING", "work_item_id", 8L);
-        assertEquals(Map.of("status", "RETURNED"), service.decide(manager, approval,
+        assertEquals(new ApprovalDecisionResponse(ApprovalStatus.RETURNED), service.decide(manager, approval,
                 Map.of("decision", "RETURNED", "reason", "Kiểm tra lại lịch")));
         var order = inOrder(repository, notifications, audit);
         order.verify(repository).recordDecision(7L, 9L, "RETURNED", "Kiểm tra lại lịch");

@@ -3,8 +3,10 @@ package vn.huce.repository;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Repository;
+import vn.huce.exception.ApiFailure;
 
 @Repository
 public class ApprovalRepository {
@@ -35,18 +37,23 @@ public class ApprovalRepository {
                 semesterId);
     }
 
-    public Map<String, Object> findDraft(long semesterId, long actorId) {
-        return store.one("""
+    public Long findDraft(long semesterId, long actorId) {
+        List<Long> rows = store.jdbc().query("""
                 SELECT id FROM timetable_versions WHERE semester_id=? AND created_by=? AND status='DRAFT'
                 ORDER BY id DESC LIMIT 1
-                """, semesterId, actorId);
+                """, (rs, row) -> rs.getLong("id"), semesterId, actorId);
+        return rows.isEmpty() ? null : rows.getFirst();
     }
 
-    public Map<String, Object> createDraft(long semesterId, long actorId) {
-        return store.need("""
+    public long createDraft(long semesterId, long actorId) {
+        List<Long> rows = store.jdbc().query("""
                 INSERT INTO timetable_versions(semester_id,version_no,created_by)
                 SELECT ?,COALESCE(max(version_no),0)+1,? FROM timetable_versions WHERE semester_id=? RETURNING id
-                """, semesterId, actorId, semesterId);
+                """, (rs, row) -> rs.getLong("id"), semesterId, actorId, semesterId);
+        if (rows.isEmpty()) {
+            throw new ApiFailure(404, "NOT_FOUND", "Không tìm thấy dữ liệu.");
+        }
+        return rows.getFirst();
     }
 
     public Map<String, Object> findVersion(long versionId) {
