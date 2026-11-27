@@ -2,11 +2,11 @@ package vn.huce.service;
 
 import java.time.LocalDate;
 import java.util.List;
-import vn.huce.model.SectionSemester;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
+import vn.huce.model.SectionSemester;
 import vn.huce.repository.AuditRepository;
 import vn.huce.repository.SchedulePatternRepository;
 import vn.huce.repository.SectionRepository;
@@ -51,5 +51,24 @@ class SectionMutationServiceTest {
                 Map.of("semesterId", 4L, "rows", List.of(Map.of("semesterCode", "HK2")))));
         verify(sections, never()).create(any(), any());
         verifyNoInteractions(audit);
+    }
+
+    @Test
+    void staleVersionIsRejectedBeforeAssignmentParsing() {
+        when(sections.editable(staff, 7L)).thenReturn(Map.of("version", 2L));
+        var error = assertThrows(ApiFailure.class, () ->
+                service.assign(staff, 7L, Map.of("version", 1L, "staffId", false)));
+        assertEquals(409, error.status());
+        assertEquals("VERSION_CONFLICT", error.code());
+        verifyNoInteractions(repository, patterns, audit, scheduling);
+    }
+
+    @Test
+    void invalidGroupSelectionDoesNotMutateRepository() {
+        when(sections.editable(staff, 7L)).thenReturn(Map.of("version", 1L));
+        var error = assertThrows(ApiFailure.class, () ->
+                service.groups(staff, 7L, Map.of("groupIds", List.of(1, 1.5))));
+        assertEquals(400, error.status());
+        verifyNoInteractions(repository, patterns, audit, scheduling);
     }
 }

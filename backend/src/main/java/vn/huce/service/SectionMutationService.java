@@ -2,25 +2,26 @@ package vn.huce.service;
 
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import vn.huce.Accounts.Actor;
-import vn.huce.exception.ApiFailure;
+import vn.huce.dto.SectionAssignmentRequest;
 import vn.huce.dto.SectionIdResponse;
 import vn.huce.dto.SectionImportResponse;
-import vn.huce.model.SectionSemester;
-import vn.huce.model.SectionSubject;
+import vn.huce.dto.SectionTargetGroupsRequest;
+import vn.huce.exception.ApiFailure;
 import vn.huce.model.PatternDraft;
 import vn.huce.model.SectionDraft;
+import vn.huce.model.SectionSemester;
+import vn.huce.model.SectionSubject;
 import vn.huce.repository.AuditRepository;
 import vn.huce.repository.SchedulePatternRepository;
 import vn.huce.repository.SectionRepository;
+import vn.huce.validation.SectionRequestParser;
 
 import static vn.huce.validation.Inputs.*;
 
@@ -104,14 +105,17 @@ public class SectionMutationService {
         role(actor, "STAFF");
         Map<String, Object> section = sections.editable(actor, sectionId);
         checkOptionalVersion(input, section);
-        long mainLecturer = id(input.get("staffId"));
-        Set<Long> assistants = idSet(input.get("assistantIds"));
-        if (assistants.contains(mainLecturer)) {
-            throw invalid("Giảng viên chính không thể đồng thời là trợ giảng.");
-        }
+        SectionAssignmentRequest request = SectionRequestParser.assignment(input);
+        applyAssignment(actor, sectionId, section, request);
+        return null;
+    }
+
+    private void applyAssignment(Actor actor, long sectionId, Map<String, Object> section,
+                                 SectionAssignmentRequest request) {
+        long mainLecturer = request.staffId();
         Map<Long, String> desired = new LinkedHashMap<>();
         desired.put(mainLecturer, "MAIN");
-        for (long assistant : assistants) {
+        for (long assistant : request.assistantIds()) {
             desired.put(assistant, "ASSISTANT");
         }
         for (long staffId : desired.keySet()) {
@@ -136,13 +140,13 @@ public class SectionMutationService {
         scheduling.recheck(sectionId, actor);
         repository.touch(sectionId);
         audit.record(actor, "ASSIGN", "course_sections", sectionId);
-        return null;
     }
 
     public Object groups(Actor actor, long sectionId, Map<String, Object> input) {
         role(actor, "STAFF");
         checkOptionalVersion(input, sections.editable(actor, sectionId));
-        repository.replaceTargetGroups(sectionId, idSet(input.get("groupIds")));
+        SectionTargetGroupsRequest request = SectionRequestParser.groups(input);
+        repository.replaceTargetGroups(sectionId, request.groupIds());
         scheduling.recheck(sectionId, actor);
         repository.touch(sectionId);
         audit.record(actor, "SET_TARGET_GROUPS", "course_sections", sectionId);
@@ -203,17 +207,4 @@ public class SectionMutationService {
         }
     }
 
-    private Set<Long> idSet(Object value) {
-        Set<Long> result = new LinkedHashSet<>();
-        if (value == null) {
-            return result;
-        }
-        if (!(value instanceof List<?> list) || list.size() > 200) {
-            throw invalid("Danh sách lựa chọn không hợp lệ.");
-        }
-        for (Object item : list) {
-            result.add(id(item));
-        }
-        return result;
-    }
 }
