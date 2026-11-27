@@ -227,13 +227,29 @@ jobs:
         run: docker compose -f compose.share.yaml down -v
 
   dependency-audit:
+    needs: smoke
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: huce-maven-inventory
+          path: ${{ runner.temp }}/huce-maven-inventory
+      - name: Audit packaged Maven dependencies against OSV
+        run: |
+          python3 backend/tests/test-audit-runtime.py
+          python3 backend/tests/audit-runtime.py "$RUNNER_TEMP/huce-maven-inventory/huce.cdx.json" "$RUNNER_TEMP/huce-maven-inventory/osv-report.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: huce-java-osv-audit
+          path: ${{ runner.temp }}/huce-maven-inventory/osv-report.json
+          if-no-files-found: error
       - name: Audit all locked frontend dependencies
+        if: always()
         working-directory: frontend
         run: |
           mkdir -p audit-results
