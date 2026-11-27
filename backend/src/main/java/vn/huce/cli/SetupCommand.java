@@ -2,6 +2,8 @@ package vn.huce.cli;
 
 import vn.huce.exception.ApiFailure;
 import vn.huce.repository.SqlStore;
+import vn.huce.repository.MutationRepository;
+import vn.huce.repository.RuntimeModeRepository;
 import vn.huce.config.RuntimeMode;
 
 import static vn.huce.validation.Inputs.*;
@@ -49,8 +51,9 @@ public final class SetupCommand {
     }
     static String env(String key,String fallback){String value=System.getenv(key);return value==null?fallback:value;}
     static void guard(SqlStore db,BCryptPasswordEncoder bcrypt){
-        db.jdbc().execute("SELECT pg_advisory_xact_lock(5060505)");
-        new RuntimeMode(db.jdbc(),bcrypt,false).run(null);
+        new MutationRepository(db.jdbc()).lock();
+        // The CLI already owns a TransactionTemplate transaction; no Spring proxy is needed here.
+        new RuntimeMode(new RuntimeModeRepository(db.jdbc()), bcrypt, false).run(null);
     }
     static String code(Object x){return text(x,80).toUpperCase(Locale.ROOT);}
     static List<Map<?,?>> list(Map<String,Object> data,String key){

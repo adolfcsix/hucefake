@@ -163,3 +163,9 @@ for (const name of javaFiles) {
 const runtimeModeSource = readFileSync(new URL('config/RuntimeMode.java', root), 'utf8')
 assert.doesNotMatch(runtimeModeSource, /\b(?:JdbcTemplate|SqlStore|SELECT|INSERT\s+INTO|LOCK\s+TABLE)\b/)
 console.log('PASS: Spring stereotype placement and runtime initialization persistence boundary')
+
+const setupSource = readFileSync(new URL('cli/SetupCommand.java', root), 'utf8')
+assert.match(setupSource, /new RuntimeMode\(new RuntimeModeRepository\(/)
+assert.doesNotMatch(setupSource, /pg_advisory_xact_lock/)
+assert.match(setupSource, /new MutationRepository\(db\.jdbc\(\)\)\.lock\(\)/)
+console.log('PASS: CLI shares runtime-mode protection and mutation lock')

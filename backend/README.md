@@ -149,3 +149,8 @@ SchedulingService chuẩn hóa khai báo record, ánh xạ dữ liệu, kiểm t
 ### Kiểm toán annotation và khởi tạo chế độ chạy
 
 RuntimeMode giữ trách nhiệm ApplicationRunner và giao dịch khởi tạo, RuntimeModeRepository chịu trách nhiệm khóa bảng, đọc chế độ, kiểm tra dữ liệu, nạp catalog demo và ghi dữ liệu. Không thay đổi thứ tự khởi tạo, migration, tài khoản mẫu hoặc nguyên tắc tách database demo/private. Bổ sung sáu kiểm thử bảo vệ dữ liệu và kiểm tra vị trí stereotype Spring (@Service, @Repository, @Configuration), không gắn stereotype vào model/DTO. CLI setup vẫn trực tiếp dùng JDBC vì chạy độc lập ngoài Spring context.
+
+
+### Kiểm tra liên kết CLI và cấu hình bảo mật
+
+SetupCommand tạo RuntimeModeRepository và MutationRepository từ JdbcTemplate của giao dịch CLI đang có, tránh constructor RuntimeMode cũ và khóa advisory lặp. CLI vẫn chạy không cần Spring application context. SecurityConfig và LoginThrottle chuẩn hóa cách trình bày, giữ nguyên CSRF, danh sách endpoint công khai, cookie, mã lỗi và hạn mức. Không loại bỏ dependency Maven chỉ vì ít xuất hiện trong import: Flyway, JDBC, PostgreSQL runtime, Spring Session, Security và Web đều phục vụ runtime/CLI. Cần kiểm chứng luồng setup catalog/account và database demo/private qua CI của cây mã nguồn mới.
