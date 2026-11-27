@@ -9,3 +9,25 @@ Java 21, Spring Boot, Spring Security, Spring JDBC, Spring Session JDBC, Flyway 
 - `pom.xml`: Maven.
 
 Xem README gốc để cài đặt, cấu hình và chạy. Không dùng database Express cũ trực tiếp; cần sao lưu và quy trình chuyển dữ liệu riêng.
+
+
+## Tổ chức mã nguồn Java
+
+Mã nguồn nằm tại `src/main/java/vn/huce`. Lớp khởi động `HuceApplication` ở package gốc; `Accounts.Actor` giữ định danh đã sử dụng trong phiên Spring Session JDBC để tương thích với phiên cũ.
+
+| Package | Trách nhiệm |
+| --- | --- |
+| controller | Ánh xạ HTTP, nhận dữ liệu, gọi service, trả trạng thái HTTP |
+| service | Nghiệp vụ, phân quyền theo phạm vi, xử lý xếp lịch và chatbot |
+| repository | Truy cập PostgreSQL; AccountRepository và CatalogRepository chứa truy vấn theo nghiệp vụ |
+| dto | Kiểu dữ liệu truyền tải qua API |
+| validation | Kiểm tra và chuẩn hóa dữ liệu |
+| exception | Ngoại lệ và xử lý lỗi HTTP tập trung |
+| config, security | Cấu hình Spring, xác thực và phiên đăng nhập |
+| cli | Lệnh thiết lập dữ liệu riêng và healthcheck |
+
+Luồng chính: React → Controller → Service → Repository → PostgreSQL. Các service không được gọi controller. Controller không được chứa SQL hoặc phụ thuộc trực tiếp repository/JdbcTemplate.
+
+`SqlStore` là lớp tương thích cho các truy vấn động cũ. Một số service vẫn chứa SQL và các projection kiểu Map; các phần này cần được chuyển dần sang repository theo nghiệp vụ và kiểu dữ liệu cụ thể, giữ nguyên hợp đồng API và kiểm thử hồi quy. Không coi việc chia package là đã hoàn tất toàn bộ cải tổ.
+
+Kiểm tra nhanh (từ thư mục backend): `node tests/api-surface.mjs` kiểm kê REST API và kiểm tra ranh giới kiến trúc; `mvn clean verify` biên dịch và chạy unit test. Kiểm thử PostgreSQL, trình duyệt và đóng gói chạy qua GitHub Actions.

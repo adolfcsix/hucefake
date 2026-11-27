@@ -75,4 +75,9 @@ public class ProposalService {
         var row=owned(a,id);if(row.get("result")!=null)throw state("Đề xuất đã thực hiện.");
         db.jdbc().update("UPDATE ai_proposals SET cancelled_at=COALESCE(cancelled_at,now()) WHERE id=?",id);return Map.of("status","CANCELLED");
     }
+
+    public Map<String,Object> prepareForSemester(Accounts.Actor actor, String action, Map<String,Object> input) {
+        return prepare(actor, action, db.need("SELECT id,code FROM semesters WHERE id=?",
+                id(input.get("semesterId"))), input);
+    }
 }

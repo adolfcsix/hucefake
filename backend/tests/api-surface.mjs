@@ -14,3 +14,31 @@ assert.deepEqual(actual.sort(),expected)
 for(const path of ['../package.json','../src/server.js','../../spring-backend'])
   assert.equal(existsSync(new URL(path,import.meta.url)),false,path+' must not exist')
 console.log('PASS: '+expected.length+' legacy HTTP routes mapped to Spring Boot, no legacy Express runtime')
+
+
+// Architecture regression checks: keep HTTP adapters separate from persistence
+// and never depend on controllers from application or persistence layers.
+const javaFiles = readdirSync(root, { recursive: true }).filter(name => name.endsWith('.java'))
+for (const name of javaFiles) {
+  const relative = name.replaceAll('\\', '/')
+  const source = readFileSync(new URL(relative, root), 'utf8')
+  const packageSuffix = relative.split('/').slice(0, -1).join('.')
+  const expectedPackage = 'vn.huce' + (packageSuffix ? '.' + packageSuffix : '')
+  assert.equal(source.match(/^package\s+([\w.]+);/m)?.[1], expectedPackage, relative + ': package/path mismatch')
+  if (relative.startsWith('controller/')) {
+    assert.doesNotMatch(source, /\b(?:SqlStore|JdbcTemplate|DataSource|EntityManager)\b/, relative + ': direct database access')
+    assert.doesNotMatch(source, /import\s+(?:static\s+)?vn\.huce\.repository\./, relative + ': repository dependency')
+    assert.doesNotMatch(source, /\b(?:SELECT|INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM)\b/, relative + ': inline SQL')
+  }
+  if (/^(service|repository)\//.test(relative)) {
+    assert.doesNotMatch(source, /\bvn\.huce\.controller\./, relative + ': reverse dependency on HTTP controllers')
+  }
+  if (source.includes('@RestControllerAdvice')) {
+    assert.ok(relative.startsWith('exception/'), relative + ': error handling belongs in exception package')
+  } else if (/@RestController\b/.test(source)) {
+    assert.ok(relative.startsWith('controller/'), relative + ': HTTP endpoint outside controller package')
+  }
+}
+assert.deepEqual(javaFiles.filter(name => !name.includes('/') && !name.includes('\\')).sort(),
+  ['Accounts.java', 'HuceApplication.java'])
+console.log('PASS: package layout, controller boundaries, reverse dependency and exception placement checks')

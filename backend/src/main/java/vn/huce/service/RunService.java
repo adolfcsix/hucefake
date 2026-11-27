@@ -77,4 +77,28 @@ public class RunService {
         if(!Set.of("QUEUED","COMPLETED","FAILED").contains(run.get("status")))throw state("Lần chạy không thể bỏ ở trạng thái hiện tại.");
         db.jdbc().update("UPDATE schedule_runs SET status='DISCARDED' WHERE id=?",id);db.audit(a,"DISCARD","schedule_runs",id);
     }
+
+    public Object active(Accounts.Actor a, String semesterId){
+        role(a,"STAFF","MANAGER");return Map.of("active",db.exists("SELECT 1 FROM schedule_runs WHERE semester_id=? AND status IN ('QUEUED','RUNNING')",id(semesterId)));
+    }
+    @Transactional(readOnly=true,isolation=org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
+    public Object list(Accounts.Actor a, Map<String,String> q){
+        role(a,"STAFF","MANAGER");String sql="""
+          SELECT id,status,generations_run,hard_violations,soft_penalty,fitness,message,requested_by,created_at
+          FROM schedule_runs run WHERE semester_id=? AND (? OR requested_by=? OR (status IN ('COMPLETED','APPLIED') AND
+          """+RunService.MANAGER_SCOPE+"))";
+        var args=Arrays.<Object>asList(id(q.get("semesterId")),"MANAGER".equals(a.role()),a.id(),a.unitId());
+        if(!q.containsKey("page")&&!q.containsKey("pageSize"))return db.rows(sql+" ORDER BY id DESC LIMIT 30",args.toArray());
+        return db.paged(q,sql,args,"id DESC");
+    }
+    public Object detail(Accounts.Actor a, long id){
+        var run=get(a,id);run.put("progress",db.rows("SELECT generation,hard_violations,soft_penalty FROM schedule_run_progress WHERE run_id=? ORDER BY generation",id));return run;
+    }
+    public Object items(Accounts.Actor a, long id){
+        get(a,id);return db.rows("""
+          SELECT i.*,c.code AS section_code,t.code AS room_code,s.name AS subject_name
+          FROM schedule_run_items i JOIN course_sections c ON c.id=i.section_id JOIN subjects s ON s.id=c.subject_id
+          JOIN teaching_rooms t ON t.id=i.room_id WHERE run_id=? ORDER BY day_of_week,period_from,i.id
+          """,id);
+    }
 }
