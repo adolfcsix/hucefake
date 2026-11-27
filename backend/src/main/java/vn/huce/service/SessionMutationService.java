@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import org.springframework.stereotype.Service;
+import vn.huce.model.AvailabilityEntry.Kind;
 import vn.huce.Accounts.Actor;
 import vn.huce.dto.SessionChangeRequest;
 import vn.huce.dto.SessionRequestDecision;
@@ -87,7 +88,7 @@ public class SessionMutationService {
                 }
                 Slot proposed = slot.move(roomId, slot.day(), period);
                 Span time = scheduling.interval(context, proposed, slot.from());
-                if (time == null || scheduling.busy(context, proposed, "BUSY") || unchanged(proposed, time, original)) {
+                if (time == null || scheduling.busy(context, proposed, Kind.BUSY || unchanged(proposed, time, original)) {
                     continue;
                 }
                 if (scheduling.actualConflicts(context, proposed, time, exclude).isEmpty()) {
@@ -164,7 +165,7 @@ public class SessionMutationService {
                 replacementDate.getDayOfWeek().getValue(), period, (int) n(original, "period_count"),
                 replacementDate, replacementDate);
         Span time = scheduling.interval(context, slot, replacementDate);
-        if (time == null || scheduling.busy(context, slot, "BUSY")) {
+        if (time == null || scheduling.busy(context, slot, Kind.BUSY) {
             throw invalid("Tiết thay thế qua ca hoặc rơi vào giờ bận.");
         }
         if (unchanged(slot, time, original)) {

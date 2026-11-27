@@ -10,6 +10,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import org.springframework.stereotype.Service;
+import vn.huce.model.AvailabilityEntry.Kind;
 import vn.huce.Accounts.Actor;
 import vn.huce.service.SchedulingService.Context;
 import vn.huce.service.SchedulingService.Slot;
@@ -145,7 +146,7 @@ public class GeneticScheduler {
                     }
                 }
             }
-            if (evaluator.busy(slot, "BUSY") > 0) {
+            if (evaluator.busy(slot, Kind.BUSY > 0) {
                 messages.add("Giảng viên bận trong khung tiết.");
             }
             String message = String.join(" ", messages);
