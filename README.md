@@ -347,3 +347,8 @@ HuceChat.jsx điều phối trạng thái hội thoại, gọi API, tìm lịch 
 ### Tổ chức quản lý lớp học phần ReactJS
 
 Trong `frontend/src/features/sections/`, `Sections.jsx` quản lý danh sách, lọc, phân trang và xuất lớp nháp; `DraftImport.jsx` đọc tệp CSV/JSON, tải mẫu và gửi nhập dữ liệu; `SectionEditor.jsx` xử lý thêm/sửa/hủy lớp, phân công giảng viên và nhóm lớp đối tượng, gồm xử lý lỗi mã lớp và xung đột phiên bản; `SectionTransfer.js` giữ các hàm chuyển đổi tệp. Dùng một editor chung cho các thao tác để tránh lặp form, giữ nguyên JSX, CSS, hợp đồng API và điều kiện quyền. Cần nghiệm thu CI trên commit mới.
+
+
+### Danh mục và kiểm thử lớp API ReactJS
+
+`Catalog.jsx` hiển thị danh mục; `CatalogEditor.jsx` xử lý biểu mẫu phòng, khung tiết và ngày nghỉ; `catalogFields.js` chứa nhãn và xây dựng payload đúng từng nghiệp vụ. Ba test kiểm tra kiểu số, trường gửi API và campusId null cho ngày nghỉ toàn trường. Năm test API dùng fetch giả lập kiểm tra CSRF retry, idempotency khi lỗi 5xx/4xx, preview xung đột và xóa token khi logout; không gọi backend thật. Giữ nguyên useFetch/usePagedQuery và cơ chế API hiện tại trong đợt này, không thêm dependency.
