@@ -1,5 +1,6 @@
 package vn.huce.service;
 
+import vn.huce.model.SchedulingRoom;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -125,15 +126,15 @@ public class ApprovalService {
             }
             for (Slot slot : slots) {
                 Result result = scheduling.check(context, slot, actor, false);
-                Map<String, Object> room = context.rooms().get(slot.room());
+                SchedulingRoom room = context.rooms().get(slot.room());
                 if (!result.valid()) {
                     conflicts.add(new PatternConflict(slot.id(), slot.day(), slot.first(),
-                            room == null ? null : (String) room.get("code"), result.issues()));
+                            room == null ? null : room.code(), result.issues()));
                 } else {
                     snapshot.add(new ApprovalSnapshot(slot.id(), slot.section(), slot.staff(), slot.room(),
                             slot.day(), slot.first(), slot.count(), slot.from().toString(), slot.to().toString(),
                             repository.patternVersion(slot.id()), (String) section.get("code"),
-                            (String) section.get("subject_name"), (String) room.get("code")));
+                            (String) section.get("subject_name"), room.code()));
                 }
             }
             if (!missing.isEmpty() || !conflicts.isEmpty()) {
@@ -289,7 +290,7 @@ public class ApprovalService {
             }
             long count = 0;
             for (var date : occurrences(slot)) {
-                if (scheduling.holiday(context, n(context.rooms().get(slot.room()), "campus_id"), date)) {
+                if (scheduling.holiday(context, context.rooms().get(slot.room()).campusId(), date)) {
                     continue;
                 }
                 Span time = scheduling.interval(context, slot, date);

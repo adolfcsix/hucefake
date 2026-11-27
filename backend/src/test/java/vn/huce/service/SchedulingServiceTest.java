@@ -1,5 +1,6 @@
 package vn.huce.service;
 
+import vn.huce.model.SchedulingRoom;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -60,7 +61,8 @@ class SchedulingServiceTest {
 
     private Context candidateContext(List<Slot> patterns) {
         return new Context(Map.of(2L, section()),
-                Map.of(4L, Map.of("campus_id", 5L), 6L, Map.of("campus_id", 7L)),
+                Map.of(4L, new SchedulingRoom(4L, 5L, "P4", 40, "LECTURE", "ACTIVE"),
+                        6L, new SchedulingRoom(6L, 7L, "P6", 40, "LECTURE", "ACTIVE")),
                 List.of(), List.of(), List.of(), patterns);
     }
 
@@ -91,7 +93,7 @@ class SchedulingServiceTest {
 
     @Test
     void allHolidayOccurrencesReturnBr14WithoutQueryingPublishedSessions() {
-        Context context = new Context(Map.of(2L, section()), Map.of(4L, Map.of("campus_id", 5L)),
+        Context context = new Context(Map.of(2L, section()), Map.of(4L, new SchedulingRoom(4L, 5L, "P4", 40, "LECTURE", "ACTIVE")),
                 List.of(), List.of(), List.of(new NonTeachingDay(5L, monday, monday.plusWeeks(2))), List.of());
         Slot slot = new Slot(1L, 2L, 3L, 4L, 1, 1, 2, monday, monday.plusWeeks(2));
         assertEquals("BR14", service.actual(context, slot).getFirst().get("rule"));

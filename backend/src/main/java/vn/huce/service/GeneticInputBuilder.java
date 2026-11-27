@@ -1,5 +1,6 @@
 package vn.huce.service;
 
+import vn.huce.model.SchedulingRoom;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -99,8 +100,8 @@ class GeneticInputBuilder {
     private List<Slot> domain(Context context, Map<String, Object> section, Set<Long> allowedCampuses,
                               Map<LocalDate, List<PublishedSession>> published, long deadline) {
         List<Slot> domain = new ArrayList<>();
-        for (Map<String, Object> room : context.rooms().values()) {
-            long campusId = n(room, "campus_id");
+        for (SchedulingRoom room : context.rooms().values()) {
+            long campusId = room.campusId();
             if (!allowedCampuses.contains(campusId) || !scheduling.fits(room, section)) {
                 continue;
             }
@@ -109,7 +110,7 @@ class GeneticInputBuilder {
                     if (System.nanoTime() > deadline) {
                         throw state("Vượt giới hạn 60 giây tạo miền xếp lịch.");
                     }
-                    Slot slot = make(section, n(room, "id"), dayOfWeek, period);
+                    Slot slot = make(section, room.id(), dayOfWeek, period);
                     if (feasible(context, section, slot, campusId, published)) {
                         domain.add(slot);
                     }

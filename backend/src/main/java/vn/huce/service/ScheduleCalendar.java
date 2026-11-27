@@ -1,15 +1,14 @@
 package vn.huce.service;
 
+import vn.huce.model.SchedulingRoom;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import vn.huce.model.TeachingPeriod;
 
 import static vn.huce.service.SchedulingService.*;
-import static vn.huce.validation.Inputs.n;
 
 /** Calendar calculations shared by manual scheduling and the genetic solver. */
 final class ScheduleCalendar {
@@ -36,7 +35,7 @@ final class ScheduleCalendar {
     }
 
     static Span interval(Context context, Slot slot, LocalDate date) {
-        Map<String, Object> room = context.rooms().get(slot.room());
+        SchedulingRoom room = context.rooms().get(slot.room());
         if (room == null || slot.first() < 1 || slot.count() < 1 || slot.count() > 6 || slot.last() > 15) {
             return null;
         }
@@ -47,7 +46,7 @@ final class ScheduleCalendar {
         for (int period = slot.first(); period <= slot.last(); period++) {
             TeachingPeriod selected = null;
             for (TeachingPeriod definition : context.periods()) {
-                if (definition.campusId() == n(room, "campus_id")
+                if (definition.campusId() == room.campusId()
                         && definition.periodNo() == period && definition.effectiveOn(date)) {
                     selected = definition;
                     break;

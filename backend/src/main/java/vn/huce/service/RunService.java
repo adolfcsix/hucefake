@@ -1,5 +1,6 @@
 package vn.huce.service;
 
+import vn.huce.model.SchedulingRoom;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
@@ -117,12 +118,12 @@ public class RunService {
                     || n(section, "periods_per_session") != item.periodCount()) {
                 throw stale;
             }
-            Map<String, Object> room = context.rooms().get(item.roomId());
+            SchedulingRoom room = context.rooms().get(item.roomId());
             if (room == null) {
                 throw stale;
             }
-            scheduling.requireCampus(actor, n(room, "campus_id"));
-            Slot slot = GeneticScheduler.make(section, n(room, "id"),
+            scheduling.requireCampus(actor, room.campusId());
+            Slot slot = GeneticScheduler.make(section, room.id(),
                     item.dayOfWeek(), item.periodFrom());
             Context test = new Context(context.sections(), context.rooms(), context.periods(),
                     context.availability(), context.holidays(), fixed);

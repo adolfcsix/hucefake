@@ -1,5 +1,6 @@
 package vn.huce.service;
 
+import vn.huce.model.SchedulingRoom;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -55,8 +56,8 @@ public class SessionMutationService {
         }
     }
 
-    private Map<String, Object> room(Context context, long roomId) {
-        Map<String, Object> room = context.rooms().get(roomId);
+    private SchedulingRoom room(Context context, long roomId) {
+        SchedulingRoom room = context.rooms().get(roomId);
         if (room == null) {
             throw new ApiFailure(404, "NOT_FOUND", "Không tìm thấy dữ liệu.");
         }
@@ -76,9 +77,9 @@ public class SessionMutationService {
         int first = roomChange ? slot.first() : 1;
         int last = roomChange ? slot.first() : 15;
         for (int period = first; period <= last; period++) {
-            for (Map<String, Object> room : context.rooms().values()) {
-                long campusId = n(room, "campus_id");
-                long roomId = n(room, "id");
+            for (SchedulingRoom room : context.rooms().values()) {
+                long campusId = room.campusId();
+                long roomId = room.id();
                 if (!allowed.contains(campusId) || !scheduling.fits(room, section)
                         || scheduling.holiday(context, campusId, slot.from())
                         || (roomChange && Objects.equals(nullableId(original.get("room_id")), roomId))) {
@@ -90,7 +91,7 @@ public class SessionMutationService {
                     continue;
                 }
                 if (scheduling.actualConflicts(context, proposed, time, exclude).isEmpty()) {
-                    result.add(Map.of("roomId", roomId, "roomCode", room.get("code"),
+                    result.add(Map.of("roomId", roomId, "roomCode", room.code(),
                             "dayOfWeek", slot.day(), "periodFrom", period));
                 }
                 if (result.size() == 5) {
@@ -138,9 +139,9 @@ public class SessionMutationService {
 
     private long createReplacement(Actor actor, long sessionId, Context context, Map<String, Object> original,
             Map<String, Object> section, LocalDate originalDate, SessionChangeAction action, Map<String, Object> body) {
-        Map<String, Object> room = room(context, id(body.get("roomId")));
-        long roomId = n(room, "id");
-        long campusId = n(room, "campus_id");
+        SchedulingRoom room = room(context, id(body.get("roomId")));
+        long roomId = room.id();
+        long campusId = room.campusId();
         scheduling.requireCampus(actor, campusId);
         boolean roomChange = action == SessionChangeAction.ROOM_CHANGE;
         LocalDate replacementDate = roomChange ? originalDate : LocalDate.parse(date(body.get("date")));

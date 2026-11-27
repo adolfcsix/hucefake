@@ -1,5 +1,6 @@
 package vn.huce.service;
 
+import vn.huce.model.SchedulingRoom;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
 import java.util.List;
@@ -100,7 +101,7 @@ class ApprovalServiceTest {
         var slot = new SchedulingService.Slot(11L, 21L, 2L, 5L, 1, 2, 3,
                 LocalDate.of(2026, 9, 1), LocalDate.of(2026, 12, 31));
         var context = new SchedulingService.Context(Map.of(21L, section),
-                Map.of(5L, Map.of("code", "P101")), List.of(), List.of(), List.of(), List.of(slot));
+                Map.of(5L, new SchedulingRoom(5L, 1L, "P101", 40, "LECTURE", "ACTIVE")), List.of(), List.of(), List.of(), List.of(slot));
         when(scheduling.context()).thenReturn(context);
         when(scheduling.check(context, slot, staff, false))
                 .thenReturn(new SchedulingService.Result(true, List.of(), List.of()));

@@ -1,5 +1,6 @@
 package vn.huce.service;
 
+import vn.huce.model.SchedulingRoom;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -24,10 +25,10 @@ final class ScheduleConstraints {
     private ScheduleConstraints() {
     }
 
-    static boolean fits(Map<String, Object> room, Map<String, Object> section) {
-        return room != null && section != null && "ACTIVE".equals(room.get("status"))
-                && n(room, "capacity") >= n(section, "capacity")
-                && Objects.equals(room.get("type"), section.get("required_room_type"));
+    static boolean fits(SchedulingRoom room, Map<String, Object> section) {
+        return room != null && section != null && "ACTIVE".equals(room.status())
+                && room.capacity() >= n(section, "capacity")
+                && Objects.equals(room.type(), section.get("required_room_type"));
     }
 
     static Set<Long> staff(Context context, Slot slot) {
@@ -51,7 +52,7 @@ final class ScheduleConstraints {
     static Map<String, Object> pairIssue(Context context, Slot other, String rule, String message) {
         Map<String, Object> result = issue(rule, message, context.sections().get(other.section()));
         result.put("patternId", other.id());
-        result.put("roomCode", context.rooms().get(other.room()).get("code"));
+        result.put("roomCode", context.rooms().get(other.room()).code());
         result.put("dayOfWeek", other.day());
         result.put("periodFrom", other.first());
         result.put("periodCount", other.count());
@@ -74,8 +75,8 @@ final class ScheduleConstraints {
         if (!sameSection && !sameRoom && !sameStaff && !sameGroup) {
             return result;
         }
-        long firstCampus = n(context.rooms().get(first.room()), "campus_id");
-        long secondCampus = n(context.rooms().get(second.room()), "campus_id");
+        long firstCampus = context.rooms().get(first.room()).campusId();
+        long secondCampus = context.rooms().get(second.room()).campusId();
         boolean teaches = false;
         boolean overlap = false;
         for (LocalDate date = ScheduleCalendar.firstDay(from, first.day()); !date.isAfter(to); date = date.plusWeeks(1)) {

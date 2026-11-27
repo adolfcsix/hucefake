@@ -1,5 +1,6 @@
 package vn.huce.service;
 
+import vn.huce.model.SchedulingRoom;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -31,7 +32,7 @@ class GeneticSchedulerTest {
     private Context context(List<StaffAvailability> availability) {
         return new Context(Map.of(1L, Map.of("id", 1L, "semester_id", 4L, "staff_id", 2L,
                         "capacity", 30, "assistant_ids", new Long[0], "group_ids", new Long[0])),
-                Map.of(3L, Map.of("id", 3L, "campus_id", 5L, "capacity", 60)),
+                Map.of(3L, new SchedulingRoom(3L, 5L, "P3", 60, "LECTURE", "ACTIVE")),
                 List.of(), availability, List.of(), List.of());
     }
 
@@ -82,12 +83,12 @@ class GeneticSchedulerTest {
                 Map.entry("start_date", monday.toString()), Map.entry("end_date", monday.plusDays(1).toString()),
                 Map.entry("periods_per_session", 1));
         var context = new Context(Map.of(1L, section),
-                Map.of(3L, Map.of("id", 3L, "campus_id", 5L)),
+                Map.of(3L, new SchedulingRoom(3L, 5L, "P3", 60, "LECTURE", "ACTIVE")),
                 List.of(), List.of(), List.of(), List.of());
         SchedulingService mockScheduling = mock(SchedulingService.class);
         when(mockScheduling.context()).thenReturn(context);
         when(mockScheduling.campuses(staff)).thenReturn(Set.of(5L));
-        when(mockScheduling.fits(anyMap(), anyMap())).thenReturn(true);
+        when(mockScheduling.fits(any(SchedulingRoom.class), anyMap())).thenReturn(true);
         when(mockScheduling.staff(eq(context), any(Slot.class))).thenReturn(Set.of(2L, 8L));
         when(mockScheduling.interval(eq(context), any(Slot.class), any(LocalDate.class))).thenAnswer(call -> {
             Slot candidate = call.getArgument(1);

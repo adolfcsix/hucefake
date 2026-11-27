@@ -1,5 +1,6 @@
 package vn.huce.service;
 
+import vn.huce.model.SchedulingRoom;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -27,8 +28,7 @@ class ScheduleConstraintsTest {
 
     private Context context(List<NonTeachingDay> holidays, List<StaffAvailability> availability) {
         return new Context(Map.of(1L, section("A"), 2L, section("B")),
-                Map.of(4L, Map.of("code", "P1", "campus_id", 5L, "status", "ACTIVE",
-                        "capacity", 40, "type", "THEORY")),
+                Map.of(4L, new SchedulingRoom(4L, 5L, "P1", 40, "THEORY", "ACTIVE")),
                 List.of(), availability, holidays, List.of());
     }
 
@@ -64,6 +64,17 @@ class ScheduleConstraintsTest {
         var context = context(List.of(), rows);
         assertFalse(ScheduleConstraints.busy(context, slot(1, 1, 4, 1, 2), Kind.BUSY));
         assertTrue(ScheduleConstraints.busy(context, slot(1, 1, 4, 2, 2), Kind.BUSY));
+    }
+
+    @Test
+    void roomMustBeActiveOfRequiredTypeAndLargeEnough() {
+        var section = Map.<String, Object>of("capacity", 30, "required_room_type", "LECTURE");
+        assertTrue(ScheduleConstraints.fits(new SchedulingRoom(1L, 5L, "P1", 30, "LECTURE", "ACTIVE"), section));
+        assertFalse(ScheduleConstraints.fits(new SchedulingRoom(1L, 5L, "P1", 29, "LECTURE", "ACTIVE"), section));
+        assertFalse(ScheduleConstraints.fits(new SchedulingRoom(1L, 5L, "P1", 30, "LAB", "ACTIVE"), section));
+        assertFalse(ScheduleConstraints.fits(new SchedulingRoom(1L, 5L, "P1", 30, "LECTURE", "MAINTENANCE"), section));
+        assertFalse(ScheduleConstraints.fits(new SchedulingRoom(1L, 5L, "P1", 30, "LECTURE", "INACTIVE"), section));
+        assertFalse(ScheduleConstraints.fits(null, section));
     }
 
     @Test

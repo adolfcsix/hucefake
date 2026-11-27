@@ -1,5 +1,6 @@
 package vn.huce.service;
 
+import vn.huce.model.SchedulingRoom;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
@@ -72,17 +73,17 @@ final class GeneticFitnessEvaluator {
     Base base(Slot candidate) {
         return intrinsic.computeIfAbsent(candidate, slot -> {
             Context context = input.ctx();
-            Map<String, Object> room = context.rooms().get(slot.room());
+            SchedulingRoom room = context.rooms().get(slot.room());
             Map<String, Object> section = context.sections().get(slot.section());
             int hard = busy(slot, Kind.BUSY);
             for (Slot fixed : context.patterns()) {
                 hard += clash(slot, fixed);
             }
             double soft = 5.0 * busy(slot, Kind.AVOID)
-                    + 10.0 * (n(room, "capacity") - n(section, "capacity")) / n(room, "capacity");
+                    + 10.0 * (room.capacity() - n(section, "capacity")) / room.capacity();
             LocalDate date = firstDay(slot.from(), slot.day());
             String shift = context.periods().stream()
-                    .filter(period -> period.campusId() == n(room, "campus_id")
+                    .filter(period -> period.campusId() == room.campusId()
                             && period.periodNo() == slot.first() && period.effectiveOn(date))
                     .findFirst().map(TeachingPeriod::shift).orElse("");
             return new Base(hard, soft, scheduling.staff(context, slot), shift);

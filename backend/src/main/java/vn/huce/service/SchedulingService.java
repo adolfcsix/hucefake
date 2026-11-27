@@ -1,5 +1,6 @@
 package vn.huce.service;
 
+import vn.huce.model.SchedulingRoom;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -48,7 +49,7 @@ public class SchedulingService {
     public record Span(LocalDateTime start, LocalDateTime end) {
     }
 
-    public record Context(Map<Long, Map<String, Object>> sections, Map<Long, Map<String, Object>> rooms,
+    public record Context(Map<Long, Map<String, Object>> sections, Map<Long, SchedulingRoom> rooms,
                           List<TeachingPeriod> periods, List<StaffAvailability> availability,
                           List<NonTeachingDay> holidays, List<Slot> patterns) {
     }
@@ -101,7 +102,11 @@ public class SchedulingService {
     }
 
     public Context context() {
-        return new Context(index(repository.activeSections()), index(repository.rooms()),
+        Map<Long, SchedulingRoom> rooms = new LinkedHashMap<>();
+        for (SchedulingRoom room : repository.rooms()) {
+            rooms.put(room.id(), room);
+        }
+        return new Context(index(repository.activeSections()), rooms,
                 repository.activePeriods(), repository.availability(), repository.holidays(),
                 repository.draftPatterns().stream().map(SchedulingService::slot).toList());
     }
@@ -126,13 +131,13 @@ public class SchedulingService {
         }
 
         long roomId = id(body.get("roomId"));
-        Map<String, Object> room = context.rooms().get(roomId);
+        SchedulingRoom room = context.rooms().get(roomId);
         if (room == null) {
             throw new ApiFailure(404, "NOT_FOUND", "Không tìm thấy dữ liệu.");
         }
-        requireCampus(actor, n(room, "campus_id"));
+        requireCampus(actor, room.campusId());
         if (prior != null) {
-            requireCampus(actor, n(context.rooms().get(prior.room()), "campus_id"));
+            requireCampus(actor, context.rooms().get(prior.room()).campusId());
         }
 
         LocalDate from = effectiveDate(body.get("effectiveFrom"), section.get("start_date"));
@@ -147,7 +152,7 @@ public class SchedulingService {
         return value == null || "".equals(value) ? day(fallback) : day(date(value));
     }
 
-    public boolean fits(Map<String, Object> room, Map<String, Object> section) {
+    public boolean fits(SchedulingRoom room, Map<String, Object> section) {
         return ScheduleConstraints.fits(room, section);
     }
 
@@ -185,7 +190,7 @@ public class SchedulingService {
     }
 
     public List<Map<String, Object>> actual(Context context, Slot slot) {
-        long campusId = n(context.rooms().get(slot.room()), "campus_id");
+        long campusId = context.rooms().get(slot.room()).campusId();
         boolean teaching = false;
         for (LocalDate date : occurrences(slot)) {
             if (holiday(context, campusId, date)) {
@@ -216,15 +221,15 @@ public class SchedulingService {
     private List<Map<String, Object>> suggestAlternatives(Context context, Slot slot, Actor actor) {
         Set<Long> allowed = campuses(actor);
         List<Map<String, Object>> suggestions = new ArrayList<>();
-        for (Map<String, Object> room : context.rooms().values()) {
-            if (!allowed.contains(n(room, "campus_id")) || !fits(room, context.sections().get(slot.section()))) {
+        for (SchedulingRoom room : context.rooms().values()) {
+            if (!allowed.contains(room.campusId()) || !fits(room, context.sections().get(slot.section()))) {
                 continue;
             }
             for (int dayOfWeek = 1; dayOfWeek <= 7; dayOfWeek++) {
                 for (int period = 1; period <= 15; period++) {
-                    Slot candidate = slot.move(n(room, "id"), dayOfWeek, period);
+                    Slot candidate = slot.move(room.id(), dayOfWeek, period);
                     if (problems(context, candidate).isEmpty() && actual(context, candidate).isEmpty()) {
-                        suggestions.add(Map.of("roomId", candidate.room(), "roomCode", room.get("code"),
+                        suggestions.add(Map.of("roomId", candidate.room(), "roomCode", room.code(),
                                 "dayOfWeek", dayOfWeek, "periodFrom", period));
                         if (suggestions.size() == MAX_SUGGESTIONS) {
                             return suggestions;

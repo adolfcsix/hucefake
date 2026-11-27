@@ -19,6 +19,7 @@ import vn.huce.model.PublishedSession;
 import vn.huce.model.TeachingPeriod;
 import vn.huce.model.NonTeachingDay;
 import vn.huce.model.StaffAvailability;
+import vn.huce.model.SchedulingRoom;
 import vn.huce.model.AvailabilityEntry.Kind;
 
 @Repository
@@ -33,12 +34,13 @@ public class SchedulingRepository {
         return store.rows(SectionQueries.SECTION_SQL + " WHERE c.status IN ('OPEN','DRAFT') ORDER BY c.id");
     }
 
-    public List<Map<String, Object>> rooms() {
-        return store.rows("""
+    public List<SchedulingRoom> rooms() {
+        return store.jdbc().query("""
                 SELECT r.id,r.campus_id,r.code,r.capacity,r.type,
                     CASE WHEN c.status='ACTIVE' THEN r.status ELSE 'INACTIVE' END AS status
                 FROM teaching_rooms r JOIN campuses c ON c.id=r.campus_id ORDER BY r.id
-                """);
+                """, (rs, row) -> new SchedulingRoom(rs.getLong("id"), rs.getLong("campus_id"),
+                rs.getString("code"), rs.getInt("capacity"), rs.getString("type"), rs.getString("status")));
     }
 
     public List<TeachingPeriod> activePeriods() {

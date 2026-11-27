@@ -1,5 +1,6 @@
 package vn.huce.service;
 
+import vn.huce.model.SchedulingRoom;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -25,7 +26,7 @@ class ScheduleCalendarTest {
     }
 
     private Context context(List<TeachingPeriod> periods, List<NonTeachingDay> holidays) {
-        return new Context(Map.of(), Map.of(4L, Map.of("campus_id", 5L)),
+        return new Context(Map.of(), Map.of(4L, new SchedulingRoom(4L, 5L, "P4", 40, "LECTURE", "ACTIVE")),
                 periods, List.of(), holidays, List.of());
     }
 
