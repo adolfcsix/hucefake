@@ -11,6 +11,7 @@ import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
 import vn.huce.model.HolidayDraft;
 import vn.huce.model.PeriodDraft;
+import vn.huce.model.PeriodRevision;
 import vn.huce.model.RoomDraft;
 import vn.huce.repository.AuditRepository;
 import vn.huce.repository.CatalogMutationRepository;
@@ -39,12 +40,11 @@ public class CatalogMutationService {
                 text(input.get("name"), 100), number(input.get("capacity"), 1, 10000),
                 choice(input.get("type"), "LECTURE", "COMPUTER_LAB", "LAB", "STUDIO"),
                 choice(input.get("status"), "ACTIVE", "MAINTENANCE", "INACTIVE"));
-        Map<String, Object> result;
+        long result;
         if (roomId == null) {
             result = repository.insertRoom(draft);
         } else {
-            Map<String, Object> current = repository.findRoom(roomId);
-            if (n(current, "campus_id") != campusId) {
+            if (repository.roomCampus(roomId) != campusId) {
                 throw invalid("Không thể chuyển cơ sở của phòng đã lưu.");
             }
             List<Map<String, Object>> issues = repository.affectedRoomSessions(roomId, draft);
@@ -54,8 +54,8 @@ public class CatalogMutationService {
             }
             result = repository.updateRoom(roomId, draft);
         }
-        audit.record(actor, "SAVE", "teaching_rooms", n(result, "id"));
-        return result;
+        audit.record(actor, "SAVE", "teaching_rooms", result);
+        return Map.of("id", result);
     }
 
     private void holidayScope(Actor actor, Long campusId) {
@@ -82,16 +82,15 @@ public class CatalogMutationService {
         if (!issues.isEmpty()) {
             throw conflict(Map.of("issues", issues));
         }
-        Map<String, Object> result;
+        long result;
         if (holidayId != null) {
-            Map<String, Object> current = repository.findHoliday(holidayId);
-            holidayScope(actor, SchedulingService.nullableId(current.get("campus_id")));
+            holidayScope(actor, repository.holidayCampus(holidayId));
             result = repository.updateHoliday(holidayId, draft);
         } else {
             result = repository.insertHoliday(draft, actor.id());
         }
-        audit.record(actor, "SAVE", "non_teaching_days", n(result, "id"));
-        return result;
+        audit.record(actor, "SAVE", "non_teaching_days", result);
+        return Map.of("id", result);
     }
 
     public Object createPeriod(Actor actor, Map<String, Object> input) {
@@ -103,9 +102,9 @@ public class CatalogMutationService {
         if (!draft.startTime().isBefore(draft.endTime())) {
             throw invalid("Giờ bắt đầu phải trước giờ kết thúc.");
         }
-        Map<String, Object> current = repository.latestPeriod(draft);
+        PeriodRevision current = repository.latestPeriod(draft);
         if (current != null && (!draft.effectiveFrom().isAfter(LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh")))
-                || !draft.effectiveFrom().isAfter(SchedulingService.day(current.get("effective_from"))))) {
+                || !draft.effectiveFrom().isAfter(current.effectiveFrom()))) {
             throw invalid("Khung tiết mới phải có ngày hiệu lực trong tương lai và sau khung hiện có.");
         }
         List<Map<String, Object>> issues = repository.affectedPeriodSessions(draft);
@@ -116,9 +115,9 @@ public class CatalogMutationService {
             throw invalid("Giờ của tiết mới chồng lấn hoặc sai thứ tự.");
         }
         if (current != null) {
-            repository.closePeriod(n(current, "id"), draft);
+            repository.closePeriod(current.id(), draft);
         }
-        Map<String, Object> result = repository.insertPeriod(draft);
+        long result = repository.insertPeriod(draft);
         SchedulingService.Context context = scheduling.context();
         for (SchedulingService.Slot slot : context.patterns()) {
             if (context.rooms().get(slot.room()).campusId() == draft.campusId()
@@ -127,8 +126,8 @@ public class CatalogMutationService {
                 scheduling.verify(context, slot, actor);
             }
         }
-        audit.record(actor, "CREATE", "period_definitions", n(result, "id"));
-        return result;
+        audit.record(actor, "CREATE", "period_definitions", result);
+        return Map.of("id", result);
     }
 
     private LocalTime time(Object value) {

@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
 import vn.huce.model.RoomDraft;
+import vn.huce.model.PeriodRevision;
 import vn.huce.model.SchedulingRoom;
 import vn.huce.repository.AuditRepository;
 import vn.huce.repository.CatalogMutationRepository;
@@ -29,7 +30,7 @@ class CatalogMutationServiceTest {
     @Test
     void createsNormalizedRoomAndRecordsAudit() {
         RoomDraft draft = new RoomDraft(4L, "A101", "Phòng A101", 40, "LECTURE", "ACTIVE");
-        when(repository.insertRoom(draft)).thenReturn(Map.of("id", 7L));
+        when(repository.insertRoom(draft)).thenReturn(7L);
         assertEquals(Map.of("id", 7L), service.room(staff, roomInput(), null));
         verify(scheduling).requireCampus(staff, 4L);
         verify(audit).record(staff, "SAVE", "teaching_rooms", 7L);
@@ -37,7 +38,7 @@ class CatalogMutationServiceTest {
 
     @Test
     void rejectsRoomCampusTransfer() {
-        when(repository.findRoom(7L)).thenReturn(Map.of("campus_id", 8L));
+        when(repository.roomCampus(7L)).thenReturn(8L);
         assertThrows(ApiFailure.class, () -> service.room(staff, roomInput(), 7L));
         verify(repository, never()).updateRoom(anyLong(), any());
         verifyNoInteractions(audit);
@@ -45,7 +46,7 @@ class CatalogMutationServiceTest {
 
     @Test
     void rejectsRoomUpdateWithConflictingSessions() {
-        when(repository.findRoom(7L)).thenReturn(Map.of("campus_id", 4L));
+        when(repository.roomCampus(7L)).thenReturn(4L);
         when(repository.affectedRoomSessions(eq(7L), any())).thenReturn(List.of(Map.of("id", 9L)));
         ApiFailure failure = assertThrows(ApiFailure.class, () -> service.room(staff, roomInput(), 7L));
         assertEquals("SCHEDULE_CONFLICT", failure.code());
@@ -72,7 +73,7 @@ class CatalogMutationServiceTest {
                 List.of(), List.of(), List.of(), List.of(affected, otherCampus, otherPeriod));
         when(scheduling.context()).thenReturn(context);
         when(repository.latestPeriod(any())).thenReturn(null);
-        when(repository.insertPeriod(any())).thenReturn(Map.of("id", 9L));
+        when(repository.insertPeriod(any())).thenReturn(9L);
         assertEquals(Map.of("id", 9L), service.createPeriod(staff, Map.of("campusId", 4L,
                 "periodNo", 2, "effectiveFrom", from.toString(),
                 "startTime", "08:00", "endTime", "08:50", "shift", "MORNING")));
@@ -80,6 +81,18 @@ class CatalogMutationServiceTest {
         verify(scheduling, never()).verify(context, otherCampus, staff);
         verify(scheduling, never()).verify(context, otherPeriod, staff);
         verify(audit).record(staff, "CREATE", "period_definitions", 9L);
+    }
+
+    @Test
+    void replacementPeriodMustFollowExistingRevision() {
+        LocalDate from = LocalDate.now(java.time.ZoneId.of("Asia/Ho_Chi_Minh")).plusDays(2);
+        when(repository.latestPeriod(any())).thenReturn(new PeriodRevision(8L, from));
+        assertEquals("VALIDATION_ERROR", assertThrows(ApiFailure.class, () -> service.createPeriod(staff,
+                Map.of("campusId", 4L, "periodNo", 2, "effectiveFrom", from.toString(),
+                        "startTime", "08:00", "endTime", "08:50", "shift", "MORNING"))).code());
+        verify(repository, never()).closePeriod(anyLong(), any());
+        verify(repository, never()).insertPeriod(any());
+        verifyNoInteractions(audit);
     }
 
     @Test
