@@ -22,7 +22,7 @@ server:
   servlet:
     session:
       cookie:
-        name: HUCE_SPRING_SID
+        name: ${SESSION_COOKIE_NAME:HUCE_SPRING_SID}
         http-only: true
         same-site: lax
         secure: ${COOKIE_SECURE:false}

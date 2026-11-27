@@ -19,6 +19,7 @@ services:
       target: ${HUCE_BUILD_TARGET:-local}
     environment:
       DEMO: "true"
+      SESSION_COOKIE_NAME: HUCE_DEMO_SID
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-}
       PORT: "8080"

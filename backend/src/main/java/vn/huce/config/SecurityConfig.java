@@ -3,6 +3,7 @@ package vn.huce.config;
 import java.io.IOException;
 import java.util.List;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -36,7 +37,8 @@ public class SecurityConfig {
 
     @Bean
     SecurityFilterChain security(HttpSecurity http, HttpSessionSecurityContextRepository contexts,
-                                 AccountService accounts) throws Exception {
+                                 AccountService accounts,
+                                 @Value("${server.servlet.session.cookie.name}") String sessionCookieName) throws Exception {
         var csrf = new HttpSessionCsrfTokenRepository();
         csrf.setHeaderName("X-CSRF-Token");
         var handler = new CsrfTokenRequestAttributeHandler();
@@ -57,7 +59,7 @@ public class SecurityConfig {
                                 write(response, 403, error instanceof CsrfException ? "CSRF_INVALID" : "FORBIDDEN",
                                         "Yêu cầu không có quyền hoặc phiên biểu mẫu đã hết hạn.")))
                 .logout(config -> config.logoutUrl("/api/auth/logout")
-                        .deleteCookies("HUCE_SPRING_SID", "SESSION")
+                        .deleteCookies(sessionCookieName, "SESSION")
                         .logoutSuccessHandler((request, response, auth) -> response.setStatus(204)))
                 .build();
     }

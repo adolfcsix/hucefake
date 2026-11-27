@@ -100,7 +100,7 @@ cd backend
 mvn clean verify
 mvn spring-boot:run
 ```
-Thay mật khẩu đúng PostgreSQL. Mặc định backend lắng nghe localhost:8080. Chọn DEMO=false và database riêng để chạy bản trắng. Java không tự nạp .env; cần đặt biến môi trường trong terminal. Linux/macOS dùng export thay cho $env:.
+Thay mật khẩu đúng PostgreSQL. Mặc định backend lắng nghe localhost:8080. Chọn DEMO=false và database riêng để chạy bản trắng. Java không tự nạp .env; cần đặt biến môi trường trong terminal. Dùng `DEMO=true` chỉ với database demo mới hoặc đã khởi tạo demo; bản trắng dùng `DEMO=false` với database riêng. Nếu dùng Docker PostgreSQL và thay mật khẩu, phải đặt DB_PASSWORD trước lần tạo volume đầu tiên; đổi biến môi trường không tự đổi mật khẩu role trong volume đã tồn tại. Linux/macOS dùng export thay cho $env:.
 
 **Terminal 2** (mở tại thư mục gốc):
 ```powershell
@@ -140,13 +140,13 @@ CLI hỏi mật khẩu ẩn hai lần (ít nhất 10 ký tự, tối đa 72 byte
 
 ### Dữ liệu riêng bằng Docker
 
-Dừng demo hoặc dùng cổng khác. Bản riêng có project/volume khác:
+Dừng demo hoặc dùng cổng khác. Bản riêng có project/volume và cookie phiên khác. Nếu demo vẫn chạy ở 8081, đặt `$env:FM05_WEB_PORT='8082'` trước các lệnh dưới đây và mở http://localhost:8082. Dùng cùng hostname (không đổi qua lại localhost và 127.0.0.1).
 ```powershell
 docker compose -f compose.share.yaml -f compose.private.yaml up -d --build --wait
 docker compose -f compose.share.yaml -f compose.private.yaml run --rm -v "${PWD}/config:/config:ro" app setup catalog /config/local.json
 docker compose -f compose.share.yaml -f compose.private.yaml run --rm app setup account --username quanly_rieng --email manager@example.test --role MANAGER
 ```
-Lặp lệnh setup account cho ba vai trò còn lại với tham số tương ứng ở trên. Đăng nhập bằng tên riêng. Giữ volume khi dừng. Trường hợp chạy song song đặt FM05_WEB_PORT khác cho bản riêng.
+Lặp lệnh setup account cho ba vai trò còn lại với tham số tương ứng ở trên. Đăng nhập bằng tên riêng. Giữ volume khi dừng. Demo dùng `HUCE_DEMO_SID`, bản riêng dùng `HUCE_PRIVATE_SID`; đăng xuất một bản không xóa phiên của bản còn lại. Sau khi nâng cấp từ phiên bản cookie cũ, đăng nhập lại. Khi chạy nhiều backend native trên cùng hostname, đặt `SESSION_COOKIE_NAME` khác nhau trong từng terminal backend, đồng thời dùng database và cổng riêng. Không cần sửa React.
 
 ## 6. Xóa bốn nút đăng nhập nhanh
 
@@ -362,3 +362,8 @@ useFetch bắt cả lỗi đồng bộ từ loader và lỗi Promise, vẫn bỏ
 ### Tổ chức CSS và kiểm tra module dư thừa
 
 `frontend/src/styles/style.css` là điểm nhập CSS, giữ thứ tự cascade: base, workspace, timetable, dialogs, login, student, responsive, workflow-details, chat. Nội dung các quy tắc được chuyển nguyên văn, không đổi selector, giá trị, media query hoặc thứ tự. Không xóa token hoặc selector chỉ vì chưa thấy trong một màn hình; trạng thái động cần kiểm tra trình duyệt. Source Integrity kiểm tra tất cả module JS/JSX/CSS sản xuất đều có đường dẫn từ main.jsx qua import, phát hiện module bị bỏ lại sau cải tổ. Hướng dẫn xóa CSS nút demo sử dụng login.css. Cần build và nghiệm thu browser để xác nhận cascade sau Vite bundling.
+
+
+### Kiểm toán cài đặt song song demo và dữ liệu riêng
+
+Đối chiếu application.yml, ba Compose, Dockerfile, Vite và cấu hình Spring Security. Cookie không phân biệt cổng trên cùng hostname: tách cookie demo/private và dùng tên được cấu hình khi logout. Bổ sung kiểm thử Chromium cùng browser context đăng nhập hai bản, đọc /api/me độc lập và đăng xuất riêng từng bản. Backend native giữ tên cookie mặc định để tương thích. Không thay đổi database hoặc dữ liệu đã lưu. Cần CI container mới xác nhận trên runtime thật.

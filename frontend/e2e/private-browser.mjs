@@ -95,6 +95,31 @@ try{
   }
  }
  if(phase==='term'){
+  // Both Compose applications run on 127.0.0.1; cookies are not isolated by port.
+  const context=await browser.newContext()
+  try{
+   const demo='http://127.0.0.1:8081'
+   const request=context.request
+   async function mutation(origin,path,body){
+    const tokenResponse=await request.get(origin+'/api/csrf')
+    assert.equal(tokenResponse.status(),200)
+    const token=await tokenResponse.json()
+    return request.post(origin+path,{headers:{[token.header]:token.token},...(body===undefined?{}:{data:body})})
+   }
+   assert.equal((await mutation(demo,'/api/auth/demo-login',{role:'STUDENT'})).status(),200)
+   assert.equal((await mutation(base,'/api/auth/login',{username:users.STUDENT,password:process.env.FM05_SETUP_PASSWORD})).status(),200)
+   assert.equal((await request.get(demo+'/api/me').then(r=>r.json())).username,'sinhvien')
+   assert.equal((await request.get(base+'/api/me').then(r=>r.json())).username,users.STUDENT)
+   const names=(await context.cookies()).map(cookie=>cookie.name)
+   assert.ok(names.includes('HUCE_DEMO_SID'))
+   assert.ok(names.includes('HUCE_PRIVATE_SID'))
+   assert.equal((await mutation(base,'/api/auth/logout')).status(),204)
+   assert.equal((await request.get(base+'/api/me')).status(),401)
+   assert.equal((await request.get(demo+'/api/me').then(r=>r.json())).username,'sinhvien')
+   assert.equal((await mutation(demo,'/api/auth/logout')).status(),204)
+   assert.equal((await request.get(demo+'/api/me')).status(),401)
+   console.log('PASS: demo/private session isolation on one browser and host')
+  }finally{await context.close()}
   const staff=await open('STAFF',1440)
   const page=staff.page
   try{
