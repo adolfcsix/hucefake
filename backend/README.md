@@ -90,4 +90,7 @@ Kiểm thử source-integrity rà cả import trong mã frontend, unit test và 
 
 ### Genetic Algorithm
 
-`GeneticInputBuilder` chọn lớp thuộc phạm vi, đọc lịch công bố qua SchedulingRepository và xây dựng miền ứng viên theo các ràng buộc hiện có. `GeneticFitnessEvaluator` đánh giá vi phạm cứng/mềm và giữ cache cục bộ từng lần giải. `GeneticScheduler` điều phối tiến hóa và báo tiến độ. Không thay đổi trọng số, mặc định, thứ tự lấy số ngẫu nhiên, giới hạn thời gian hoặc công thức fitness. Bài kiểm thử seed cố định và trọng số được bổ sung; benchmark tích hợp hiện có vẫn cần chạy trên HEAD mới. Các thao tác tiến hóa và record nội bộ tiếp tục được chuẩn hóa ở đợt sau.
+`GeneticInputBuilder` chọn lớp thuộc phạm vi, đọc lịch công bố qua SchedulingRepository và xây dựng miền ứng viên theo các ràng buộc hiện có. `GeneticFitnessEvaluator` đánh giá vi phạm cứng/mềm và giữ cache cục bộ từng lần giải. `GeneticScheduler` điều phối tiến hóa và báo tiến độ. Không thay đổi trọng số, mặc định, thứ tự lấy số ngẫu nhiên, giới hạn thời gian hoặc công thức fitness. Bài kiểm thử seed cố định và trọng số được bổ sung; benchmark tích hợp hiện có vẫn cần chạy trên HEAD mới. Các thao tác tiến hóa được tách tiếp sang GeneticEvolution; record nội bộ vẫn được giữ để tránh thay đổi đồng loạt hợp đồng giữa các class.
+
+
+`GeneticEvolution` thực hiện lấy mẫu miền, khởi tạo tham lam, tournament ba cá thể, lai ghép theo lớp học phần, đột biến và sửa vi phạm cứng cục bộ. Một Random theo seed được truyền vào để bảo toàn thứ tự lấy số ngẫu nhiên. GeneticScheduler duy trì elitism hai cá thể, giới hạn thế hệ/thời gian, báo tiến độ và ghi chú vi phạm. Bổ sung kiểm thử trực tiếp các toán tử; benchmark tích hợp phải được xác minh trên commit mới.

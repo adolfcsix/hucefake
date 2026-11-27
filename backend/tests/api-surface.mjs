@@ -128,3 +128,7 @@ for (const name of ['GeneticScheduler', 'GeneticInputBuilder', 'GeneticFitnessEv
   assert.doesNotMatch(source, /\b(?:SqlStore|JdbcTemplate|SELECT|INSERT\s+INTO|DELETE\s+FROM|UPDATE\s+\w+\s+SET)\b/)
 }
 console.log('PASS: genetic input and fitness boundaries')
+
+const geneticEvolution = readFileSync(new URL('service/GeneticEvolution.java', root), 'utf8')
+assert.doesNotMatch(geneticEvolution, /\b(?:SqlStore|JdbcTemplate|SELECT|INSERT\s+INTO|DELETE\s+FROM|UPDATE\s+\w+\s+SET)\b/)
+console.log('PASS: genetic evolution persistence boundary')
