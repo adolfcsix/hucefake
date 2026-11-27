@@ -61,3 +61,11 @@ assert.doesNotMatch(sectionMutationService, /\b(?:SqlStore|JdbcTemplate|SELECT|I
 assert.ok(existsSync(new URL('repository/SchedulePatternRepository.java', root)))
 assert.ok(existsSync(new URL('model/PatternDraft.java', root)))
 console.log('PASS: section mutation persistence boundaries')
+
+const catalogMutationService = readFileSync(new URL('service/CatalogMutationService.java', root), 'utf8')
+assert.doesNotMatch(catalogMutationService, /\b(?:SqlStore|JdbcTemplate|SELECT|INSERT\s+INTO|DELETE\s+FROM|UPDATE\s+\w+\s+SET)\b/)
+assert.ok(existsSync(new URL('repository/CatalogMutationRepository.java', root)))
+for (const name of ['RoomDraft', 'HolidayDraft', 'PeriodDraft']) {
+  assert.ok(existsSync(new URL('model/' + name + '.java', root)))
+}
+console.log('PASS: catalog mutation persistence boundaries')

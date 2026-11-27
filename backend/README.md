@@ -46,3 +46,8 @@ Nhóm nghiệp vụ HUCEChat nằm trong `service/chat/` (nhận diện intent, 
 Kiểm thử source-integrity rà cả import trong mã frontend, unit test và E2E để phát hiện đường dẫn cũ khi đổi thư mục.
 
 `PatternDraft` định kiểu dữ liệu lịch định kỳ; `SchedulePatternRepository` phụ trách đọc, ghi, xóa lịch. Các thao tác ghi tiếp tục tham gia giao dịch và khóa của MutationService; không thay đổi hợp đồng HTTP hoặc schema.
+
+
+### Danh mục phòng học, ngày nghỉ và khung tiết
+
+`CatalogMutationService` xử lý quyền theo cơ sở, dữ liệu đầu vào, ngày giờ hiệu lực và kiểm tra xung đột; không thực thi SQL trực tiếp. `CatalogMutationRepository` phụ trách các truy vấn và thao tác ghi. Ba model `RoomDraft`, `HolidayDraft`, `PeriodDraft` mô tả dữ liệu đã kiểm tra, trong đó ngày giờ sử dụng LocalDate và LocalTime. Việc ghi dữ liệu và nhật ký vẫn nằm trong giao dịch hiện có của MutationService.
