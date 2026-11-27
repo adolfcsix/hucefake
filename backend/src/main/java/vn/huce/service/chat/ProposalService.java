@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
 import vn.huce.model.ProposalAction;
+import vn.huce.model.ProposalSnapshot;
 import vn.huce.repository.AuditRepository;
 import vn.huce.repository.ChatRepository;
 import vn.huce.repository.NotificationRepository;
@@ -145,49 +146,46 @@ public class ProposalService {
         return new Preview(Map.of("lastId", summary.lastId()), null, Map.of("count", summary.count()));
     }
 
-    public Map<String, Object> owned(Actor actor, long proposalId) {
+    private ProposalSnapshot owned(Actor actor, long proposalId) {
         var row = repository.lock(proposalId);
-        if (n(row, "requested_by") != actor.id()) {
+        if (row.requestedBy() != actor.id()) {
             throw forbidden();
         }
-        permission(actor, s(row, "action"));
+        permission(actor, row.action().name());
         if (repository.hasDifferentConversationScope(proposalId, actor)) {
             throw forbidden();
         }
-        row.put("parameters", decode(row.remove("params_json")));
-        row.put("result", decode(row.remove("result_json")));
         return row;
     }
 
-    @SuppressWarnings("unchecked")
     public Object confirm(Actor actor, long proposalId) {
         var proposal = owned(actor, proposalId);
-        if (proposal.get("result") != null) {
-            return proposal.get("result");
+        if (proposal.resultJson() != null) {
+            return decode(proposal.resultJson());
         }
-        if (proposal.get("cancelled_at") != null) {
+        if (proposal.cancelled()) {
             throw state("Đề xuất đã hủy.");
         }
-        if (Boolean.TRUE.equals(proposal.get("expired"))) {
+        if (proposal.expired()) {
             throw state("Đề xuất đã hết hạn. Hãy tạo đề xuất mới.");
         }
-        ProposalAction action = action(s(proposal, "action"));
-        var parameters = (Map<String, Object>) proposal.get("parameters");
+        ProposalAction action = proposal.action();
+        var parameters = decode(proposal.parametersJson());
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("action", action.name());
         switch (action) {
-            case GENERATE -> result.put("id", runs.enqueue(actor, n(proposal, "semester_id"), parameters).id());
+            case GENERATE -> result.put("id", runs.enqueue(actor, proposal.semesterId(), parameters).id());
             case APPLY -> {
-                var run = runs.snapshot(actor, n(proposal, "run_id"));
-                if (run.semesterId() != n(proposal, "semester_id")) {
+                var run = runs.snapshot(actor, proposal.runId());
+                if (run.semesterId() != proposal.semesterId()) {
                     throw forbidden();
                 }
-                var applied = runs.apply(actor, n(proposal, "run_id"));
+                var applied = runs.apply(actor, proposal.runId());
                 result.put("status", applied.status().name());
                 if (applied.patterns() != null) {
                     result.put("patterns", applied.patterns());
                 }
-                result.put("id", proposal.get("run_id"));
+                result.put("id", proposal.runId());
             }
             case DRAFT -> {
                 result.put("id", sections.saveDraft(actor, parameters).id());
@@ -202,7 +200,7 @@ public class ProposalService {
 
     public Object cancel(Actor actor, long proposalId) {
         var row = owned(actor, proposalId);
-        if (row.get("result") != null) {
+        if (row.resultJson() != null) {
             throw state("Đề xuất đã thực hiện.");
         }
         repository.cancel(proposalId);

@@ -1,6 +1,8 @@
 package vn.huce.service.chat;
 
 import vn.huce.model.ChatSemester;
+import vn.huce.model.ProposalAction;
+import vn.huce.model.ProposalSnapshot;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -48,15 +50,14 @@ class ProposalServiceTest {
 
     @Test
     void proposalFromDifferentAccountIsRejected() {
-        when(repository.lock(7L)).thenReturn(new LinkedHashMap<>(Map.of("requested_by", 2L)));
+        when(repository.lock(7L)).thenReturn(new ProposalSnapshot(2L, null, null, ProposalAction.READ_NOTICES, null, null, false, false));
         assertEquals(403, assertThrows(ApiFailure.class, () -> service.confirm(student, 7L)).status());
         verifyNoInteractions(notifications, audit, runs, sections);
     }
 
     @Test
     void changedConversationScopeIsRejected() {
-        when(repository.lock(7L)).thenReturn(new LinkedHashMap<>(Map.of(
-                "requested_by", 1L, "action", "READ_NOTICES")));
+        when(repository.lock(7L)).thenReturn(new ProposalSnapshot(1L, null, null, ProposalAction.READ_NOTICES, null, null, false, false));
         when(repository.hasDifferentConversationScope(7L, student)).thenReturn(true);
         assertEquals(403, assertThrows(ApiFailure.class, () -> service.confirm(student, 7L)).status());
         verifyNoInteractions(notifications, audit, runs, sections);
@@ -64,18 +65,14 @@ class ProposalServiceTest {
 
     @Test
     void expiredProposalCannotChangeData() {
-        when(repository.lock(7L)).thenReturn(new LinkedHashMap<>(Map.of(
-                "requested_by", 1L, "action", "READ_NOTICES", "expired", true,
-                "params_json", "{\"lastId\":12}")));
+        when(repository.lock(7L)).thenReturn(new ProposalSnapshot(1L, null, null, ProposalAction.READ_NOTICES, "{\"lastId\":12}", null, false, true));
         assertThrows(ApiFailure.class, () -> service.confirm(student, 7L));
         verifyNoInteractions(notifications, audit, runs, sections);
     }
 
     @Test
     void alreadyConfirmedProposalReturnsRecordedResultWithoutRepeatingMutation() {
-        when(repository.lock(7L)).thenReturn(new LinkedHashMap<>(Map.of(
-                "requested_by", 1L, "action", "READ_NOTICES",
-                "result_json", "{\"action\":\"READ_NOTICES\",\"marked\":3}")));
+        when(repository.lock(7L)).thenReturn(new ProposalSnapshot(1L, null, null, ProposalAction.READ_NOTICES, null, "{\"action\":\"READ_NOTICES\",\"marked\":3}", false, false));
         assertEquals(Map.of("action", "READ_NOTICES", "marked", 3), service.confirm(student, 7L));
         verifyNoInteractions(notifications, audit, runs, sections);
         verify(repository, never()).confirm(anyLong(), anyString());
@@ -83,9 +80,7 @@ class ProposalServiceTest {
 
     @Test
     void notificationConfirmationOnlyMarksThroughPreviewedId() {
-        when(repository.lock(7L)).thenReturn(new LinkedHashMap<>(Map.of(
-                "requested_by", 1L, "action", "READ_NOTICES", "expired", false,
-                "params_json", "{\"lastId\":12}")));
+        when(repository.lock(7L)).thenReturn(new ProposalSnapshot(1L, null, null, ProposalAction.READ_NOTICES, "{\"lastId\":12}", null, false, false));
         when(notifications.markThrough(1L, 12L)).thenReturn(3);
         assertEquals(Map.of("action", "READ_NOTICES", "marked", 3), service.confirm(student, 7L));
         verify(notifications).markThrough(1L, 12L);
@@ -95,12 +90,18 @@ class ProposalServiceTest {
 
     @Test
     void cancelledProposalCannotBeExecuted() {
-        when(repository.lock(7L)).thenReturn(new LinkedHashMap<>(Map.of(
-                "requested_by", 1L, "action", "READ_NOTICES", "cancelled_at", "2026-11-27",
-                "params_json", "{\"lastId\":12}")));
+        when(repository.lock(7L)).thenReturn(new ProposalSnapshot(1L, null, null, ProposalAction.READ_NOTICES, "{\"lastId\":12}", null, true, false));
         assertEquals(409, assertThrows(ApiFailure.class, () -> service.confirm(student, 7L)).status());
         verifyNoInteractions(notifications, audit, runs, sections);
         verify(repository, never()).confirm(anyLong(), anyString());
+    }
+
+    @Test
+    void confirmedProposalCannotBeCancelled() {
+        when(repository.lock(7L)).thenReturn(new ProposalSnapshot(1L, null, null,
+                ProposalAction.READ_NOTICES, null, "{\"marked\":3}", false, false));
+        assertEquals(409, assertThrows(ApiFailure.class, () -> service.cancel(student, 7L)).status());
+        verify(repository, never()).cancel(anyLong());
     }
 
     @Test
@@ -168,9 +169,7 @@ class ProposalServiceTest {
     @Test
     void confirmedGenerateKeepsResultContract() {
         Actor staff = new Actor(2L, "staff", "STAFF", 3L, 4L);
-        when(repository.lock(11L)).thenReturn(new LinkedHashMap<>(Map.of(
-                "requested_by", 2L, "action", "GENERATE", "expired", false,
-                "semester_id", 7L, "params_json", "{}")));
+        when(repository.lock(11L)).thenReturn(new ProposalSnapshot(2L, 7L, null, ProposalAction.GENERATE, "{}", null, false, false));
         when(runs.enqueue(eq(staff), eq(7L), anyMap())).thenReturn(new ScheduleRunIdResponse(9L));
         assertEquals(Map.of("action", "GENERATE", "id", 9L), service.confirm(staff, 11L));
         verify(repository).confirm(eq(11L), anyString());
@@ -180,9 +179,7 @@ class ProposalServiceTest {
     @Test
     void confirmedApplyKeepsOptionalPatternCount() {
         Actor staff = new Actor(2L, "staff", "STAFF", 3L, 4L);
-        when(repository.lock(11L)).thenAnswer(call -> new LinkedHashMap<>(Map.of(
-                "requested_by", 2L, "action", "APPLY", "expired", false,
-                "semester_id", 7L, "run_id", 9L)));
+        when(repository.lock(11L)).thenAnswer(call -> new ProposalSnapshot(2L, 7L, 9L, ProposalAction.APPLY, null, null, false, false));
         when(runs.snapshot(staff, 9L)).thenReturn(new ScheduleRunSnapshot(
                 9L, 7L, 2L, ScheduleRunStatus.COMPLETED, 0));
         when(runs.apply(staff, 9L)).thenReturn(
@@ -197,9 +194,7 @@ class ProposalServiceTest {
     @Test
     void confirmedDraftKeepsResultContract() {
         Actor staff = new Actor(2L, "staff", "STAFF", 3L, 4L);
-        when(repository.lock(11L)).thenReturn(new LinkedHashMap<>(Map.of(
-                "requested_by", 2L, "action", "DRAFT", "expired", false,
-                "params_json", "{\"code\":\"CS01\"}")));
+        when(repository.lock(11L)).thenReturn(new ProposalSnapshot(2L, null, null, ProposalAction.DRAFT, "{\"code\":\"CS01\"}", null, false, false));
         when(sections.saveDraft(eq(staff), anyMap())).thenReturn(new SectionIdResponse(9L));
         assertEquals(Map.of("action", "DRAFT", "id", 9L, "code", "CS01"), service.confirm(staff, 11L));
         verify(repository).confirm(eq(11L), anyString());
