@@ -2,7 +2,6 @@ package vn.huce.service;
 
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Service;
 import vn.huce.Accounts.Actor;
@@ -30,18 +29,16 @@ public class SessionMutationService {
     private final AuditRepository audit;
     private final SchedulingService scheduling;
     private final NotificationService notifications;
-    private final AvailabilityService availabilityService;
     private final SessionReplacementService replacements;
 
     SessionMutationService(SessionChangeRepository repository, SectionRepository sectionRepository,
                            AuditRepository audit, SchedulingService scheduling, NotificationService notifications,
-                           AvailabilityService availabilityService, SessionReplacementService replacements) {
+                           SessionReplacementService replacements) {
         this.repository = repository;
         this.sectionRepository = sectionRepository;
         this.audit = audit;
         this.scheduling = scheduling;
         this.notifications = notifications;
-        this.availabilityService = availabilityService;
         this.replacements = replacements;
     }
 
@@ -95,14 +92,6 @@ public class SessionMutationService {
             audit.record(actor, request.status().name(), "session_change_requests", request.id());
             notifications.notifyStaffProfile(request.staffId(), request.reason());
         }
-    }
-
-    public List<Map<String, Object>> availability(Actor actor, long semesterId) {
-        return availabilityService.find(actor, semesterId);
-    }
-
-    public void setAvailability(Actor actor, Map<String, Object> input) {
-        availabilityService.replace(actor, input);
     }
 
     public Object requests(Actor actor, Map<String, String> query) {

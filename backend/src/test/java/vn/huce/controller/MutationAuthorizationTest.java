@@ -15,6 +15,7 @@ import vn.huce.service.RunService;
 import vn.huce.service.SectionMutationService;
 import vn.huce.service.SectionService;
 import vn.huce.service.SessionMutationService;
+import vn.huce.service.AvailabilityService;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -26,13 +27,14 @@ class MutationAuthorizationTest {
     private final SectionService sections = mock(SectionService.class);
     private final SectionMutationService sectionChanges = mock(SectionMutationService.class);
     private final SessionMutationService sessions = mock(SessionMutationService.class);
+    private final AvailabilityService availability = mock(AvailabilityService.class);
     private final ApprovalService approvals = mock(ApprovalService.class);
     private final RunService runs = mock(RunService.class);
     private final HttpServletRequest request = mock(HttpServletRequest.class);
     private final Map<String, Object> body = Map.of();
     private final CatalogMutationController catalogController = new CatalogMutationController(writes, catalog);
     private final SectionController sectionController = new SectionController(writes, sections, sectionChanges);
-    private final SessionMutationController sessionController = new SessionMutationController(writes, sessions);
+    private final SessionMutationController sessionController = new SessionMutationController(writes, sessions, availability);
     private final ApprovalController approvalController = new ApprovalController(writes, approvals);
     private final RunController runController = new RunController(writes, runs);
 
@@ -48,7 +50,7 @@ class MutationAuthorizationTest {
             assertEquals(403, error.status());
             assertEquals("FORBIDDEN", error.code());
         }
-        verifyNoInteractions(writes, catalog, sections, sectionChanges, sessions, approvals, runs, request);
+        verifyNoInteractions(writes, catalog, sections, sectionChanges, sessions, availability, approvals, runs, request);
     }
 
     @Test

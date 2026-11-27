@@ -18,6 +18,7 @@ import vn.huce.repository.CatalogRepository;
 import vn.huce.service.ApprovalService;
 import vn.huce.service.SectionService;
 import vn.huce.service.SessionMutationService;
+import vn.huce.service.AvailabilityService;
 import vn.huce.service.SessionReadService;
 
 import static vn.huce.validation.Inputs.*;
@@ -30,15 +31,18 @@ class ChatReplyService {
     private final ApprovalService approvals;
     private final SessionReadService reads;
     private final SessionMutationService sessions;
+    private final AvailabilityService availability;
 
     ChatReplyService(CatalogRepository catalog, ProposalService proposals, SectionService sections,
-                     ApprovalService approvals, SessionReadService reads, SessionMutationService sessions) {
+                     ApprovalService approvals, SessionReadService reads, SessionMutationService sessions,
+                     AvailabilityService availability) {
         this.catalog = catalog;
         this.proposals = proposals;
         this.sections = sections;
         this.approvals = approvals;
         this.reads = reads;
         this.sessions = sessions;
+        this.availability = availability;
     }
 
     private static final String EMPTY = "Chưa tìm thấy dữ liệu trong phạm vi đã chọn.";
@@ -172,7 +176,7 @@ class ChatReplyService {
     }
 
     private Map<String, Object> availability(Actor actor, ChatSemester semester, String code) {
-        var rows = sessions.availability(actor, semester.id());
+        var rows = availability.find(actor, semester.id());
         var entries = rows.stream().limit(8).map(row -> item(
                 (n(row, "day_of_week") == 7 ? "Chủ nhật" : "Thứ " + (n(row, "day_of_week") + 1))
                         + " · tiết " + row.get("period_from") + "–" + row.get("period_to"),

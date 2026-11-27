@@ -30,9 +30,8 @@ class SessionMutationServiceTest {
     private final AuditRepository audit = mock(AuditRepository.class);
     private final SchedulingService scheduling = mock(SchedulingService.class);
     private final NotificationService notifications = mock(NotificationService.class);
-    private final AvailabilityService availability = mock(AvailabilityService.class);
     private final SessionMutationService service = new SessionMutationService(repository, sections, audit,
-            scheduling, notifications, availability, new SessionReplacementService(repository, scheduling));
+            scheduling, notifications, new SessionReplacementService(repository, scheduling));
     private final Actor staff = new Actor(1L, "staff", "STAFF", 2L, 3L);
 
     @Test
@@ -40,7 +39,7 @@ class SessionMutationServiceTest {
         Actor student = new Actor(9L, "student", "STUDENT", null, null);
         assertEquals(403, assertThrows(ApiFailure.class, () -> service.change(student, 7L, Map.of(), null)).status());
         assertEquals(403, assertThrows(ApiFailure.class, () -> service.decide(student, 7L, Map.of())).status());
-        verifyNoInteractions(repository, sections, audit, scheduling, notifications, availability);
+        verifyNoInteractions(repository, sections, audit, scheduling, notifications);
     }
 
     @Test
