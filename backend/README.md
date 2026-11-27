@@ -119,3 +119,8 @@ SessionChangeAction và SessionRequestStatus tách hành động điều chỉnh
 ### Kiểu dữ liệu lần chạy xếp lịch
 
 ScheduleRunStatus phản ánh sáu trạng thái trong ràng buộc schedule_runs, tập trung điều kiện xem lần chạy của quản lý và loại bỏ lần chạy. ClaimedScheduleRun định kiểu dữ liệu worker nhận; ScheduleRunItem định kiểu phương án trước khi kiểm tra lại và áp dụng. RunRepository ánh xạ JDBC, RunWorker sử dụng Actor đã ánh xạ và không đọc Map cột dữ liệu. RunController được chuẩn hóa cách trình bày; các phản hồi động và body chống lặp giữ nguyên JSON. Không thay đổi thuật toán, thứ tự khóa, giao dịch, schema hoặc quy tắc nghiệp vụ. Kiểm thử bổ sung quyền đọc, trạng thái, bỏ lần chạy và từ chối phương án lỗi thời.
+
+
+### Hoàn thiện Controller
+
+CatalogMutationController, SectionController, SessionReadController và ChatController được chuẩn hóa tên biến, import và phương thức xử lý HTTP; CatalogController đã gọn nên không sửa. ScheduleAssistantService chịu trách nhiệm phân quyền, kiểm tra cấu hình, hạn mức và phân loại Gemini; ChatController giữ HTTP status và giao dịch xác nhận. Giữ nguyên tham số tìm kiếm q, body gốc dùng cho fingerprint, phương thức HTTP và JSON. Không mở thêm API hay thay đổi giao diện. Bổ sung kiểm thử trợ lý xếp lịch; kiểm thử tích hợp trên HEAD mới vẫn bắt buộc.

@@ -1,16 +1,24 @@
 package vn.huce.controller;
 
-import vn.huce.Accounts;
+import jakarta.servlet.http.HttpServletRequest;
+import java.util.Map;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import vn.huce.Accounts.Actor;
 import vn.huce.service.MutationService;
 import vn.huce.service.SectionMutationService;
 import vn.huce.service.SectionService;
-
-import static vn.huce.validation.Inputs.*;
-import java.util.*;
-import jakarta.servlet.http.HttpServletRequest;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.*;
+import static vn.huce.validation.Inputs.role;
 
 @RestController
 @RequestMapping("/api")
@@ -18,58 +26,105 @@ public class SectionController {
     private final MutationService writes;
     private final SectionService sections;
     private final SectionMutationService mutations;
+
     SectionController(MutationService writes, SectionService sections, SectionMutationService mutations) {
         this.writes = writes;
         this.sections = sections;
         this.mutations = mutations;
     }
-    private Accounts.Actor actor(Authentication a){return (Accounts.Actor)a.getPrincipal();}
+
+    private Actor actor(Authentication authentication) {
+        return (Actor) authentication.getPrincipal();
+    }
+
+    private Actor staff(Authentication authentication) {
+        Actor actor = actor(authentication);
+        role(actor, "STAFF");
+        return actor;
+    }
+
     @GetMapping("/course-sections")
-    public Object sections(Authentication auth, @RequestParam Map<String,String> q) {
-        return sections.sections(actor(auth), q);
+    public Object sections(Authentication authentication, @RequestParam Map<String, String> query) {
+        return sections.sections(actor(authentication), query);
     }
 
     @GetMapping("/schedule-patterns")
-    public Object patterns(Authentication auth, @RequestParam Map<String,String> q) {
-        return sections.patterns(actor(auth), q);
+    public Object patterns(Authentication authentication, @RequestParam Map<String, String> query) {
+        return sections.patterns(actor(authentication), query);
     }
 
-    @PostMapping("/course-sections") ResponseEntity<?> create(Authentication auth,HttpServletRequest req,@RequestBody Map<String,Object> f){
-        var a=actor(auth);role(a,"STAFF");
-        return ResponseEntity.status(201).body(writes.write(a,req,f,()->sections.saveDraft(a,f)));
+    @PostMapping("/course-sections")
+    public ResponseEntity<?> create(Authentication authentication, HttpServletRequest request,
+                                    @RequestBody Map<String, Object> body) {
+        Actor actor = staff(authentication);
+        return ResponseEntity.status(201).body(writes.write(actor, request, body,
+                () -> sections.saveDraft(actor, body)));
     }
-    @PostMapping("/course-sections/import") ResponseEntity<?> imports(Authentication auth,HttpServletRequest req,@RequestBody Map<String,Object> f){
-        var a=actor(auth);role(a,"STAFF");
-        return ResponseEntity.status(201).body(writes.write(a,req,f,() -> mutations.importSections(a, f)));
+
+    @PostMapping("/course-sections/import")
+    public ResponseEntity<?> imports(Authentication authentication, HttpServletRequest request,
+                                     @RequestBody Map<String, Object> body) {
+        Actor actor = staff(authentication);
+        return ResponseEntity.status(201).body(writes.write(actor, request, body,
+                () -> mutations.importSections(actor, body)));
     }
-    @PatchMapping("/course-sections/{id}") Object update(Authentication auth,HttpServletRequest req,@PathVariable long id,@RequestBody Map<String,Object> f){
-        var a=actor(auth);role(a,"STAFF");
-        return writes.write(a,req,f,() -> mutations.update(a, id, f));
+
+    @PatchMapping("/course-sections/{id}")
+    public Object update(Authentication authentication, HttpServletRequest request, @PathVariable long id,
+                         @RequestBody Map<String, Object> body) {
+        Actor actor = staff(authentication);
+        return writes.write(actor, request, body, () -> mutations.update(actor, id, body));
     }
-    @PostMapping("/course-sections/{id}/cancel") ResponseEntity<?> cancel(Authentication auth,HttpServletRequest req,@PathVariable long id,@RequestParam(required=false) String version){
-        var a=actor(auth);role(a,"STAFF");
-        writes.write(a,req,Map.of(),() -> mutations.cancel(a, id, version));return ResponseEntity.noContent().build();
+
+    @PostMapping("/course-sections/{id}/cancel")
+    public ResponseEntity<Void> cancel(Authentication authentication, HttpServletRequest request, @PathVariable long id,
+                                       @RequestParam(required = false) String version) {
+        Actor actor = staff(authentication);
+        writes.write(actor, request, Map.of(), () -> mutations.cancel(actor, id, version));
+        return ResponseEntity.noContent().build();
     }
-    @PutMapping("/course-sections/{id}/assignments") ResponseEntity<?> assign(Authentication auth,HttpServletRequest req,@PathVariable long id,@RequestBody Map<String,Object> f){
-        var a=actor(auth);role(a,"STAFF");
-        writes.write(a,req,f,() -> mutations.assign(a, id, f));return ResponseEntity.noContent().build();
+
+    @PutMapping("/course-sections/{id}/assignments")
+    public ResponseEntity<Void> assign(Authentication authentication, HttpServletRequest request, @PathVariable long id,
+                                       @RequestBody Map<String, Object> body) {
+        Actor actor = staff(authentication);
+        writes.write(actor, request, body, () -> mutations.assign(actor, id, body));
+        return ResponseEntity.noContent().build();
     }
-    @PutMapping("/course-sections/{id}/target-groups") ResponseEntity<?> groups(Authentication auth,HttpServletRequest req,@PathVariable long id,@RequestBody Map<String,Object> f){
-        var a=actor(auth);role(a,"STAFF");
-        writes.write(a,req,f,() -> mutations.groups(a, id, f));return ResponseEntity.noContent().build();
+
+    @PutMapping("/course-sections/{id}/target-groups")
+    public ResponseEntity<Void> groups(Authentication authentication, HttpServletRequest request, @PathVariable long id,
+                                       @RequestBody Map<String, Object> body) {
+        Actor actor = staff(authentication);
+        writes.write(actor, request, body, () -> mutations.groups(actor, id, body));
+        return ResponseEntity.noContent().build();
     }
+
     @PostMapping("/schedule/conflicts/check")
-    public Object conflicts(Authentication auth, @RequestBody Map<String,Object> f) {
-        return mutations.conflicts(actor(auth), f);
+    public Object conflicts(Authentication authentication, @RequestBody Map<String, Object> body) {
+        return mutations.conflicts(actor(authentication), body);
     }
-    @PostMapping("/schedule-patterns") ResponseEntity<?> createPattern(Authentication auth,HttpServletRequest req,@RequestBody Map<String,Object> f){
-        var a=actor(auth);role(a,"STAFF");return ResponseEntity.status(201).body(writes.write(a,req,f,()->mutations.savePattern(a,f,null)));
+
+    @PostMapping("/schedule-patterns")
+    public ResponseEntity<?> createPattern(Authentication authentication, HttpServletRequest request,
+                                           @RequestBody Map<String, Object> body) {
+        Actor actor = staff(authentication);
+        return ResponseEntity.status(201).body(writes.write(actor, request, body,
+                () -> mutations.savePattern(actor, body, null)));
     }
-    @PatchMapping("/schedule-patterns/{id}") Object updatePattern(Authentication auth,HttpServletRequest req,@PathVariable long id,@RequestBody Map<String,Object> f){
-        var a=actor(auth);role(a,"STAFF");return writes.write(a,req,f,()->mutations.savePattern(a,f,id));
+
+    @PatchMapping("/schedule-patterns/{id}")
+    public Object updatePattern(Authentication authentication, HttpServletRequest request, @PathVariable long id,
+                                @RequestBody Map<String, Object> body) {
+        Actor actor = staff(authentication);
+        return writes.write(actor, request, body, () -> mutations.savePattern(actor, body, id));
     }
-    @DeleteMapping("/schedule-patterns/{id}") ResponseEntity<?> deletePattern(Authentication auth,HttpServletRequest req,@PathVariable long id,@RequestParam(required=false) String version){
-        var a=actor(auth);role(a,"STAFF");
-        writes.write(a,req,Map.of(),() -> mutations.deletePattern(a, id, version));return ResponseEntity.noContent().build();
+
+    @DeleteMapping("/schedule-patterns/{id}")
+    public ResponseEntity<Void> deletePattern(Authentication authentication, HttpServletRequest request,
+                                              @PathVariable long id, @RequestParam(required = false) String version) {
+        Actor actor = staff(authentication);
+        writes.write(actor, request, Map.of(), () -> mutations.deletePattern(actor, id, version));
+        return ResponseEntity.noContent().build();
     }
 }

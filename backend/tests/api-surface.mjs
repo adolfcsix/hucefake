@@ -140,3 +140,8 @@ assert.ok(existsSync(new URL('model/IdempotencyRecord.java', root)))
 const runRepositorySource = readFileSync(new URL('repository/RunRepository.java', root), 'utf8')
 assert.doesNotMatch(runRepositorySource, /pg_advisory_xact_lock/)
 console.log('PASS: shared mutation locking and typed idempotency records')
+
+const chatControllerSource = readFileSync(new URL('controller/ChatController.java', root), 'utf8')
+assert.doesNotMatch(chatControllerSource, /\bGeminiAdvisor\b|gemini\.(?:take|classify)\(/)
+assert.ok(existsSync(new URL('service/chat/ScheduleAssistantService.java', root)))
+console.log('PASS: schedule assistant classification stays in service layer')
