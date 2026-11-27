@@ -124,3 +124,8 @@ ScheduleRunStatus phản ánh sáu trạng thái trong ràng buộc schedule_run
 ### Hoàn thiện Controller
 
 CatalogMutationController, SectionController, SessionReadController và ChatController được chuẩn hóa tên biến, import và phương thức xử lý HTTP; CatalogController đã gọn nên không sửa. ScheduleAssistantService chịu trách nhiệm phân quyền, kiểm tra cấu hình, hạn mức và phân loại Gemini; ChatController giữ HTTP status và giao dịch xác nhận. Giữ nguyên tham số tìm kiếm q, body gốc dùng cho fingerprint, phương thức HTTP và JSON. Không mở thêm API hay thay đổi giao diện. Bổ sung kiểm thử trợ lý xếp lịch; kiểm thử tích hợp trên HEAD mới vẫn bắt buộc.
+
+
+### Kiểu dữ liệu đề xuất HUCEChat
+
+ProposalAction phản ánh bốn hành động lưu trong ai_proposals theo migration V7. ProposalService dùng Preview nội bộ định kiểu và tách xử lý xem trước theo nghiệp vụ. Quyền, phạm vi hội thoại, thời hạn, xác nhận lặp và hợp đồng JSON giữ nguyên. Các payload động vẫn dùng Map vì mỗi hành động có cấu trúc riêng. Bổ sung kiểm thử đề xuất đã hủy, thông báo đã đọc hết và phương án thuộc học kỳ khác.

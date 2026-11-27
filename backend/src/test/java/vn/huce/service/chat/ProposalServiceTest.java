@@ -82,4 +82,30 @@ class ProposalServiceTest {
         verify(repository).confirm(eq(7L), anyString());
         verify(audit).record(student, "CONFIRM", "ai_proposals", 7L);
     }
+
+    @Test
+    void cancelledProposalCannotBeExecuted() {
+        when(repository.lock(7L)).thenReturn(new LinkedHashMap<>(Map.of(
+                "requested_by", 1L, "action", "READ_NOTICES", "cancelled_at", "2026-11-27",
+                "params_json", "{\"lastId\":12}")));
+        assertEquals(409, assertThrows(ApiFailure.class, () -> service.confirm(student, 7L)).status());
+        verifyNoInteractions(notifications, audit, runs, sections);
+        verify(repository, never()).confirm(anyLong(), anyString());
+    }
+
+    @Test
+    void noUnreadNotificationsDoesNotCreateProposal() {
+        when(notifications.unreadSummary(1L)).thenReturn(Map.of("count", 0L));
+        assertNull(service.prepare(student, "READ_NOTICES", null, Map.of()));
+        verifyNoInteractions(repository, audit, runs, sections);
+    }
+
+    @Test
+    void applyPreviewCannotUseRunFromAnotherSemester() {
+        Actor staff = new Actor(2L, "staff", "STAFF", 3L, 4L);
+        when(runs.get(staff, 9L)).thenReturn(Map.of("id", 9L, "semester_id", 8L));
+        assertEquals(403, assertThrows(ApiFailure.class, () -> service.prepare(staff, "APPLY",
+                Map.of("id", 7L), Map.of("runId", 9L))).status());
+        verifyNoInteractions(repository, audit, sections, notifications);
+    }
 }

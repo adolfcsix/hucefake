@@ -1,22 +1,25 @@
 package vn.huce.service.chat;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import org.springframework.stereotype.Service;
+import vn.huce.Accounts.Actor;
+import vn.huce.exception.ApiFailure;
+import vn.huce.model.ProposalAction;
+import vn.huce.model.ScheduleRunStatus;
+import vn.huce.repository.AuditRepository;
+import vn.huce.repository.ChatRepository;
+import vn.huce.repository.NotificationRepository;
+import vn.huce.repository.ProposalRepository;
+import vn.huce.repository.SectionRepository;
+import vn.huce.service.GeneticScheduler;
 import vn.huce.service.RunService;
 import vn.huce.service.SectionService;
-import vn.huce.service.GeneticScheduler;
-
-import vn.huce.Accounts;
-import vn.huce.exception.ApiFailure;
-import vn.huce.repository.ProposalRepository;
-import vn.huce.repository.ChatRepository;
-import vn.huce.repository.SectionRepository;
-import vn.huce.repository.NotificationRepository;
-import vn.huce.repository.AuditRepository;
 
 import static vn.huce.validation.Inputs.*;
-import java.util.*;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.core.type.TypeReference;
-import org.springframework.stereotype.Service;
 
 @Service
 public class ProposalService {
@@ -41,63 +44,167 @@ public class ProposalService {
         this.runs = runs;
         this.sections = sections;
     }
-    public String encode(Object value){try{return json.writeValueAsString(value);}catch(Exception e){throw new IllegalStateException(e);}}
-    public Map<String,Object> decode(Object value){if(value==null)return null;try{return json.readValue(value.toString(),new TypeReference<Map<String,Object>>(){});}catch(Exception e){throw new IllegalStateException(e);}}
-    private void permission(Accounts.Actor a,String action){if(!ChatPermissions.allowed(a.role()).contains(action))throw new ApiFailure(403,"FORBIDDEN","Bạn không có quyền trong phạm vi này.");}
-    public Map<String,Object> prepare(Accounts.Actor a,String action,Map<String,Object> sem,Map<String,Object> input){
-        permission(a,action);Object params=null;Long runId=null;Map<String,Object> preview;
-        if("GENERATE".equals(action)){
-            var p=GeneticScheduler.parameters(input.get("parameters"));params=p;preview=Map.of("parameters",p);
-        }else if("APPLY".equals(action)){
-            var r=runs.get(a,id(input.get("runId")));runId=n(r,"id");
-            if(n(r,"semester_id")!=n(sem,"id"))throw new ApiFailure(403,"FORBIDDEN","Bạn không có quyền trong phạm vi này.");
-            if(!"COMPLETED".equals(r.get("status"))||n(r,"hard_violations")!=0)throw state("Chọn phương án đã hoàn tất với 0 vi phạm cứng.");
-            long count=repository.countRunItems(runId);
-            preview=Map.of("runId",runId,"count",count,"hardViolations",0);
-        }else if("DRAFT".equals(action)){
-            if(!(input.get("draft") instanceof Map<?,?> draft))throw invalid("Thông tin lớp nháp không hợp lệ.");
-            var form=new LinkedHashMap<String,Object>();draft.forEach((k,v)->form.put(k.toString(),v));form.put("semesterId",sem.get("id"));
-            var normalized=sections.previewDraft(a,form);params=normalized;
-            var subject=sectionRepository.findSubject(id(normalized.get("subjectId")));
-            preview=new LinkedHashMap<>(normalized);preview.put("subject",subject.get("code")+" · "+subject.get("name"));
-        }else if("READ_NOTICES".equals(action)){
-            var count=notifications.unreadSummary(a.id());
-            if(n(count,"count")==0)return null;params=Map.of("lastId",count.get("last_id"));preview=Map.of("count",count.get("count"));
-        }else throw invalid("Thao tác không hợp lệ.");
-        var result=repository.insert(a.id(),sem==null?null:sem.get("id"),action,runId,params==null?null:encode(params));
-        result.put("action",action);result.put("semester",sem==null?null:sem.get("code"));result.put("preview",preview);return result;
-    }
-    public Map<String,Object> owned(Accounts.Actor a,long id){
-        var row=repository.lock(id);
-        if(n(row,"requested_by")!=a.id())throw new ApiFailure(403,"FORBIDDEN","Bạn không có quyền trong phạm vi này.");
-        permission(a,s(row,"action"));
-        if(repository.hasDifferentConversationScope(id,a))throw new ApiFailure(403,"FORBIDDEN","Bạn không có quyền trong phạm vi này.");
-        row.put("parameters",decode(row.remove("params_json")));row.put("result",decode(row.remove("result_json")));return row;
-    }
-    @SuppressWarnings("unchecked")
-    public Object confirm(Accounts.Actor a,long id){
-        var p=owned(a,id);if(p.get("result")!=null)return p.get("result");
-        if(p.get("cancelled_at")!=null)throw state("Đề xuất đã hủy.");
-        if(Boolean.TRUE.equals(p.get("expired")))throw state("Đề xuất đã hết hạn. Hãy tạo đề xuất mới.");
-        String action=s(p,"action");var params=(Map<String,Object>)p.get("parameters");var result=new LinkedHashMap<String,Object>();result.put("action",action);
-        switch(action){
-            case "GENERATE" -> result.putAll((Map<String,Object>)runs.enqueue(a,n(p,"semester_id"),params));
-            case "APPLY" -> {
-                var run=runs.get(a,n(p,"run_id"));if(n(run,"semester_id")!=n(p,"semester_id"))throw new ApiFailure(403,"FORBIDDEN","Bạn không có quyền trong phạm vi này.");
-                result.putAll((Map<String,Object>)runs.apply(a,n(p,"run_id")));result.put("id",p.get("run_id"));
-            }
-            case "DRAFT" -> {result.putAll((Map<String,Object>)sections.saveDraft(a,params));result.put("code",params.get("code"));}
-            case "READ_NOTICES" -> result.put("marked",notifications.markThrough(a.id(),id(params.get("lastId"))));
-            default -> throw invalid("Thao tác không hợp lệ.");
+
+    public String encode(Object value) {
+        try {
+            return json.writeValueAsString(value);
+        } catch (JsonProcessingException error) {
+            throw new IllegalStateException(error);
         }
-        repository.confirm(id,encode(result));audit.record(a,"CONFIRM","ai_proposals",id);return result;
-    }
-    public Object cancel(Accounts.Actor a,long id){
-        var row=owned(a,id);if(row.get("result")!=null)throw state("Đề xuất đã thực hiện.");
-        repository.cancel(id);return Map.of("status","CANCELLED");
     }
 
-    public Map<String,Object> prepareForSemester(Accounts.Actor actor, String action, Map<String,Object> input) {
+    public Map<String, Object> decode(Object value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return json.readValue(value.toString(), new TypeReference<Map<String, Object>>() {});
+        } catch (JsonProcessingException error) {
+            throw new IllegalStateException(error);
+        }
+    }
+
+    private ApiFailure forbidden() {
+        return new ApiFailure(403, "FORBIDDEN", "Bạn không có quyền trong phạm vi này.");
+    }
+
+    private void permission(Actor actor, String action) {
+        if (!ChatPermissions.allowed(actor.role()).contains(action)) {
+            throw forbidden();
+        }
+    }
+
+    private ProposalAction action(String value) {
+        try {
+            return ProposalAction.valueOf(value);
+        } catch (IllegalArgumentException error) {
+            throw invalid("Thao tác không hợp lệ.");
+        }
+    }
+
+    private record Preview(Object parameters, Long runId, Map<String, Object> details) {
+    }
+
+    public Map<String, Object> prepare(Actor actor, String rawAction, Map<String, Object> semester,
+                                       Map<String, Object> input) {
+        permission(actor, rawAction);
+        ProposalAction action = action(rawAction);
+        Preview preview = switch (action) {
+            case GENERATE -> {
+                var parameters = GeneticScheduler.parameters(input.get("parameters"));
+                yield new Preview(parameters, null, Map.of("parameters", parameters));
+            }
+            case APPLY -> previewApply(actor, semester, input);
+            case DRAFT -> previewDraft(actor, semester, input);
+            case READ_NOTICES -> previewNotifications(actor);
+        };
+        if (preview == null) {
+            return null;
+        }
+        var result = repository.insert(actor.id(), semester == null ? null : semester.get("id"),
+                action.name(), preview.runId(), preview.parameters() == null ? null : encode(preview.parameters()));
+        result.put("action", action.name());
+        result.put("semester", semester == null ? null : semester.get("code"));
+        result.put("preview", preview.details());
+        return result;
+    }
+
+    private Preview previewApply(Actor actor, Map<String, Object> semester, Map<String, Object> input) {
+        var run = runs.get(actor, id(input.get("runId")));
+        long runId = n(run, "id");
+        if (n(run, "semester_id") != n(semester, "id")) {
+            throw forbidden();
+        }
+        if (!ScheduleRunStatus.COMPLETED.name().equals(run.get("status")) || n(run, "hard_violations") != 0) {
+            throw state("Chọn phương án đã hoàn tất với 0 vi phạm cứng.");
+        }
+        long count = repository.countRunItems(runId);
+        return new Preview(null, runId, Map.of("runId", runId, "count", count, "hardViolations", 0));
+    }
+
+    private Preview previewDraft(Actor actor, Map<String, Object> semester, Map<String, Object> input) {
+        if (!(input.get("draft") instanceof Map<?, ?> draft)) {
+            throw invalid("Thông tin lớp nháp không hợp lệ.");
+        }
+        Map<String, Object> form = new LinkedHashMap<>();
+        draft.forEach((key, value) -> form.put(key.toString(), value));
+        form.put("semesterId", semester.get("id"));
+        var normalized = sections.previewDraft(actor, form);
+        var subject = sectionRepository.findSubject(id(normalized.get("subjectId")));
+        Map<String, Object> details = new LinkedHashMap<>(normalized);
+        details.put("subject", subject.get("code") + " · " + subject.get("name"));
+        return new Preview(normalized, null, details);
+    }
+
+    private Preview previewNotifications(Actor actor) {
+        var summary = notifications.unreadSummary(actor.id());
+        if (n(summary, "count") == 0) {
+            return null;
+        }
+        return new Preview(Map.of("lastId", summary.get("last_id")), null, Map.of("count", summary.get("count")));
+    }
+
+    public Map<String, Object> owned(Actor actor, long proposalId) {
+        var row = repository.lock(proposalId);
+        if (n(row, "requested_by") != actor.id()) {
+            throw forbidden();
+        }
+        permission(actor, s(row, "action"));
+        if (repository.hasDifferentConversationScope(proposalId, actor)) {
+            throw forbidden();
+        }
+        row.put("parameters", decode(row.remove("params_json")));
+        row.put("result", decode(row.remove("result_json")));
+        return row;
+    }
+
+    @SuppressWarnings("unchecked")
+    public Object confirm(Actor actor, long proposalId) {
+        var proposal = owned(actor, proposalId);
+        if (proposal.get("result") != null) {
+            return proposal.get("result");
+        }
+        if (proposal.get("cancelled_at") != null) {
+            throw state("Đề xuất đã hủy.");
+        }
+        if (Boolean.TRUE.equals(proposal.get("expired"))) {
+            throw state("Đề xuất đã hết hạn. Hãy tạo đề xuất mới.");
+        }
+        ProposalAction action = action(s(proposal, "action"));
+        var parameters = (Map<String, Object>) proposal.get("parameters");
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("action", action.name());
+        switch (action) {
+            case GENERATE -> result.putAll((Map<String, Object>) runs.enqueue(actor, n(proposal, "semester_id"), parameters));
+            case APPLY -> {
+                var run = runs.get(actor, n(proposal, "run_id"));
+                if (n(run, "semester_id") != n(proposal, "semester_id")) {
+                    throw forbidden();
+                }
+                result.putAll((Map<String, Object>) runs.apply(actor, n(proposal, "run_id")));
+                result.put("id", proposal.get("run_id"));
+            }
+            case DRAFT -> {
+                result.putAll((Map<String, Object>) sections.saveDraft(actor, parameters));
+                result.put("code", parameters.get("code"));
+            }
+            case READ_NOTICES -> result.put("marked", notifications.markThrough(actor.id(), id(parameters.get("lastId"))));
+        }
+        repository.confirm(proposalId, encode(result));
+        audit.record(actor, "CONFIRM", "ai_proposals", proposalId);
+        return result;
+    }
+
+    public Object cancel(Actor actor, long proposalId) {
+        var row = owned(actor, proposalId);
+        if (row.get("result") != null) {
+            throw state("Đề xuất đã thực hiện.");
+        }
+        repository.cancel(proposalId);
+        return Map.of("status", "CANCELLED");
+    }
+
+    public Map<String, Object> prepareForSemester(Actor actor, String action, Map<String, Object> input) {
         return prepare(actor, action, chat.semester(id(input.get("semesterId"))), input);
     }
 }
