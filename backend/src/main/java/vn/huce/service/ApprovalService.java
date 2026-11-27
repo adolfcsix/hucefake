@@ -19,9 +19,11 @@ import vn.huce.dto.ApprovalDecisionRequest;
 import vn.huce.dto.ApprovalDecisionResponse;
 import vn.huce.dto.ApprovalSubmissionResponse;
 import vn.huce.dto.TimetableVersionIdResponse;
+import vn.huce.dto.TimetablePublicationResponse;
 import vn.huce.model.ApprovalSnapshot;
 import vn.huce.model.ApprovalStatus;
 import vn.huce.model.TimetableVersionStatus;
+import vn.huce.model.TimetableVersionSnapshot;
 import vn.huce.repository.ApprovalRepository;
 import vn.huce.repository.AuditRepository;
 
@@ -70,6 +72,12 @@ public class ApprovalService {
             }
         }
         throw state("Hồ sơ đang ở trạng thái " + row.get("status") + ".");
+    }
+
+    private void requireVersionStatus(TimetableVersionSnapshot version, TimetableVersionStatus expected) {
+        if (version.status() != expected) {
+            throw state("Hồ sơ đang ở trạng thái " + version.status() + ".");
+        }
     }
 
     private void forbidden() {
@@ -172,12 +180,12 @@ public class ApprovalService {
 
     public ApprovalSubmissionResponse submit(Actor actor, long versionId) {
         role(actor, "STAFF");
-        Map<String, Object> version = repository.findVersion(versionId);
-        if (n(version, "created_by") != actor.id()) {
+        TimetableVersionSnapshot version = repository.findVersion(versionId);
+        if (version.createdBy() != actor.id()) {
             forbidden();
         }
-        status(version, TimetableVersionStatus.DRAFT);
-        long semesterId = n(version, "semester_id");
+        requireVersionStatus(version, TimetableVersionStatus.DRAFT);
+        long semesterId = version.semesterId();
         if (repository.hasSubmittedVersion(semesterId)) {
             throw new ApiFailure(409, "DUPLICATE_REQUEST", "Học kỳ đã có thời khóa biểu chờ duyệt.");
         }
@@ -196,7 +204,7 @@ public class ApprovalService {
         long approvalId = repository.createApproval(workItemId, actor.id(), encode(assessment.snapshot()));
         repository.submitVersion(versionId, n(ready, "draftCount"), approvalId);
         audit.record(actor, "SUBMIT", "timetable_versions", versionId);
-        notifications.notifyManagers("Thời khóa biểu bản " + version.get("version_no")
+        notifications.notifyManagers("Thời khóa biểu bản " + version.versionNo()
                 + " đang chờ duyệt. Mở Duyệt thời khóa biểu để xem phương án.");
         return new ApprovalSubmissionResponse(approvalId);
     }
@@ -261,10 +269,10 @@ public class ApprovalService {
             return decode(prior.get("result"));
         }
         status(approval, ApprovalStatus.APPROVED);
-        Map<String, Object> version = repository.findVersionForApproval(approvalId);
-        status(version, TimetableVersionStatus.SUBMITTED);
-        long versionId = n(version, "id");
-        long semesterId = n(version, "semester_id");
+        TimetableVersionSnapshot version = repository.findVersionForApproval(approvalId);
+        requireVersionStatus(version, TimetableVersionStatus.SUBMITTED);
+        long versionId = version.id();
+        long semesterId = version.semesterId();
         Context context = scheduling.context();
         Set<Long> sections = new LinkedHashSet<>();
         long total = 0;
@@ -308,7 +316,7 @@ public class ApprovalService {
             total += count;
             sections.add(slot.section());
         }
-        if (!current.isEmpty() || sections.size() != n(version, "section_count")) {
+        if (!current.isEmpty() || sections.size() != version.sectionCount()) {
             throw state("Phương án đã thay đổi sau khi gửi duyệt.");
         }
         for (long sectionId : sections) {
@@ -320,7 +328,7 @@ public class ApprovalService {
         repository.publishVersion(versionId, actor.id());
         repository.markApplied(approvalId);
         repository.changeWorkStatus(n(approval, "work_item_id"), ApprovalStatus.APPLIED.name());
-        var result = Map.of("versionId", versionId, "sessions", total, "sections", sections.size());
+        var result = new TimetablePublicationResponse(versionId, total, sections.size());
         repository.saveExecution(approvalId, encode(result));
         audit.record(actor, "PUBLISH", "timetable_versions", versionId);
         return result;

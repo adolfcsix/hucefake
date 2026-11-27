@@ -22,6 +22,12 @@ class ApprovalResponseTest {
     }
 
     @Test
+    void publicationPreservesExistingJson() throws Exception {
+        assertEquals(json.readTree("{\"versionId\":4,\"sessions\":12,\"sections\":2}"),
+                json.readTree(json.writeValueAsString(new TimetablePublicationResponse(4L, 12L, 2))));
+    }
+
+    @Test
     void decisionsPreserveStatusNames() throws Exception {
         for (ApprovalStatus status : new ApprovalStatus[]{ApprovalStatus.APPROVED, ApprovalStatus.RETURNED}) {
             assertEquals(json.readTree("{\"status\":\"" + status.name() + "\"}"),

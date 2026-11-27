@@ -5,11 +5,19 @@ import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 import vn.huce.exception.ApiFailure;
+import vn.huce.model.TimetableVersionSnapshot;
+import vn.huce.model.TimetableVersionStatus;
 
 @Repository
 public class ApprovalRepository {
+    private static final String VERSION_COLUMNS = "id,semester_id,version_no,status,section_count,created_by";
+    private static final RowMapper<TimetableVersionSnapshot> VERSION_MAPPER = (rs, row) ->
+            new TimetableVersionSnapshot(rs.getLong("id"), rs.getLong("semester_id"),
+                    rs.getInt("version_no"), TimetableVersionStatus.valueOf(rs.getString("status")),
+                    rs.getInt("section_count"), rs.getLong("created_by"));
     private final SqlStore store;
 
     public ApprovalRepository(SqlStore store) {
@@ -56,12 +64,21 @@ public class ApprovalRepository {
         return rows.getFirst();
     }
 
-    public Map<String, Object> findVersion(long versionId) {
-        return store.need("SELECT * FROM timetable_versions WHERE id=?", versionId);
+    public TimetableVersionSnapshot findVersion(long versionId) {
+        return requireVersion(store.jdbc().query("SELECT " + VERSION_COLUMNS
+                + " FROM timetable_versions WHERE id=?", VERSION_MAPPER, versionId));
     }
 
-    public Map<String, Object> findVersionForApproval(long approvalId) {
-        return store.need("SELECT * FROM timetable_versions WHERE approval_request_id=?", approvalId);
+    public TimetableVersionSnapshot findVersionForApproval(long approvalId) {
+        return requireVersion(store.jdbc().query("SELECT " + VERSION_COLUMNS
+                + " FROM timetable_versions WHERE approval_request_id=?", VERSION_MAPPER, approvalId));
+    }
+
+    private static TimetableVersionSnapshot requireVersion(List<TimetableVersionSnapshot> rows) {
+        if (rows.isEmpty()) {
+            throw new ApiFailure(404, "NOT_FOUND", "Không tìm thấy dữ liệu.");
+        }
+        return rows.getFirst();
     }
 
     public long createWorkItem(long actorId) {

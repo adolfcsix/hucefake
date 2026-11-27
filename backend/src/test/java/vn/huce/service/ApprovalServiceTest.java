@@ -8,6 +8,8 @@ import vn.huce.exception.ApiFailure;
 import vn.huce.dto.ApprovalDecisionResponse;
 import vn.huce.dto.TimetableVersionIdResponse;
 import vn.huce.model.ApprovalStatus;
+import vn.huce.model.TimetableVersionSnapshot;
+import vn.huce.model.TimetableVersionStatus;
 import vn.huce.repository.ApprovalRepository;
 import vn.huce.repository.AuditRepository;
 
@@ -47,6 +49,42 @@ class ApprovalServiceTest {
         order.verify(repository).hasSubmittedVersion(4L);
         order.verify(repository).findDraft(4L, 1L);
         order.verify(repository).createDraft(4L, 1L);
+    }
+
+    @Test
+    void submissionChecksOwnerBeforeStatusAndDoesNotWrite() {
+        when(repository.findVersion(7L)).thenReturn(new TimetableVersionSnapshot(
+                7L, 4L, 1, TimetableVersionStatus.PUBLISHED, 2, 99L));
+        assertEquals(403, assertThrows(ApiFailure.class, () -> service.submit(staff, 7L)).status());
+        verify(repository).findVersion(7L);
+        verifyNoMoreInteractions(repository);
+        verifyNoInteractions(audit, notifications, scheduling);
+    }
+
+    @Test
+    void submissionRejectsNonDraftVersionBeforeAssessing() {
+        when(repository.findVersion(7L)).thenReturn(new TimetableVersionSnapshot(
+                7L, 4L, 1, TimetableVersionStatus.SUBMITTED, 2, 1L));
+        var error = assertThrows(ApiFailure.class, () -> service.submit(staff, 7L));
+        assertEquals(409, error.status());
+        assertEquals("Hồ sơ đang ở trạng thái SUBMITTED.", error.getMessage());
+        verify(repository).findVersion(7L);
+        verifyNoMoreInteractions(repository);
+        verifyNoInteractions(audit, notifications, scheduling);
+    }
+
+    @Test
+    void publicationRequiresSubmittedVersionBeforeScheduling() {
+        when(repository.findVersionForApproval(7L)).thenReturn(new TimetableVersionSnapshot(
+                4L, 2L, 1, TimetableVersionStatus.RETURNED, 2, 1L));
+        var error = assertThrows(ApiFailure.class, () -> service.apply(manager, Map.of(
+                "id", 7L, "requested_by", 1L, "status", "APPROVED")));
+        assertEquals(409, error.status());
+        assertEquals("Hồ sơ đang ở trạng thái RETURNED.", error.getMessage());
+        verify(repository).priorExecution(7L);
+        verify(repository).findVersionForApproval(7L);
+        verifyNoMoreInteractions(repository);
+        verifyNoInteractions(audit, notifications, scheduling);
     }
 
     @Test
