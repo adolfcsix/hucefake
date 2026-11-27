@@ -1,5 +1,6 @@
 package vn.huce.service;
 
+import vn.huce.model.SchedulingSection;
 import vn.huce.model.SchedulingRoom;
 import java.time.LocalDate;
 import java.util.List;
@@ -37,7 +38,8 @@ class SchedulingServiceTest {
     void actualConflictQueryIncludesAssistantsAndExcludesOriginalSession() {
         LocalDate date = LocalDate.of(2026, 11, 30);
         Slot slot = new Slot(1L, 2L, 3L, 4L, 1, 1, 2, date, date);
-        Context context = new Context(Map.of(2L, Map.of("assistant_ids", new Long[]{6L, 7L})),
+        Context context = new Context(Map.of(2L, new SchedulingSection(2L, 1L, 1L, "DRAFT", "HP02", "Toán", 3L,
+                30, "LECTURE", 1, 2, 0L, date, date, Set.of(6L, 7L), Map.of())),
                 Map.of(), List.of(), List.of(), List.of(), List.of());
         Span span = new Span(date.atTime(7, 0), date.atTime(8, 50));
         service.actualConflicts(context, slot, span, 9L);
@@ -60,7 +62,8 @@ class SchedulingServiceTest {
     }
 
     private Context candidateContext(List<Slot> patterns) {
-        return new Context(Map.of(2L, section()),
+        return new Context(Map.of(2L, new SchedulingSection(2L, 1L, 1L, "DRAFT", "HP02", "Toán", 3L,
+                30, "LECTURE", 1, 2, 0L, monday, monday.plusWeeks(2), Set.of(), Map.of())),
                 Map.of(4L, new SchedulingRoom(4L, 5L, "P4", 40, "LECTURE", "ACTIVE"),
                         6L, new SchedulingRoom(6L, 7L, "P6", 40, "LECTURE", "ACTIVE")),
                 List.of(), List.of(), List.of(), patterns);
@@ -93,7 +96,8 @@ class SchedulingServiceTest {
 
     @Test
     void allHolidayOccurrencesReturnBr14WithoutQueryingPublishedSessions() {
-        Context context = new Context(Map.of(2L, section()), Map.of(4L, new SchedulingRoom(4L, 5L, "P4", 40, "LECTURE", "ACTIVE")),
+        Context context = new Context(Map.of(2L, new SchedulingSection(2L, 1L, 1L, "DRAFT", "HP02", "Toán", 3L,
+                30, "LECTURE", 1, 2, 0L, monday, monday.plusWeeks(2), Set.of(), Map.of())), Map.of(4L, new SchedulingRoom(4L, 5L, "P4", 40, "LECTURE", "ACTIVE")),
                 List.of(), List.of(), List.of(new NonTeachingDay(5L, monday, monday.plusWeeks(2))), List.of());
         Slot slot = new Slot(1L, 2L, 3L, 4L, 1, 1, 2, monday, monday.plusWeeks(2));
         assertEquals("BR14", service.actual(context, slot).getFirst().get("rule"));

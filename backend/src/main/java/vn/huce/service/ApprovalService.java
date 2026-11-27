@@ -1,5 +1,6 @@
 package vn.huce.service;
 
+import vn.huce.model.SchedulingSection;
 import vn.huce.model.SchedulingRoom;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -104,24 +105,24 @@ public class ApprovalService {
     Assessment assess(Actor actor, long semesterId) {
         Context context = scheduling.context();
         var drafts = context.sections().values().stream()
-                .filter(section -> n(section, "semester_id") == semesterId
-                        && "DRAFT".equals(section.get("status"))).toList();
+                .filter(section -> section.semesterId() == semesterId
+                        && "DRAFT".equals(section.status())).toList();
         boolean eligible = drafts.stream().anyMatch(section ->
-                Objects.equals(actor.unitId(), nullableId(section.get("managing_unit_id"))));
+                Objects.equals(actor.unitId(), section.managingUnitId()));
         List<BlockedSection> blocked = new ArrayList<>();
         List<ApprovalSnapshot> snapshot = new ArrayList<>();
         if (drafts.isEmpty() || !eligible) {
             return new Assessment(new ApprovalReadiness(semesterId, drafts.size(), eligible, false, blocked), snapshot);
         }
-        for (Map<String, Object> section : drafts) {
+        for (SchedulingSection section : drafts) {
             List<Slot> slots = context.patterns().stream()
-                    .filter(pattern -> pattern.section() == n(section, "id")).toList();
+                    .filter(pattern -> pattern.section() == section.id()).toList();
             List<Map<String, Object>> missing = new ArrayList<>();
             List<PatternConflict> conflicts = new ArrayList<>();
-            if (section.get("staff_id") == null) {
+            if (section.staffId() == null) {
                 missing.add(Map.of("rule", "BR02", "message", "Chưa có giảng viên chính."));
             }
-            if (slots.size() != n(section, "sessions_per_week")) {
+            if (slots.size() != section.sessionsPerWeek()) {
                 missing.add(Map.of("rule", "BR10", "message", "Số buổi đã xếp khác số buổi yêu cầu."));
             }
             for (Slot slot : slots) {
@@ -133,15 +134,15 @@ public class ApprovalService {
                 } else {
                     snapshot.add(new ApprovalSnapshot(slot.id(), slot.section(), slot.staff(), slot.room(),
                             slot.day(), slot.first(), slot.count(), slot.from().toString(), slot.to().toString(),
-                            repository.patternVersion(slot.id()), (String) section.get("code"),
-                            (String) section.get("subject_name"), room.code()));
+                            repository.patternVersion(slot.id()), section.code(),
+                            section.subjectName(), room.code()));
                 }
             }
             if (!missing.isEmpty() || !conflicts.isEmpty()) {
-                blocked.add(new BlockedSection(n(section, "id"), (String) section.get("code"),
-                        (String) section.get("subject_name"),
-                        Objects.equals(actor.unitId(), nullableId(section.get("managing_unit_id"))),
-                        slots.size(), n(section, "sessions_per_week"), missing, conflicts));
+                blocked.add(new BlockedSection(section.id(), section.code(),
+                        section.subjectName(),
+                        Objects.equals(actor.unitId(), section.managingUnitId()),
+                        slots.size(), section.sessionsPerWeek(), missing, conflicts));
             }
         }
         return new Assessment(new ApprovalReadiness(semesterId, drafts.size(), eligible, blocked.isEmpty(), blocked),
@@ -267,7 +268,7 @@ public class ApprovalService {
         List<?> snapshot = (List<?>) decode(approval.payloadJson());
         Map<Long, Slot> current = new HashMap<>();
         for (Slot pattern : context.patterns()) {
-            if (n(context.sections().get(pattern.section()), "semester_id") == semesterId) {
+            if (context.sections().get(pattern.section()).semesterId() == semesterId) {
                 current.put(pattern.id(), pattern);
             }
         }
@@ -310,7 +311,7 @@ public class ApprovalService {
         for (long sectionId : sections) {
             repository.openSection(sectionId);
             notifications.notifySection(sectionId, "Đã công bố lịch lớp "
-                    + context.sections().get(sectionId).get("code") + ".");
+                    + context.sections().get(sectionId).code() + ".");
         }
         repository.supersedePublished(semesterId);
         repository.publishVersion(versionId, actor.id());

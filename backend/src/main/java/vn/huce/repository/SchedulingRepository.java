@@ -8,6 +8,8 @@ import java.util.Arrays;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -20,6 +22,7 @@ import vn.huce.model.TeachingPeriod;
 import vn.huce.model.NonTeachingDay;
 import vn.huce.model.StaffAvailability;
 import vn.huce.model.SchedulingRoom;
+import vn.huce.model.SchedulingSection;
 import vn.huce.model.AvailabilityEntry.Kind;
 
 @Repository
@@ -30,8 +33,33 @@ public class SchedulingRepository {
         this.store = store;
     }
 
-    public List<Map<String, Object>> activeSections() {
-        return store.rows(SectionQueries.SECTION_SQL + " WHERE c.status IN ('OPEN','DRAFT') ORDER BY c.id");
+    public List<SchedulingSection> activeSections() {
+        return store.jdbc().query(SectionQueries.SECTION_SQL + " WHERE c.status IN ('OPEN','DRAFT') ORDER BY c.id",
+                (rs, row) -> new SchedulingSection(rs.getLong("id"), rs.getLong("semester_id"),
+                rs.getObject("managing_unit_id", Long.class), rs.getString("status"), rs.getString("code"),
+                rs.getString("subject_name"), rs.getObject("staff_id", Long.class), rs.getInt("capacity"),
+                rs.getString("required_room_type"), rs.getInt("sessions_per_week"),
+                rs.getInt("periods_per_session"), rs.getLong("scheduled"),
+                rs.getObject("start_date", LocalDate.class), rs.getObject("end_date", LocalDate.class),
+                readIds(rs, "assistant_ids"), readGroups(rs)));
+    }
+
+    private static Map<Long, String> readGroups(ResultSet rs) throws SQLException {
+        var ids = new ArrayList<>(readIds(rs, "group_ids"));
+        var codes = rs.getArray("group_codes");
+        try {
+            String[] values = (String[]) codes.getArray();
+            if (ids.size() != values.length) {
+                throw new SQLException("Mismatched section group identifiers and codes");
+            }
+            Map<Long, String> groups = new LinkedHashMap<>();
+            for (int i = 0; i < ids.size(); i++) {
+                groups.put(ids.get(i), values[i]);
+            }
+            return groups;
+        } finally {
+            codes.free();
+        }
     }
 
     public List<SchedulingRoom> rooms() {

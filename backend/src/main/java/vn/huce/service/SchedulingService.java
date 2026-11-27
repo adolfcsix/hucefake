@@ -1,5 +1,6 @@
 package vn.huce.service;
 
+import vn.huce.model.SchedulingSection;
 import vn.huce.model.SchedulingRoom;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -49,7 +50,7 @@ public class SchedulingService {
     public record Span(LocalDateTime start, LocalDateTime end) {
     }
 
-    public record Context(Map<Long, Map<String, Object>> sections, Map<Long, SchedulingRoom> rooms,
+    public record Context(Map<Long, SchedulingSection> sections, Map<Long, SchedulingRoom> rooms,
                           List<TeachingPeriod> periods, List<StaffAvailability> availability,
                           List<NonTeachingDay> holidays, List<Slot> patterns) {
     }
@@ -106,7 +107,11 @@ public class SchedulingService {
         for (SchedulingRoom room : repository.rooms()) {
             rooms.put(room.id(), room);
         }
-        return new Context(index(repository.activeSections()), rooms,
+        Map<Long, SchedulingSection> sections = new LinkedHashMap<>();
+        for (SchedulingSection section : repository.activeSections()) {
+            sections.put(section.id(), section);
+        }
+        return new Context(sections, rooms,
                 repository.activePeriods(), repository.availability(), repository.holidays(),
                 repository.draftPatterns().stream().map(SchedulingService::slot).toList());
     }
@@ -153,6 +158,11 @@ public class SchedulingService {
     }
 
     public boolean fits(SchedulingRoom room, Map<String, Object> section) {
+        return section != null && ScheduleConstraints.fits(room, n(section, "capacity"),
+                section.get("required_room_type"));
+    }
+
+    public boolean fits(SchedulingRoom room, SchedulingSection section) {
         return ScheduleConstraints.fits(room, section);
     }
 
@@ -168,7 +178,7 @@ public class SchedulingService {
         return ScheduleConstraints.staff(context, slot);
     }
 
-    public Map<String, Object> issue(String rule, String message, Map<String, Object> section) {
+    public Map<String, Object> issue(String rule, String message, SchedulingSection section) {
         return ScheduleConstraints.issue(rule, message, section);
     }
 

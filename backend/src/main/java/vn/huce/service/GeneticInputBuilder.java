@@ -1,5 +1,6 @@
 package vn.huce.service;
 
+import vn.huce.model.SchedulingSection;
 import vn.huce.model.SchedulingRoom;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -30,41 +31,41 @@ class GeneticInputBuilder {
         this.repository = repository;
     }
 
-    List<Map<String, Object>> targets(Context context, Actor actor, long semesterId) {
+    List<SchedulingSection> targets(Context context, Actor actor, long semesterId) {
         return context.sections().values().stream()
-                .filter(section -> n(section, "semester_id") == semesterId
-                        && "DRAFT".equals(section.get("status"))
+                .filter(section -> section.semesterId() == semesterId
+                        && "DRAFT".equals(section.status())
                         && ("MANAGER".equals(actor.role())
-                            || Objects.equals(actor.unitId(), nullableId(section.get("managing_unit_id"))))
-                        && n(section, "scheduled") < n(section, "sessions_per_week"))
+                            || Objects.equals(actor.unitId(), section.managingUnitId()))
+                        && section.scheduled() < section.sessionsPerWeek())
                 .toList();
     }
 
-    static Slot make(Map<String, Object> section, long roomId, int dayOfWeek, int periodFrom) {
-        return new Slot(0, n(section, "id"), nullableId(section.get("staff_id")), roomId, dayOfWeek,
-                periodFrom, (int) n(section, "periods_per_session"), day(section.get("start_date")),
-                day(section.get("end_date")));
+    static Slot make(SchedulingSection section, long roomId, int dayOfWeek, int periodFrom) {
+        return new Slot(0, section.id(), section.staffId(), roomId, dayOfWeek,
+                periodFrom, section.periodsPerSession(), section.startDate(),
+                section.endDate());
     }
 
     GeneticScheduler.Input build(Actor actor, long semesterId) {
         Context context = scheduling.context();
-        List<Map<String, Object>> sections = targets(context, actor, semesterId);
+        List<SchedulingSection> sections = targets(context, actor, semesterId);
         Set<Long> allowedCampuses = scheduling.campuses(actor);
         if (sections.isEmpty()) {
             throw state("Không có buổi học nháp cần xếp trong phạm vi đã chọn.");
         }
 
-        LocalDate from = sections.stream().map(section -> day(section.get("start_date")))
+        LocalDate from = sections.stream().map(section -> section.startDate())
                 .min(LocalDate::compareTo).orElseThrow();
-        LocalDate to = sections.stream().map(section -> day(section.get("end_date")))
+        LocalDate to = sections.stream().map(section -> section.endDate())
                 .max(LocalDate::compareTo).orElseThrow();
         Map<LocalDate, List<PublishedSession>> published = indexByDay(repository.publishedSessions(from, to));
         List<List<Slot>> genes = new ArrayList<>();
         List<Map<String, Object>> issues = new ArrayList<>();
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(60);
 
-        for (Map<String, Object> section : sections) {
-            if (section.get("staff_id") == null) {
+        for (SchedulingSection section : sections) {
+            if (section.staffId() == null) {
                 issues.add(scheduling.issue("BR02", "Chưa có giảng viên chính.", section));
                 continue;
             }
@@ -74,7 +75,7 @@ class GeneticInputBuilder {
                 continue;
             }
             List<Slot> options = List.copyOf(domain);
-            for (long index = n(section, "scheduled"); index < n(section, "sessions_per_week"); index++) {
+            for (long index = section.scheduled(); index < section.sessionsPerWeek(); index++) {
                 genes.add(options);
             }
         }
@@ -97,7 +98,7 @@ class GeneticInputBuilder {
         return result;
     }
 
-    private List<Slot> domain(Context context, Map<String, Object> section, Set<Long> allowedCampuses,
+    private List<Slot> domain(Context context, SchedulingSection section, Set<Long> allowedCampuses,
                               Map<LocalDate, List<PublishedSession>> published, long deadline) {
         List<Slot> domain = new ArrayList<>();
         for (SchedulingRoom room : context.rooms().values()) {
@@ -106,7 +107,7 @@ class GeneticInputBuilder {
                 continue;
             }
             for (int dayOfWeek = 1; dayOfWeek <= 6; dayOfWeek++) {
-                for (int period = 1; period <= 16 - n(section, "periods_per_session"); period++) {
+                for (int period = 1; period <= 16 - section.periodsPerSession(); period++) {
                     if (System.nanoTime() > deadline) {
                         throw state("Vượt giới hạn 60 giây tạo miền xếp lịch.");
                     }
@@ -120,10 +121,10 @@ class GeneticInputBuilder {
         return domain;
     }
 
-    private boolean feasible(Context context, Map<String, Object> section, Slot slot, long campusId,
+    private boolean feasible(Context context, SchedulingSection section, Slot slot, long campusId,
                              Map<LocalDate, List<PublishedSession>> published) {
         Set<Long> staff = scheduling.staff(context, slot);
-        Set<Long> groups = ids(section.get("group_ids"));
+        Set<Long> groups = section.groups().keySet();
         boolean teaching = false;
         for (LocalDate date : occurrences(slot)) {
             Span time = scheduling.interval(context, slot, date);

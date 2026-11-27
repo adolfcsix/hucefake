@@ -1,5 +1,6 @@
 package vn.huce.service;
 
+import vn.huce.model.SchedulingSection;
 import vn.huce.model.SchedulingRoom;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
@@ -95,9 +96,9 @@ class ApprovalServiceTest {
 
     @Test
     void validSubmissionUsesPersistedIdsAndKeepsSnapshotContract() throws Exception {
-        var section = Map.<String, Object>of("id", 21L, "semester_id", 4L, "status", "DRAFT",
-                "managing_unit_id", 3L, "staff_id", 2L, "sessions_per_week", 1,
-                "code", "HP01", "subject_name", "Toán");
+        var section = new SchedulingSection(21L, 4L, 3L, "DRAFT", "HP01", "Toán", 2L,
+                30, "LECTURE", 1, 3, 0L, LocalDate.of(2026, 9, 1), LocalDate.of(2026, 12, 31),
+                java.util.Set.of(), Map.of());
         var slot = new SchedulingService.Slot(11L, 21L, 2L, 5L, 1, 2, 3,
                 LocalDate.of(2026, 9, 1), LocalDate.of(2026, 12, 31));
         var context = new SchedulingService.Context(Map.of(21L, section),
@@ -144,9 +145,9 @@ class ApprovalServiceTest {
 
     @Test
     void conflictDetailsKeepNullRoomAndExistingPatternIdWithoutMutation() throws Exception {
-        var section = Map.<String, Object>of("id", 21L, "semester_id", 4L, "status", "DRAFT",
-                "managing_unit_id", 3L, "staff_id", 2L, "sessions_per_week", 1,
-                "code", "HP01", "subject_name", "Toán");
+        var section = new SchedulingSection(21L, 4L, 3L, "DRAFT", "HP01", "Toán", 2L,
+                30, "LECTURE", 1, 3, 0L, LocalDate.of(2026, 9, 1), LocalDate.of(2026, 12, 31),
+                java.util.Set.of(), Map.of());
         var slot = new SchedulingService.Slot(11L, 21L, 2L, 5L, 1, 2, 3,
                 LocalDate.of(2026, 9, 1), LocalDate.of(2026, 12, 31));
         var issue = Map.<String, Object>of("rule", "BR05", "message", "Xung đột", "patternId", 99L);

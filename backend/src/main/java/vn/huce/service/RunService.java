@@ -1,5 +1,6 @@
 package vn.huce.service;
 
+import vn.huce.model.SchedulingSection;
 import vn.huce.model.SchedulingRoom;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -100,22 +101,22 @@ public class RunService {
         Context context = scheduling.context();
         var expected = genetic.targets(context, actor, semesterId);
         Set<Long> expectedIds = new HashSet<>();
-        for (Map<String, Object> section : expected) {
-            expectedIds.add(n(section, "id"));
+        for (SchedulingSection section : expected) {
+            expectedIds.add(section.id());
         }
         List<Slot> plan = new ArrayList<>();
         List<Slot> fixed = new ArrayList<>(context.patterns());
         ApiFailure stale = new ApiFailure(409, "VERSION_CONFLICT",
                 "Dữ liệu đã thay đổi. Hãy tải lại trước khi lưu.", Map.of("runId", runId));
         for (ScheduleRunItem item : repository.rawItems(runId)) {
-            Map<String, Object> section = context.sections().get(item.sectionId());
+            SchedulingSection section = context.sections().get(item.sectionId());
             if (section == null) {
                 throw stale;
             }
-            unit(actor, section.get("managing_unit_id"));
-            if (!expectedIds.contains(n(section, "id"))
-                    || !Objects.equals(nullableId(section.get("staff_id")), item.staffId())
-                    || n(section, "periods_per_session") != item.periodCount()) {
+            unit(actor, section.managingUnitId());
+            if (!expectedIds.contains(section.id())
+                    || !Objects.equals(section.staffId(), item.staffId())
+                    || section.periodsPerSession() != item.periodCount()) {
                 throw stale;
             }
             SchedulingRoom room = context.rooms().get(item.roomId());
@@ -135,9 +136,9 @@ public class RunService {
             plan.add(slot);
             fixed.add(slot);
         }
-        for (Map<String, Object> section : expected) {
-            if (fixed.stream().filter(slot -> slot.section() == n(section, "id")).count()
-                    != n(section, "sessions_per_week")) {
+        for (SchedulingSection section : expected) {
+            if (fixed.stream().filter(slot -> slot.section() == section.id()).count()
+                    != section.sessionsPerWeek()) {
                 throw stale;
             }
         }

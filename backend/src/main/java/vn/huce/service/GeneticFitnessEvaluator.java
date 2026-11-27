@@ -1,5 +1,6 @@
 package vn.huce.service;
 
+import vn.huce.model.SchedulingSection;
 import vn.huce.model.SchedulingRoom;
 import java.time.LocalDate;
 import java.util.HashMap;
@@ -35,13 +36,13 @@ final class GeneticFitnessEvaluator {
 
     int busy(Slot slot, Kind kind) {
         Context context = input.ctx();
-        Map<String, Object> section = context.sections().get(slot.section());
+        SchedulingSection section = context.sections().get(slot.section());
         Set<Long> staff = scheduling.staff(context, slot);
         int count = 0;
         for (int p = slot.first(); p <= slot.last(); p++) {
             final int period = p;
             if (context.availability().stream().anyMatch(row -> staff.contains(row.staffId())
-                    && row.semesterId() == n(section, "semester_id")
+                    && row.semesterId() == section.semesterId()
                     && row.dayOfWeek() == slot.day() && row.kind() == kind
                     && row.overlaps(period, period))) {
                 count++;
@@ -74,13 +75,13 @@ final class GeneticFitnessEvaluator {
         return intrinsic.computeIfAbsent(candidate, slot -> {
             Context context = input.ctx();
             SchedulingRoom room = context.rooms().get(slot.room());
-            Map<String, Object> section = context.sections().get(slot.section());
+            SchedulingSection section = context.sections().get(slot.section());
             int hard = busy(slot, Kind.BUSY);
             for (Slot fixed : context.patterns()) {
                 hard += clash(slot, fixed);
             }
             double soft = 5.0 * busy(slot, Kind.AVOID)
-                    + 10.0 * (room.capacity() - n(section, "capacity")) / room.capacity();
+                    + 10.0 * (room.capacity() - section.capacity()) / room.capacity();
             LocalDate date = firstDay(slot.from(), slot.day());
             String shift = context.periods().stream()
                     .filter(period -> period.campusId() == room.campusId()
@@ -110,7 +111,7 @@ final class GeneticFitnessEvaluator {
             for (long staffId : base.staff()) {
                 daily.merge(staffId + ":" + slot.day(), slot.count(), Integer::sum);
             }
-            for (long groupId : ids(input.ctx().sections().get(slot.section()).get("group_ids"))) {
+            for (long groupId : input.ctx().sections().get(slot.section()).groups().keySet()) {
                 String key = groupId + ":" + slot.day() + ":" + base.shift() + ":" + slot.from() + ":" + slot.to();
                 TreeSet<Integer> periods = groupPeriods.computeIfAbsent(key, ignored -> new TreeSet<>());
                 for (int period = slot.first(); period <= slot.last(); period++) {

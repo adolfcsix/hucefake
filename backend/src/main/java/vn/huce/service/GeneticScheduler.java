@@ -1,5 +1,6 @@
 package vn.huce.service;
 
+import vn.huce.model.SchedulingSection;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -68,11 +69,11 @@ public class GeneticScheduler {
         return number.doubleValue();
     }
 
-    List<Map<String, Object>> targets(Context context, Actor actor, long semesterId) {
+    List<SchedulingSection> targets(Context context, Actor actor, long semesterId) {
         return inputBuilder.targets(context, actor, semesterId);
     }
 
-    static Slot make(Map<String, Object> section, long roomId, int dayOfWeek, int periodFrom) {
+    static Slot make(SchedulingSection section, long roomId, int dayOfWeek, int periodFrom) {
         return GeneticInputBuilder.make(section, roomId, dayOfWeek, periodFrom);
     }
 

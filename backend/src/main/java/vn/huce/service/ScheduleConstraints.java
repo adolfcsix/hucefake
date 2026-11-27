@@ -1,5 +1,6 @@
 package vn.huce.service;
 
+import vn.huce.model.SchedulingSection;
 import vn.huce.model.SchedulingRoom;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -25,26 +26,29 @@ final class ScheduleConstraints {
     private ScheduleConstraints() {
     }
 
-    static boolean fits(SchedulingRoom room, Map<String, Object> section) {
-        return room != null && section != null && "ACTIVE".equals(room.status())
-                && room.capacity() >= n(section, "capacity")
-                && Objects.equals(room.type(), section.get("required_room_type"));
+    static boolean fits(SchedulingRoom room, SchedulingSection section) {
+        return section != null && fits(room, section.capacity(), section.requiredRoomType());
+    }
+
+    static boolean fits(SchedulingRoom room, long capacity, Object requiredRoomType) {
+        return room != null && "ACTIVE".equals(room.status())
+                && room.capacity() >= capacity && Objects.equals(room.type(), requiredRoomType);
     }
 
     static Set<Long> staff(Context context, Slot slot) {
-        Set<Long> members = ids(context.sections().get(slot.section()).get("assistant_ids"));
+        Set<Long> members = new java.util.LinkedHashSet<>(context.sections().get(slot.section()).assistantIds());
         if (slot.staff() != null) {
             members.add(slot.staff());
         }
         return members;
     }
 
-    static Map<String, Object> issue(String rule, String message, Map<String, Object> section) {
+    static Map<String, Object> issue(String rule, String message, SchedulingSection section) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("rule", rule);
         result.put("message", message);
         if (section != null) {
-            result.put("sectionCode", section.get("code"));
+            result.put("sectionCode", section.code());
         }
         return result;
     }
@@ -69,9 +73,9 @@ final class ScheduleConstraints {
         boolean sameSection = first.section() == second.section();
         boolean sameRoom = first.room() == second.room();
         boolean sameStaff = !Collections.disjoint(staff(context, first), staff(context, second));
-        Set<Long> groups = ids(context.sections().get(first.section()).get("group_ids"));
-        Map<String, Object> otherSection = context.sections().get(second.section());
-        boolean sameGroup = !Collections.disjoint(groups, ids(otherSection.get("group_ids")));
+        Set<Long> groups = context.sections().get(first.section()).groups().keySet();
+        SchedulingSection otherSection = context.sections().get(second.section());
+        boolean sameGroup = !Collections.disjoint(groups, otherSection.groups().keySet());
         if (!sameSection && !sameRoom && !sameStaff && !sameGroup) {
             return result;
         }
@@ -111,14 +115,8 @@ final class ScheduleConstraints {
             }
             if (sameGroup) {
                 var conflict = pairIssue(context, second, "BR06", "Lớp hành chính đối tượng đã có lịch.");
-                Object[] otherIds = (Object[]) otherSection.get("group_ids");
-                Object[] otherCodes = (Object[]) otherSection.get("group_codes");
-                List<Object> shared = new ArrayList<>();
-                for (int index = 0; index < otherIds.length; index++) {
-                    if (groups.contains(nullableId(otherIds[index]))) {
-                        shared.add(otherCodes[index]);
-                    }
-                }
+                List<String> shared = otherSection.groups().entrySet().stream()
+                        .filter(group -> groups.contains(group.getKey())).map(Map.Entry::getValue).toList();
                 conflict.put("groupCodes", shared);
                 result.add(conflict);
             }
@@ -127,16 +125,16 @@ final class ScheduleConstraints {
     }
 
     static List<Map<String, Object>> problems(Context context, Slot slot) {
-        Map<String, Object> section = context.sections().get(slot.section());
+        SchedulingSection section = context.sections().get(slot.section());
         if (section == null || slot.staff() == null
-                || !Objects.equals(slot.staff(), nullableId(section.get("staff_id")))) {
+                || !Objects.equals(slot.staff(), section.staffId())) {
             return List.of(issue("BR02", "Lớp chưa có giảng viên chính hợp lệ.", section));
         }
         if (!fits(context.rooms().get(slot.room()), section)) {
             return List.of(issue("BR07", "Phòng phải hoạt động, đúng loại và đủ sức chứa.", section));
         }
-        if (slot.from().isBefore(day(section.get("start_date")))
-                || slot.to().isAfter(day(section.get("end_date"))) || slot.from().isAfter(slot.to())
+        if (slot.from().isBefore(section.startDate())
+                || slot.to().isAfter(section.endDate()) || slot.from().isAfter(slot.to())
                 || ScheduleCalendar.firstDay(slot.from(), slot.day()).isAfter(slot.to())
                 || ScheduleCalendar.occurrences(slot).stream().anyMatch(date -> ScheduleCalendar.interval(context, slot, date) == null)) {
             return List.of(issue("BR03", "Tiết học phải nằm trọn trong một ca và trong khoảng ngày của lớp.", section));
@@ -154,10 +152,10 @@ final class ScheduleConstraints {
     }
 
     static boolean busy(Context context, Slot slot, Kind kind) {
-        Map<String, Object> section = context.sections().get(slot.section());
+        SchedulingSection section = context.sections().get(slot.section());
         Set<Long> members = staff(context, slot);
         return context.availability().stream().anyMatch(row -> members.contains(row.staffId())
-                && row.semesterId() == n(section, "semester_id")
+                && row.semesterId() == section.semesterId()
                 && row.dayOfWeek() == slot.day() && row.kind() == kind
                 && row.overlaps(slot.first(), slot.last()));
     }

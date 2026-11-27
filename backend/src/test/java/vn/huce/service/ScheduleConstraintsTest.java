@@ -1,5 +1,6 @@
 package vn.huce.service;
 
+import vn.huce.model.SchedulingSection;
 import vn.huce.model.SchedulingRoom;
 import java.time.LocalDate;
 import java.util.List;
@@ -19,15 +20,13 @@ class ScheduleConstraintsTest {
         return new Slot(id, section, 3L, room, 1, first, count, monday, monday);
     }
 
-    private Map<String, Object> section(String code) {
-        return Map.of("code", code, "staff_id", 3L, "assistant_ids", new Long[]{8L},
-                "group_ids", new Long[]{10L}, "group_codes", new String[]{"K66"},
-                "capacity", 30, "required_room_type", "THEORY", "semester_id", 1L,
-                "start_date", monday.toString(), "end_date", monday.toString());
+    private SchedulingSection section(long id, String code) {
+        return new SchedulingSection(id, 1L, 1L, "DRAFT", code, "Toán", 3L,
+                30, "THEORY", 1, 2, 0L, monday, monday, java.util.Set.of(8L), Map.of(10L, "K66"));
     }
 
     private Context context(List<NonTeachingDay> holidays, List<StaffAvailability> availability) {
-        return new Context(Map.of(1L, section("A"), 2L, section("B")),
+        return new Context(Map.of(1L, section(1L, "A"), 2L, section(2L, "B")),
                 Map.of(4L, new SchedulingRoom(4L, 5L, "P1", 40, "THEORY", "ACTIVE")),
                 List.of(), availability, holidays, List.of());
     }
@@ -68,13 +67,31 @@ class ScheduleConstraintsTest {
 
     @Test
     void roomMustBeActiveOfRequiredTypeAndLargeEnough() {
-        var section = Map.<String, Object>of("capacity", 30, "required_room_type", "LECTURE");
+        var section = new SchedulingSection(1L, 1L, 1L, "DRAFT", "A", "Toán", 3L,
+                30, "LECTURE", 1, 2, 0L, monday, monday, java.util.Set.of(), Map.of());
         assertTrue(ScheduleConstraints.fits(new SchedulingRoom(1L, 5L, "P1", 30, "LECTURE", "ACTIVE"), section));
         assertFalse(ScheduleConstraints.fits(new SchedulingRoom(1L, 5L, "P1", 29, "LECTURE", "ACTIVE"), section));
         assertFalse(ScheduleConstraints.fits(new SchedulingRoom(1L, 5L, "P1", 30, "LAB", "ACTIVE"), section));
         assertFalse(ScheduleConstraints.fits(new SchedulingRoom(1L, 5L, "P1", 30, "LECTURE", "MAINTENANCE"), section));
         assertFalse(ScheduleConstraints.fits(new SchedulingRoom(1L, 5L, "P1", 30, "LECTURE", "INACTIVE"), section));
         assertFalse(ScheduleConstraints.fits(null, section));
+    }
+
+    @Test
+    void groupCodesRemainAssociatedWithTheirOwnIdentifiersInConflictDetails() {
+        var first = new SchedulingSection(1L, 1L, 1L, "DRAFT", "A", "Toán", 3L,
+                30, "THEORY", 1, 2, 0L, monday, monday, java.util.Set.of(), Map.of(20L, "K20"));
+        var groups = new java.util.LinkedHashMap<Long, String>();
+        groups.put(10L, "K10");
+        groups.put(20L, "K20");
+        var second = new SchedulingSection(2L, 1L, 1L, "DRAFT", "B", "Toán", 3L,
+                30, "THEORY", 1, 2, 0L, monday, monday, java.util.Set.of(), groups);
+        var context = new Context(Map.of(1L, first, 2L, second),
+                Map.of(4L, new SchedulingRoom(4L, 5L, "P1", 40, "THEORY", "ACTIVE")),
+                List.of(), List.of(), List.of(), List.of());
+        var conflict = ScheduleConstraints.pair(context, slot(1, 1, 4, 1, 2), slot(2, 2, 4, 1, 2))
+                .stream().filter(issue -> "BR06".equals(issue.get("rule"))).findFirst().orElseThrow();
+        assertEquals(List.of("K20"), conflict.get("groupCodes"));
     }
 
     @Test
