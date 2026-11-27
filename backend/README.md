@@ -169,3 +169,8 @@ Rà soát các repository, service, controller, CLI và toàn bộ 31 file Java 
 ### Kiểm toán quyền ghi và phạm vi khoa
 
 Đối chiếu sáu Controller ghi dữ liệu, các service lớp học phần, lịch, phê duyệt, GA và đề xuất HUCEChat. Bổ sung MutationAuthorizationTest: 28 endpoint ghi nghiệp vụ, 81 tổ hợp vai trò bị từ chối (25 endpoint x 3 vai trò và 3 endpoint GA x 2 vai trò), yêu cầu 403/FORBIDDEN trước khi gọi MutationService hoặc service nghiệp vụ. Bổ sung hai test lớp học phần ngoài khoa. Đây là unit test quyền ở Controller/Service, không thay thế các kiểm thử HTTP/CSRF/PostgreSQL và phạm vi dữ liệu thật trong CI. Không thay đổi chính sách quyền đang có.
+
+
+### Kiểm thử giao dịch PostgreSQL khi có yêu cầu đồng thời
+
+Mở rộng section-contract.mjs (CI chạy với Spring Boot và PostgreSQL 16 thật, chỉ trên database demo dùng một lần): hai POST tạo lớp cùng Idempotency-Key phải trả cùng ID, hai PATCH cùng version nhưng key khác chỉ một thành công và một VERSION_CONFLICT, nhập tệp lỗi phải rollback mọi dòng rồi cho phép sửa payload và dùng lại key (không để bản ghi idempotency của giao dịch thất bại), hai lần áp dụng phê duyệt đồng thời với key khác phải trả cùng kết quả công bố. Các assertion hiện có về số lớp, version, số buổi và thông báo vẫn được giữ. Không sửa nghiệp vụ hoặc schema khi chưa có lỗi được chứng minh. Cần CI mới để xác minh các test đồng thời.
