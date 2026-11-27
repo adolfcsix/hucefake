@@ -57,4 +57,21 @@ class ChatClassifierTest {
         assertEquals(new ChatClassification("UNRELATED", true),
                 classifier.classify(student, Map.of("message", "abc xyz")));
     }
+
+    @Test
+    void exhaustedQuotaReportsFallbackWithoutCallingRemoteModel() {
+        when(gemini.enabled()).thenReturn(true);
+        when(gemini.take(1L)).thenReturn(false);
+        assertEquals(new ChatClassification("UNRELATED", true),
+                classifier.classify(student, Map.of("message", "abc xyz")));
+        verify(gemini, never()).classify(anyString(), anyCollection(), anyString());
+    }
+
+    @Test
+    void disabledGeminiStillAllowsLocalFallback() {
+        assertEquals(new ChatClassification("UNRELATED", false),
+                classifier.classify(student, Map.of("message", "abc xyz")));
+        verify(gemini, never()).take(anyLong());
+        verify(gemini, never()).classify(anyString(), anyCollection(), anyString());
+    }
 }

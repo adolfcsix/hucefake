@@ -1,5 +1,6 @@
 package vn.huce.service.chat;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.URI;
@@ -85,14 +86,22 @@ public class GeminiAdvisor {
     }
 
     String parseAction(String responseBody, Collection<String> permitted) throws java.io.IOException {
-        JsonNode parts = json.readTree(responseBody).path("candidates").path(0).path("content").path("parts");
+        var reader = json.reader().with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
+        JsonNode parts = reader.readTree(responseBody).path("candidates").path(0).path("content").path("parts");
+        if (!parts.isArray()) {
+            throw new IllegalStateException("Gemini response has no content parts");
+        }
         StringBuilder output = new StringBuilder();
         for (JsonNode part : parts) {
             if (!part.path("thought").asBoolean(false)) {
                 output.append(part.path("text").asText(""));
             }
         }
-        String action = json.readTree(output.toString()).path("action").asText();
+        JsonNode payload = reader.readTree(output.toString());
+        if (payload == null || !payload.isObject() || !payload.path("action").isTextual()) {
+            throw new IllegalStateException("Gemini response has no textual action");
+        }
+        String action = payload.path("action").textValue();
         if (!permitted.contains(action)) {
             throw new IllegalStateException("Gemini returned an unsupported action");
         }

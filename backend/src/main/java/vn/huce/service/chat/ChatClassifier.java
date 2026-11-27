@@ -37,12 +37,16 @@ class ChatClassifier {
         Set<String> permitted = ChatPermissions.allowed(actor.role());
         String action = input.get("draft") != null ? "DRAFT" : ChatIntent.recognize(question, previous);
         boolean modelUnavailable = false;
-        if (action == null && gemini.enabled() && gemini.take(actor.id())) {
-            Set<String> allowed = new LinkedHashSet<>(permitted);
-            allowed.add("UNRELATED");
-            try {
-                action = gemini.classify(question, allowed, INSTRUCTION);
-            } catch (ApiFailure failure) {
+        if (action == null && gemini.enabled()) {
+            if (gemini.take(actor.id())) {
+                Set<String> allowed = new LinkedHashSet<>(permitted);
+                allowed.add("UNRELATED");
+                try {
+                    action = gemini.classify(question, allowed, INSTRUCTION);
+                } catch (ApiFailure failure) {
+                    modelUnavailable = true;
+                }
+            } else {
                 modelUnavailable = true;
             }
         }

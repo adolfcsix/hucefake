@@ -179,3 +179,8 @@ Mở rộng section-contract.mjs (CI chạy với Spring Boot và PostgreSQL 16 
 ### Bảo toàn trạng thái tiến độ xếp lịch
 
 RunRepository.recordProgress chỉ ghi lịch sử thế hệ nếu UPDATE có tác động đến một lượt RUNNING và thế hệ mới không nhỏ hơn thế hệ đã lưu. Hai câu lệnh nằm trong TransactionTemplate của RunWorker: UPDATE khóa dòng đến cuối transaction, vì vậy callback muộn sau khi lượt chạy đã kết thúc hoặc bị đánh dấu FAILED không được ghi thêm progress. Ba unit test kiểm tra lượt không còn hợp lệ, thứ tự ghi khi được chấp nhận và thế hệ cũ. Không thay đổi thuật toán, schema, endpoint hay giao diện.
+
+
+### Kiểm toán HUCEChat và phản hồi Gemini
+
+Giới hạn phân loại Gemini bằng allowlist hiện có, yêu cầu content.parts là mảng và action là chuỗi JSON hợp lệ, từ chối nội dung JSON nối tiếp. Khi hết quota, câu hỏi không nhận diện được bằng quy tắc nội bộ trả UNRELATED với modelUnavailable=true thay vì che mất trạng thái fallback. Không gửi thêm dữ liệu cá nhân, không cấp thêm quyền, không đổi hợp đồng API. Hai test ChatService xác minh kiểm tra quyền hội thoại trước khi đọc exchange và kiểm tra lại trước khi trả lời/ghi đề xuất sau bước phân loại. Bốn test bổ sung cho parser và fallback. Các test dùng mock, không gọi Gemini thật; cần CI và kiểm tra riêng với API key hợp lệ.

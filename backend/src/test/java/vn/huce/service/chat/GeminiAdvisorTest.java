@@ -46,4 +46,24 @@ class GeminiAdvisorTest {
         assertEquals("ASSISTANT_CONFIGURATION", assertThrows(ApiFailure.class,
                 () -> invalid.classify("test", List.of("GENERATE"), "classify")).code());
     }
+
+    private String rawResponse(String output) throws Exception {
+        return mapper.writeValueAsString(java.util.Map.of("candidates", List.of(
+                java.util.Map.of("content", java.util.Map.of("parts", List.of(
+                        java.util.Map.of("text", output)))))));
+    }
+
+    @Test
+    void rejectsTrailingJsonEvenWhenFirstActionIsAllowed() {
+        assertThrows(java.io.IOException.class, () -> advisor.parseAction(
+                rawResponse("{\"action\":\"GENERATE\"} {\"action\":\"APPLY\"}"), List.of("GENERATE")));
+    }
+
+    @Test
+    void rejectsNonTextActionAndMissingParts() {
+        assertThrows(IllegalStateException.class, () -> advisor.parseAction(
+                rawResponse("{\"action\":123}"), List.of("123")));
+        assertThrows(IllegalStateException.class, () -> advisor.parseAction(
+                "{\"candidates\":[]}", List.of("GENERATE")));
+    }
 }
