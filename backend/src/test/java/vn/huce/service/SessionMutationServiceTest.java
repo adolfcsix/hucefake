@@ -6,6 +6,8 @@ import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
 import vn.huce.model.SessionRequestStatus;
 import vn.huce.model.SessionChangeAction;
+import vn.huce.model.SessionRequestSnapshot;
+import vn.huce.model.SessionRequestResolution;
 import vn.huce.repository.AuditRepository;
 import vn.huce.repository.SectionRepository;
 import vn.huce.repository.SessionChangeRepository;
@@ -34,8 +36,8 @@ class SessionMutationServiceTest {
 
     @Test
     void returnRequestNotifiesLecturerWithoutChangingSession() {
-        when(repository.findRequest(7L)).thenReturn(Map.of("managing_unit_id", 3L,
-                "status", "PENDING", "staff_id", 8L, "session_id", 9L, "action", "CANCEL"));
+        when(repository.findRequest(7L)).thenReturn(new SessionRequestSnapshot(
+                7L, 9L, 8L, 3L, null, SessionRequestStatus.PENDING, SessionChangeAction.CANCEL));
         service.decide(staff, 7L, Map.of("action", "RETURNED", "reason", "Giữ lịch hiện tại"));
         verify(repository).decideRequest(7L, SessionRequestStatus.RETURNED, "Giữ lịch hiện tại");
         verify(notifications).notifyStaffProfile(8L, "Đề nghị đổi lịch đã được trả lại. Giữ lịch hiện tại");
@@ -45,8 +47,8 @@ class SessionMutationServiceTest {
 
     @Test
     void mismatchedDecisionDoesNotAdjustSession() {
-        when(repository.findRequest(7L)).thenReturn(Map.of("managing_unit_id", 3L,
-                "status", "PENDING", "staff_id", 8L, "session_id", 9L, "action", "CANCEL"));
+        when(repository.findRequest(7L)).thenReturn(new SessionRequestSnapshot(
+                7L, 9L, 8L, 3L, null, SessionRequestStatus.PENDING, SessionChangeAction.CANCEL));
         assertEquals(400, assertThrows(ApiFailure.class, () -> service.decide(staff, 7L,
                 Map.of("action", "RESCHEDULE", "reason", "Đổi lịch"))).status());
         verify(repository, never()).findSession(anyLong());
@@ -55,9 +57,21 @@ class SessionMutationServiceTest {
     }
 
     @Test
+    void requestCampusScopeIsCheckedBeforeDecision() {
+        when(repository.findRequest(7L)).thenReturn(new SessionRequestSnapshot(
+                7L, 9L, 8L, 3L, 5L, SessionRequestStatus.PENDING, SessionChangeAction.CANCEL));
+        doThrow(new ApiFailure(403, "FORBIDDEN", "Bạn không có quyền trong phạm vi này."))
+                .when(scheduling).requireCampus(staff, 5L);
+        assertEquals(403, assertThrows(ApiFailure.class, () -> service.decide(staff, 7L,
+                Map.of("action", "RETURNED", "reason", "Kiểm tra lại"))).status());
+        verify(repository, never()).decideRequest(anyLong(), any(), anyString());
+        verifyNoInteractions(notifications, audit);
+    }
+
+    @Test
     void processedRequestCannotBeDecidedAgain() {
-        when(repository.findRequest(7L)).thenReturn(Map.of("managing_unit_id", 3L,
-                "status", "APPROVED"));
+        when(repository.findRequest(7L)).thenReturn(new SessionRequestSnapshot(
+                7L, 9L, 8L, 3L, null, SessionRequestStatus.APPROVED, SessionChangeAction.CANCEL));
         assertEquals(409, assertThrows(ApiFailure.class, () -> service.decide(staff, 7L,
                 Map.of("action", "RETURNED", "reason", "Kiểm tra lại"))).status());
         verify(repository, never()).decideRequest(anyLong(), any(), anyString());
@@ -84,7 +98,9 @@ class SessionMutationServiceTest {
                 "managing_unit_id", 3L, "code", "HP01"));
         when(repository.insertException(eq(9L), any(), eq(SessionChangeAction.CANCEL),
                 isNull(), eq("Nghỉ học"), eq(1L))).thenReturn(Map.of("id", 11L));
-        when(repository.closePendingRequests(9L, SessionChangeAction.CANCEL)).thenReturn(java.util.List.of());
+        when(repository.closePendingRequests(9L, SessionChangeAction.CANCEL)).thenReturn(java.util.List.of(
+                new SessionRequestResolution(13L, 8L, SessionRequestStatus.APPROVED, "Đã xử lý"),
+                new SessionRequestResolution(14L, 9L, SessionRequestStatus.RETURNED, "Đã điều chỉnh khác")));
         Object result = service.change(staff, 9L, Map.of("action", "CANCEL", "reason", "Nghỉ học"), null);
         assertTrue(result instanceof Map<?, ?>);
         Map<?, ?> response = (Map<?, ?>) result;
@@ -94,5 +110,9 @@ class SessionMutationServiceTest {
         verify(repository).cancelSession(9L);
         verify(repository).closePendingRequests(9L, SessionChangeAction.CANCEL);
         verify(audit).record(staff, "CANCEL", "session_exceptions", 11L);
+        verify(audit).record(staff, "APPROVED", "session_change_requests", 13L);
+        verify(audit).record(staff, "RETURNED", "session_change_requests", 14L);
+        verify(notifications).notifyStaffProfile(8L, "Đã xử lý");
+        verify(notifications).notifyStaffProfile(9L, "Đã điều chỉnh khác");
     }
 }

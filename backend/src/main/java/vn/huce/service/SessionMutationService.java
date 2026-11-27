@@ -16,6 +16,8 @@ import vn.huce.dto.SessionRequestDecision;
 import vn.huce.exception.ApiFailure;
 import vn.huce.model.SessionChangeAction;
 import vn.huce.model.SessionRequestStatus;
+import vn.huce.model.SessionRequestSnapshot;
+import vn.huce.model.SessionRequestResolution;
 import vn.huce.repository.AuditRepository;
 import vn.huce.repository.SectionRepository;
 import vn.huce.repository.SessionChangeRepository;
@@ -181,9 +183,9 @@ public class SessionMutationService {
     }
 
     private void closePendingRequests(Actor actor, long sessionId, SessionChangeAction action) {
-        for (Map<String, Object> request : repository.closePendingRequests(sessionId, action)) {
-            audit.record(actor, s(request, "status"), "session_change_requests", n(request, "id"));
-            notifications.notifyStaffProfile(n(request, "staff_id"), s(request, "decision_reason"));
+        for (SessionRequestResolution request : repository.closePendingRequests(sessionId, action)) {
+            audit.record(actor, request.status().name(), "session_change_requests", request.id());
+            notifications.notifyStaffProfile(request.staffId(), request.reason());
         }
     }
 
@@ -224,22 +226,22 @@ public class SessionMutationService {
 
     public void decide(Actor actor, long requestId, Map<String, Object> body) {
         role(actor, "STAFF");
-        Map<String, Object> record = repository.findRequest(requestId);
-        unit(actor, record.get("managing_unit_id"));
-        campus(actor, record.get("campus_id"));
-        if (!SessionRequestStatus.PENDING.name().equals(record.get("status"))) {
+        SessionRequestSnapshot record = repository.findRequest(requestId);
+        unit(actor, record.managingUnitId());
+        campus(actor, record.campusId());
+        if (record.status() != SessionRequestStatus.PENDING) {
             throw state("Đề nghị đã được xử lý.");
         }
         SessionRequestDecision decision = SessionRequestDecision.from(body);
         boolean approved = decision.status() == SessionRequestStatus.APPROVED;
         if (approved) {
-            if (!decision.action().name().equals(record.get("action"))) {
+            if (decision.action() != record.action()) {
                 throw invalid("Loại điều chỉnh phải khớp với đề nghị.");
             }
-            change(actor, n(record, "session_id"), body, requestId);
+            change(actor, record.sessionId(), body, requestId);
         }
         repository.decideRequest(requestId, decision.status(), decision.reason());
-        notifications.notifyStaffProfile(n(record, "staff_id"), (approved
+        notifications.notifyStaffProfile(record.staffId(), (approved
                 ? "Đề nghị đổi lịch đã được xử lý. " : "Đề nghị đổi lịch đã được trả lại. ") + decision.reason());
         audit.record(actor, decision.status().name(), "session_change_requests", requestId);
     }

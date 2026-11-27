@@ -10,6 +10,9 @@ import java.util.Map;
 import org.springframework.stereotype.Repository;
 import vn.huce.model.SessionChangeAction;
 import vn.huce.model.SessionRequestStatus;
+import vn.huce.model.SessionRequestSnapshot;
+import vn.huce.model.SessionRequestResolution;
+import vn.huce.exception.ApiFailure;
 
 import static vn.huce.repository.SessionQueries.STAFF_IDS;
 
@@ -58,13 +61,15 @@ public class SessionChangeRepository {
         store.jdbc().update("UPDATE class_sessions SET status='CANCELLED',version=version+1 WHERE id=?", sessionId);
     }
 
-    public List<Map<String, Object>> closePendingRequests(long sessionId, SessionChangeAction action) {
-        return store.rows("""
+    public List<SessionRequestResolution> closePendingRequests(long sessionId, SessionChangeAction action) {
+        return store.jdbc().query("""
                 UPDATE session_change_requests SET status=CASE WHEN action=? THEN 'APPROVED' ELSE 'RETURNED' END,
                 decision_reason=CASE WHEN action=? THEN 'Đề nghị đã được xử lý bằng điều chỉnh trực tiếp. Xem lại thời khóa biểu.'
                     ELSE 'Buổi học có điều chỉnh trực tiếp khác với đề nghị. Xem lại thời khóa biểu.' END
                 WHERE session_id=? AND status='PENDING' RETURNING id,staff_id,status,decision_reason
-                """, action.name(), action.name(), sessionId);
+                """, (rs, row) -> new SessionRequestResolution(rs.getLong("id"),
+                rs.getLong("staff_id"), SessionRequestStatus.valueOf(rs.getString("status")),
+                rs.getString("decision_reason")), action.name(), action.name(), sessionId);
     }
 
     public Object findRequests(Map<String, String> query, long semesterId, boolean staff, Long unitId, Long staffId) {
@@ -107,12 +112,20 @@ public class SessionChangeRepository {
                 """, sessionId, staffId, action.name(), reason);
     }
 
-    public Map<String, Object> findRequest(long requestId) {
-        return store.need("""
-                SELECT r.*,s.managing_unit_id,room.campus_id FROM session_change_requests r
+    public SessionRequestSnapshot findRequest(long requestId) {
+        List<SessionRequestSnapshot> rows = store.jdbc().query("""
+                SELECT r.id,r.session_id,r.staff_id,r.status,r.action,s.managing_unit_id,room.campus_id
+                FROM session_change_requests r
                 JOIN class_sessions x ON x.id=r.session_id JOIN course_sections c ON c.id=x.section_id
                 JOIN subjects s ON s.id=c.subject_id LEFT JOIN teaching_rooms room ON room.id=x.room_id WHERE r.id=?
-                """, requestId);
+                """, (rs, row) -> new SessionRequestSnapshot(rs.getLong("id"), rs.getLong("session_id"),
+                rs.getLong("staff_id"), rs.getObject("managing_unit_id", Long.class),
+                rs.getObject("campus_id", Long.class), SessionRequestStatus.valueOf(rs.getString("status")),
+                SessionChangeAction.valueOf(rs.getString("action"))), requestId);
+        if (rows.isEmpty()) {
+            throw new ApiFailure(404, "NOT_FOUND", "Không tìm thấy dữ liệu.");
+        }
+        return rows.getFirst();
     }
 
     public void decideRequest(long requestId, SessionRequestStatus status, String reason) {
