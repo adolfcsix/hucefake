@@ -73,3 +73,10 @@ for (const name of ['Automatic','RunPlan','CostChart','Approvals','SubmissionRea
   assert.ok(frontendSource.includes(sourceRoot + 'features/workflow/' + name + '.jsx'), 'Missing workflow feature ' + name)
 }
 console.log('PASS: scheduling, approval and availability workflow modules are separate')
+
+const chatSource = read('frontend/src/features/chat/HuceChat.jsx')
+assert.doesNotMatch(chatSource, /function\s+(DraftFields|Proposal|ChatIcon|ChatHistory|ChatExchange)\s*\(/)
+for (const name of ['DraftFields','Proposal','ChatIcon','ChatHistory','ChatExchange']) {
+  assert.ok(frontendSource.includes(sourceRoot + 'features/chat/' + name + '.jsx'), 'Missing chat component ' + name)
+}
+console.log('PASS: HUCEChat orchestration and presentation components are separate')

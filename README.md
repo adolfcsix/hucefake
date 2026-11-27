@@ -337,3 +337,8 @@ Các màn hình trong `frontend/src/features/timetable/` được tách theo ngh
 ### Tổ chức phân hệ Workflow ReactJS
 
 Trong `frontend/src/features/workflow/`, `Automatic.jsx` quản lý tham số GA, theo dõi tiến độ và thao tác lần chạy; `RunPlan.jsx` hiển thị phương án; `CostChart.jsx` vẽ chi phí theo thế hệ; `Approvals.jsx` quản lý phiên bản và duyệt/công bố; `SubmissionReadiness.jsx` hiển thị điều kiện gửi duyệt; `Availability.jsx` quản lý thời gian bận/ưu tiên tránh xếp lịch. File Workflow.jsx cũ đã được loại bỏ, giữ nguyên logic component, CSS, API, quyền và chu kỳ polling. Cần kiểm thử CI trên commit mới.
+
+
+### Tổ chức HUCEChat ReactJS
+
+HuceChat.jsx điều phối trạng thái hội thoại, gọi API, tìm lịch sử, quản lý đề xuất và focus. ChatHistory.jsx hiển thị lịch sử; ChatExchange.jsx hiển thị câu hỏi, phản hồi, dữ liệu và liên kết nguồn; DraftFields.jsx là biểu mẫu lớp nháp; Proposal.jsx hiển thị đề xuất và nút xác nhận/hủy; ChatIcon.jsx và chatPresentation.js chứa icon, nhãn và gợi ý. Giữ nguyên hợp đồng API, nội dung JSX, CSS, thời hạn, quyền, xác nhận và cơ chế chống thao tác đồng thời. Cần nghiệm thu build và browser trên commit mới.
