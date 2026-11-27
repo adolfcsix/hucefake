@@ -30,7 +30,7 @@ final class ScheduleConstraints {
         return section != null && fits(room, section.capacity(), section.requiredRoomType());
     }
 
-    static boolean fits(SchedulingRoom room, long capacity, Object requiredRoomType) {
+    static boolean fits(SchedulingRoom room, int capacity, String requiredRoomType) {
         return room != null && "ACTIVE".equals(room.status())
                 && room.capacity() >= capacity && Objects.equals(room.type(), requiredRoomType);
     }

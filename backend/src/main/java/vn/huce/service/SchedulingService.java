@@ -158,9 +158,8 @@ public class SchedulingService {
         return value == null || "".equals(value) ? fallback : day(date(value));
     }
 
-    public boolean fits(SchedulingRoom room, Map<String, Object> section) {
-        return section != null && ScheduleConstraints.fits(room, n(section, "capacity"),
-                section.get("required_room_type"));
+    public boolean fits(SchedulingRoom room, int capacity, String requiredRoomType) {
+        return ScheduleConstraints.fits(room, capacity, requiredRoomType);
     }
 
     public boolean fits(SchedulingRoom room, SchedulingSection section) {

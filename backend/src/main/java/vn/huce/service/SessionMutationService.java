@@ -20,6 +20,7 @@ import vn.huce.model.SessionRequestResolution;
 import vn.huce.model.SessionAdjustmentSnapshot;
 import vn.huce.model.SessionLecturerScope;
 import vn.huce.model.SemesterDateRange;
+import vn.huce.model.SessionSectionSnapshot;
 import vn.huce.repository.AuditRepository;
 import vn.huce.repository.SectionRepository;
 import vn.huce.repository.SessionChangeRepository;
@@ -75,7 +76,7 @@ public class SessionMutationService {
     }
 
     private List<Map<String, Object>> alternatives(Actor actor, Context context, Slot slot,
-            Map<String, Object> section, SessionAdjustmentSnapshot original, SessionChangeAction action, long exclude) {
+            SessionSectionSnapshot section, SessionAdjustmentSnapshot original, SessionChangeAction action, long exclude) {
         var allowed = scheduling.campuses(actor);
         List<Map<String, Object>> result = new ArrayList<>();
         boolean roomChange = action == SessionChangeAction.ROOM_CHANGE;
@@ -85,7 +86,7 @@ public class SessionMutationService {
             for (SchedulingRoom room : context.rooms().values()) {
                 long campusId = room.campusId();
                 long roomId = room.id();
-                if (!allowed.contains(campusId) || !scheduling.fits(room, section)
+                if (!allowed.contains(campusId) || !scheduling.fits(room, section.capacity(), section.requiredRoomType())
                         || scheduling.holiday(context, campusId, slot.from())
                         || (roomChange && Objects.equals(original.roomId(), roomId))) {
                     continue;
@@ -110,12 +111,12 @@ public class SessionMutationService {
     public Object change(Actor actor, long sessionId, Map<String, Object> body, Long requestId) {
         role(actor, "STAFF");
         SessionAdjustmentSnapshot original = repository.findSession(sessionId);
-        Map<String, Object> section = sectionRepository.findSection(original.sectionId());
-        unit(actor, section.get("managing_unit_id"));
+        SessionSectionSnapshot section = sectionRepository.findSectionForSession(original.sectionId());
+        unit(actor, section.managingUnitId());
         if (repository.hasException(sessionId)) {
             throw new ApiFailure(409, "DUPLICATE_REQUEST", "Buổi học đã có ngoại lệ.");
         }
-        if (!"PLANNED".equals(original.status()) || !"OPEN".equals(section.get("status"))) {
+        if (!"PLANNED".equals(original.status()) || !"OPEN".equals(section.status())) {
             throw state("Chỉ điều chỉnh buổi học đang lên lịch của lớp đã mở.");
         }
         campus(actor, original.campusId());
@@ -134,7 +135,7 @@ public class SessionMutationService {
         if (requestId == null) {
             closePendingRequests(actor, sessionId, request.action());
         }
-        notifications.notifySection(n(section, "id"), "Lớp " + section.get("code")
+        notifications.notifySection(section.id(), "Lớp " + section.code()
                 + " thay đổi lịch ngày " + originalDate + ". " + request.reason());
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("id", exceptionId);
@@ -143,14 +144,14 @@ public class SessionMutationService {
     }
 
     private long createReplacement(Actor actor, long sessionId, Context context, SessionAdjustmentSnapshot original,
-            Map<String, Object> section, LocalDate originalDate, SessionChangeAction action, Map<String, Object> body) {
+            SessionSectionSnapshot section, LocalDate originalDate, SessionChangeAction action, Map<String, Object> body) {
         SchedulingRoom room = room(context, id(body.get("roomId")));
         long roomId = room.id();
         long campusId = room.campusId();
         scheduling.requireCampus(actor, campusId);
         boolean roomChange = action == SessionChangeAction.ROOM_CHANGE;
         LocalDate replacementDate = roomChange ? originalDate : LocalDate.parse(date(body.get("date")));
-        SemesterDateRange semester = repository.semesterDates(n(section, "semester_id"));
+        SemesterDateRange semester = repository.semesterDates(section.semesterId());
         if (!semester.contains(replacementDate)) {
             throw invalid("Ngày học bù phải nằm trong học kỳ.");
         }
@@ -158,13 +159,13 @@ public class SessionMutationService {
             throw invalid("Ngày đã chọn là ngày không học tại cơ sở.");
         }
         int period = roomChange ? original.periodFrom() : (int) number(body.get("periodFrom"), 1, 15);
-        if (!scheduling.fits(room, section)) {
+        if (!scheduling.fits(room, section.capacity(), section.requiredRoomType())) {
             throw invalid("Phòng thay thế phải đủ chỗ và phù hợp học phần.");
         }
         if (roomChange && Objects.equals(original.roomId(), roomId)) {
             throw invalid("Cần chọn phòng khác.");
         }
-        Slot slot = new Slot(0, n(section, "id"), original.staffId(), roomId,
+        Slot slot = new Slot(0, section.id(), original.staffId(), roomId,
                 replacementDate.getDayOfWeek().getValue(), period, original.periodCount(),
                 replacementDate, replacementDate);
         Span time = scheduling.interval(context, slot, replacementDate);
@@ -210,8 +211,8 @@ public class SessionMutationService {
         if (actor.staffId() == null || !session.staffIds().contains(actor.staffId())) {
             forbidden();
         }
-        Map<String, Object> section = sectionRepository.findSection(session.sectionId());
-        if (!"PLANNED".equals(session.status()) || !"OPEN".equals(section.get("status"))) {
+        SessionSectionSnapshot section = sectionRepository.findSectionForSession(session.sectionId());
+        if (!"PLANNED".equals(session.status()) || !"OPEN".equals(section.status())) {
             throw state("Buổi học không còn ở trạng thái đã lên lịch.");
         }
         if (repository.hasPendingRequest(sessionId)) {
@@ -220,8 +221,8 @@ public class SessionMutationService {
         SessionChangeRequest request = SessionChangeRequest.lecturer(body);
         long requestId = repository.insertRequest(sessionId, actor.staffId(), request.action(), request.reason());
         audit.record(actor, "REQUEST_CHANGE", "class_sessions", sessionId);
-        notifications.notifyScopedStaff(section.get("managing_unit_id"), session.roomId(),
-                "Có đề nghị đổi lịch cho lớp " + section.get("code") + ". Mở Đề nghị đổi lịch để xử lý.");
+        notifications.notifyScopedStaff(section.managingUnitId(), session.roomId(),
+                "Có đề nghị đổi lịch cho lớp " + section.code() + ". Mở Đề nghị đổi lịch để xử lý.");
         return Map.of("id", requestId);
     }
 

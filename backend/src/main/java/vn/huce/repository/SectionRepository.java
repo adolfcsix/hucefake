@@ -12,6 +12,7 @@ import vn.huce.exception.ApiFailure;
 import vn.huce.model.AssignmentRole;
 import vn.huce.model.SectionDraft;
 import vn.huce.model.SectionEditSnapshot;
+import vn.huce.model.SessionSectionSnapshot;
 import vn.huce.model.SectionSemester;
 import vn.huce.model.SectionSubject;
 
@@ -54,6 +55,15 @@ public class SectionRepository {
 
     public Map<String, Object> findSection(long sectionId) {
         return store.need(SECTION_SQL + " WHERE c.id=?", sectionId);
+    }
+
+    public SessionSectionSnapshot findSectionForSession(long sectionId) {
+        return require(store.jdbc().query("""
+                SELECT c.id,c.semester_id,c.code,c.status,c.capacity,c.required_room_type,s.managing_unit_id
+                FROM course_sections c JOIN subjects s ON s.id=c.subject_id WHERE c.id=?
+                """, (rs, row) -> new SessionSectionSnapshot(rs.getLong("id"), rs.getLong("semester_id"),
+                rs.getString("code"), rs.getString("status"), rs.getInt("capacity"),
+                rs.getString("required_room_type"), rs.getObject("managing_unit_id", Long.class)), sectionId));
     }
 
     public SectionEditSnapshot findSectionForEdit(long sectionId) {

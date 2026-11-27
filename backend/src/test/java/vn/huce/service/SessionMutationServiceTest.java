@@ -4,6 +4,11 @@ import java.util.Map;
 import java.time.LocalDateTime;
 import vn.huce.model.SessionAdjustmentSnapshot;
 import vn.huce.model.SessionLecturerScope;
+import vn.huce.model.SessionSectionSnapshot;
+import vn.huce.model.SchedulingRoom;
+import vn.huce.model.SemesterDateRange;
+import java.time.LocalDate;
+import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import vn.huce.Accounts.Actor;
@@ -98,8 +103,8 @@ class SessionMutationServiceTest {
         Actor lecturer = new Actor(5L, "lecturer", "LECTURER", 8L, 3L);
         when(repository.findSessionWithStaff(9L)).thenReturn(new SessionLecturerScope(
                 10L, 4L, "PLANNED", Set.of(12L, 8L)));
-        when(sections.findSection(10L)).thenReturn(Map.of("status", "OPEN",
-                "managing_unit_id", 3L, "code", "HP01"));
+        when(sections.findSectionForSession(10L)).thenReturn(new SessionSectionSnapshot(
+                10L, 7L, "HP01", "OPEN", 30, "LECTURE", 3L));
         when(repository.insertRequest(9L, 8L, SessionChangeAction.CANCEL, "Nghỉ học")).thenReturn(17L);
         assertEquals(Map.of("id", 17L), service.request(lecturer, 9L,
                 Map.of("action", "CANCEL", "reason", "Nghỉ học")));
@@ -113,7 +118,8 @@ class SessionMutationServiceTest {
         Actor lecturer = new Actor(5L, "lecturer", "LECTURER", 8L, 3L);
         when(repository.findSessionWithStaff(9L)).thenReturn(new SessionLecturerScope(
                 10L, null, "PLANNED", Set.of(8L)));
-        when(sections.findSection(10L)).thenReturn(Map.of("status", "OPEN"));
+        when(sections.findSectionForSession(10L)).thenReturn(new SessionSectionSnapshot(
+                10L, 7L, "HP01", "OPEN", 30, "LECTURE", 3L));
         assertEquals(400, assertThrows(ApiFailure.class, () -> service.request(lecturer, 9L,
                 Map.of("action", "ROOM_CHANGE", "reason", "Đổi phòng"))).status());
         verify(repository, never()).insertRequest(anyLong(), anyLong(), any(), anyString());
@@ -125,8 +131,8 @@ class SessionMutationServiceTest {
         when(repository.findSession(9L)).thenReturn(new SessionAdjustmentSnapshot(
                 10L, 8L, 4L, 5L, "PLANNED", LocalDateTime.of(2026, 11, 30, 7, 0),
                 1, 2, 6L));
-        when(sections.findSection(10L)).thenReturn(Map.of("id", 10L, "status", "OPEN",
-                "managing_unit_id", 3L, "code", "HP01"));
+        when(sections.findSectionForSession(10L)).thenReturn(new SessionSectionSnapshot(
+                10L, 7L, "HP01", "OPEN", 30, "LECTURE", 3L));
         doThrow(new ApiFailure(403, "FORBIDDEN", "Bạn không có quyền trong phạm vi này."))
                 .when(scheduling).requireCampus(staff, 5L);
         assertEquals(403, assertThrows(ApiFailure.class, () -> service.change(staff, 9L,
@@ -136,12 +142,41 @@ class SessionMutationServiceTest {
     }
 
     @Test
+    void replacementUsesTypedSectionCapacityAndPreservesSourceVersion() {
+        LocalDate date = LocalDate.of(2026, 11, 30);
+        var original = new SessionAdjustmentSnapshot(10L, 8L, 4L, 5L, "PLANNED",
+                date.atTime(7, 0), 1, 2, 6L);
+        var room = new SchedulingRoom(11L, 5L, "P11", 40, "LECTURE", "ACTIVE");
+        var context = new SchedulingService.Context(Map.of(), Map.of(11L, room),
+                List.of(), List.of(), List.of(), List.of());
+        var slot = new SchedulingService.Slot(0L, 10L, 8L, 11L, date.getDayOfWeek().getValue(), 1, 2, date, date);
+        var span = new SchedulingService.Span(date.atTime(7, 0), date.atTime(8, 40));
+        when(repository.findSession(9L)).thenReturn(original);
+        when(sections.findSectionForSession(10L)).thenReturn(new SessionSectionSnapshot(
+                10L, 7L, "HP01", "OPEN", 30, "LECTURE", 3L));
+        when(repository.semesterDates(7L)).thenReturn(new SemesterDateRange(date, date.plusDays(1)));
+        when(scheduling.context()).thenReturn(context);
+        when(scheduling.fits(room, 30, "LECTURE")).thenReturn(true);
+        when(scheduling.interval(context, slot, date)).thenReturn(span);
+        when(scheduling.actualConflicts(context, slot, span, 9L)).thenReturn(List.of());
+        when(repository.insertReplacement(10L, 8L, 11L, 1, 2, span.start(), span.end(), 6L, 9L))
+                .thenReturn(12L);
+        when(repository.insertException(9L, date, SessionChangeAction.ROOM_CHANGE, 12L, "Đổi phòng", 1L))
+                .thenReturn(13L);
+        assertEquals(Map.of("id", 13L, "replacementId", 12L), service.change(staff, 9L,
+                Map.of("action", "ROOM_CHANGE", "roomId", 11L, "reason", "Đổi phòng"), null));
+        verify(scheduling).fits(room, 30, "LECTURE");
+        verify(repository).cancelSession(9L);
+        verify(audit).record(staff, "ROOM_CHANGE", "session_exceptions", 13L);
+    }
+
+    @Test
     void directCancellationKeepsNullReplacementAndClosesPendingRequests() {
         when(repository.findSession(9L)).thenReturn(new SessionAdjustmentSnapshot(
                 10L, 8L, null, null, "PLANNED", LocalDateTime.of(2026, 11, 30, 7, 0),
                 1, 2, null));
-        when(sections.findSection(10L)).thenReturn(Map.of("id", 10L, "status", "OPEN",
-                "managing_unit_id", 3L, "code", "HP01"));
+        when(sections.findSectionForSession(10L)).thenReturn(new SessionSectionSnapshot(
+                10L, 7L, "HP01", "OPEN", 30, "LECTURE", 3L));
         when(repository.insertException(eq(9L), any(), eq(SessionChangeAction.CANCEL),
                 isNull(), eq("Nghỉ học"), eq(1L))).thenReturn(11L);
         when(repository.closePendingRequests(9L, SessionChangeAction.CANCEL)).thenReturn(java.util.List.of(
