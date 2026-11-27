@@ -4,6 +4,9 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Repository;
 import vn.huce.Accounts.Actor;
+import vn.huce.exception.ApiFailure;
+import vn.huce.model.ChatConversationSnapshot;
+import vn.huce.model.ChatExchangeReceipt;
 
 @Repository
 public class ChatRepository {
@@ -26,9 +29,17 @@ public class ChatRepository {
                 scope(actor, search));
     }
 
-    public Map<String, Object> findOwned(Actor actor, long conversationId) {
-        return store.need("SELECT id,title FROM chat_conversations WHERE " + OWNER + " AND id=?",
-                scope(actor, conversationId));
+    public ChatConversationSnapshot findOwned(Actor actor, long conversationId) {
+        return require(store.jdbc().query("SELECT id,title FROM chat_conversations WHERE " + OWNER + " AND id=?",
+                (rs, row) -> new ChatConversationSnapshot(rs.getLong("id"), rs.getString("title")),
+                scope(actor, conversationId)));
+    }
+
+    private static <T> T require(List<T> rows) {
+        if (rows.isEmpty()) {
+            throw new ApiFailure(404, "NOT_FOUND", "Không tìm thấy dữ liệu.");
+        }
+        return rows.getFirst();
     }
 
     public List<Map<String, Object>> exchanges(long conversationId) {
@@ -50,16 +61,17 @@ public class ChatRepository {
     }
 
     public long createConversation(Actor actor, String title) {
-        return ((Number) store.need("""
+        return require(store.jdbc().query("""
                 INSERT INTO chat_conversations(user_id,role,staff_id,unit_id,title) VALUES (?,?,?,?,?) RETURNING id
-                """, actor.id(), actor.role(), actor.staffId(), actor.unitId(), title).get("id")).longValue();
+                """, (rs, row) -> rs.getLong("id"), actor.id(), actor.role(), actor.staffId(), actor.unitId(), title));
     }
 
-    public Map<String, Object> insertExchange(long conversationId, String question, String replyJson, Object proposalId) {
-        return store.need("""
+    public ChatExchangeReceipt insertExchange(long conversationId, String question, String replyJson, Object proposalId) {
+        return require(store.jdbc().query("""
                 INSERT INTO chat_exchanges(conversation_id,question,reply,proposal_id) VALUES (?,?,?::jsonb,?)
                 RETURNING id,to_char(created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at
-                """, conversationId, question, replyJson, proposalId);
+                """, (rs, row) -> new ChatExchangeReceipt(rs.getLong("id"), rs.getString("created_at")),
+                conversationId, question, replyJson, proposalId));
     }
 
     public void touch(long conversationId) {

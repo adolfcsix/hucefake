@@ -9,6 +9,8 @@ import java.util.Map;
 import org.springframework.stereotype.Service;
 import vn.huce.Accounts.Actor;
 import vn.huce.dto.ChatClassification;
+import vn.huce.model.ChatConversationSnapshot;
+import vn.huce.model.ChatExchangeReceipt;
 import vn.huce.repository.ChatRepository;
 
 import static vn.huce.validation.Inputs.*;
@@ -32,12 +34,15 @@ public class ChatService {
         return repository.conversations(actor, search.substring(0, Math.min(80, search.length())));
     }
 
-    public Map<String, Object> owned(Actor actor, long conversationId) {
+    private ChatConversationSnapshot owned(Actor actor, long conversationId) {
         return repository.findOwned(actor, conversationId);
     }
 
     public Map<String, Object> conversation(Actor actor, long conversationId) {
-        Map<String, Object> result = owned(actor, conversationId);
+        ChatConversationSnapshot conversation = owned(actor, conversationId);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("id", conversation.id());
+        result.put("title", conversation.title());
         List<Map<String, Object>> rows = new ArrayList<>(repository.exchanges(conversationId));
         Collections.reverse(rows);
         List<Map<String, Object>> exchanges = new ArrayList<>();
@@ -88,7 +93,10 @@ public class ChatService {
         reply.put("sourceAt", Instant.now().toString());
         reply.put("modelUnavailable", classification.modelUnavailable());
         Object proposalId = reply.get("proposal") instanceof Map<?, ?> proposal ? proposal.get("id") : null;
-        Map<String, Object> exchange = repository.insertExchange(conversationId, question, proposals.encode(reply), proposalId);
+        ChatExchangeReceipt receipt = repository.insertExchange(conversationId, question, proposals.encode(reply), proposalId);
+        Map<String, Object> exchange = new LinkedHashMap<>();
+        exchange.put("id", receipt.id());
+        exchange.put("created_at", receipt.createdAt());
         exchange.put("question", question);
         exchange.put("reply", reply);
         repository.touch(conversationId);
