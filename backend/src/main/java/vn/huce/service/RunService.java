@@ -13,6 +13,8 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
+import vn.huce.dto.ScheduleRunIdResponse;
+import vn.huce.dto.ScheduleRunApplyResponse;
 import vn.huce.model.ScheduleRunItem;
 import vn.huce.model.ScheduleRunStatus;
 import vn.huce.repository.ApprovalRepository;
@@ -64,7 +66,7 @@ public class RunService {
         }
     }
 
-    public Object enqueue(Actor actor, long semesterId, Object rawParameters) {
+    public ScheduleRunIdResponse enqueue(Actor actor, long semesterId, Object rawParameters) {
         role(actor, "STAFF", "MANAGER");
         unlocked(semesterId);
         if (repository.active(semesterId)) {
@@ -78,16 +80,16 @@ public class RunService {
         } catch (JsonProcessingException error) {
             throw new IllegalStateException(error);
         }
-        Map<String, Object> row = repository.enqueue(semesterId, actor.id(), encoded);
-        audit.record(actor, "QUEUE", "schedule_runs", n(row, "id"));
-        return row;
+        long runId = repository.enqueue(semesterId, actor.id(), encoded);
+        audit.record(actor, "QUEUE", "schedule_runs", runId);
+        return new ScheduleRunIdResponse(runId);
     }
 
-    public Object apply(Actor actor, long runId) {
+    public ScheduleRunApplyResponse apply(Actor actor, long runId) {
         Map<String, Object> run = get(actor, runId);
         ScheduleRunStatus status = ScheduleRunStatus.valueOf(s(run, "status"));
         if (status == ScheduleRunStatus.APPLIED) {
-            return Map.of("status", ScheduleRunStatus.APPLIED.name());
+            return new ScheduleRunApplyResponse(ScheduleRunStatus.APPLIED, null);
         }
         if (status != ScheduleRunStatus.COMPLETED || n(run, "hard_violations") != 0) {
             throw state("Chỉ áp dụng được phương án hoàn tất với 0 vi phạm cứng.");
@@ -144,7 +146,7 @@ public class RunService {
         }
         repository.markApplied(runId);
         audit.record(actor, "APPLY", "schedule_runs", runId);
-        return Map.of("status", ScheduleRunStatus.APPLIED.name(), "patterns", plan.size());
+        return new ScheduleRunApplyResponse(ScheduleRunStatus.APPLIED, plan.size());
     }
 
     public void discard(Actor actor, long runId) {

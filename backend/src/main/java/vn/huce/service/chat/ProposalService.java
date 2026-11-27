@@ -176,13 +176,17 @@ public class ProposalService {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("action", action.name());
         switch (action) {
-            case GENERATE -> result.putAll((Map<String, Object>) runs.enqueue(actor, n(proposal, "semester_id"), parameters));
+            case GENERATE -> result.put("id", runs.enqueue(actor, n(proposal, "semester_id"), parameters).id());
             case APPLY -> {
                 var run = runs.get(actor, n(proposal, "run_id"));
                 if (n(run, "semester_id") != n(proposal, "semester_id")) {
                     throw forbidden();
                 }
-                result.putAll((Map<String, Object>) runs.apply(actor, n(proposal, "run_id")));
+                var applied = runs.apply(actor, n(proposal, "run_id"));
+                result.put("status", applied.status().name());
+                if (applied.patterns() != null) {
+                    result.put("patterns", applied.patterns());
+                }
                 result.put("id", proposal.get("run_id"));
             }
             case DRAFT -> {

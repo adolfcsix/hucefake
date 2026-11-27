@@ -36,10 +36,14 @@ public class RunRepository {
         return store.exists("SELECT 1 FROM schedule_runs WHERE semester_id=? AND status IN ('QUEUED','RUNNING')", semesterId);
     }
 
-    public Map<String, Object> enqueue(long semesterId, long actorId, String parametersJson) {
-        return store.need("""
+    public long enqueue(long semesterId, long actorId, String parametersJson) {
+        List<Long> rows = store.jdbc().query("""
                 INSERT INTO schedule_runs(semester_id,requested_by,parameters) VALUES (?,?,?::jsonb) RETURNING id
-                """, semesterId, actorId, parametersJson);
+                """, (rs, row) -> rs.getLong("id"), semesterId, actorId, parametersJson);
+        if (rows.isEmpty()) {
+            throw new ApiFailure(404, "NOT_FOUND", "Không tìm thấy dữ liệu.");
+        }
+        return rows.getFirst();
     }
 
     public List<ScheduleRunItem> rawItems(long runId) {

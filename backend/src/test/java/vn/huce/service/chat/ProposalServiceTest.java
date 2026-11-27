@@ -8,6 +8,9 @@ import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
 import vn.huce.dto.SectionDraftPreview;
 import vn.huce.dto.SectionIdResponse;
+import vn.huce.dto.ScheduleRunIdResponse;
+import vn.huce.dto.ScheduleRunApplyResponse;
+import vn.huce.model.ScheduleRunStatus;
 import vn.huce.model.SectionSubject;
 import vn.huce.model.UnreadNotificationSummary;
 import org.mockito.ArgumentCaptor;
@@ -155,6 +158,34 @@ class ProposalServiceTest {
         ((com.fasterxml.jackson.databind.node.ObjectNode) displayed).remove("subject");
         assertEquals(expected, displayed);
         verify(sections, never()).saveDraft(any(), anyMap());
+    }
+
+    @Test
+    void confirmedGenerateKeepsResultContract() {
+        Actor staff = new Actor(2L, "staff", "STAFF", 3L, 4L);
+        when(repository.lock(11L)).thenReturn(new LinkedHashMap<>(Map.of(
+                "requested_by", 2L, "action", "GENERATE", "expired", false,
+                "semester_id", 7L, "params_json", "{}")));
+        when(runs.enqueue(eq(staff), eq(7L), anyMap())).thenReturn(new ScheduleRunIdResponse(9L));
+        assertEquals(Map.of("action", "GENERATE", "id", 9L), service.confirm(staff, 11L));
+        verify(repository).confirm(eq(11L), anyString());
+        verify(audit).record(staff, "CONFIRM", "ai_proposals", 11L);
+    }
+
+    @Test
+    void confirmedApplyKeepsOptionalPatternCount() {
+        Actor staff = new Actor(2L, "staff", "STAFF", 3L, 4L);
+        when(repository.lock(11L)).thenAnswer(call -> new LinkedHashMap<>(Map.of(
+                "requested_by", 2L, "action", "APPLY", "expired", false,
+                "semester_id", 7L, "run_id", 9L)));
+        when(runs.get(staff, 9L)).thenReturn(Map.of("id", 9L, "semester_id", 7L));
+        when(runs.apply(staff, 9L)).thenReturn(
+                new ScheduleRunApplyResponse(ScheduleRunStatus.APPLIED, 3),
+                new ScheduleRunApplyResponse(ScheduleRunStatus.APPLIED, null));
+        assertEquals(Map.of("action", "APPLY", "status", "APPLIED", "id", 9L, "patterns", 3),
+                service.confirm(staff, 11L));
+        assertEquals(Map.of("action", "APPLY", "status", "APPLIED", "id", 9L),
+                service.confirm(staff, 11L));
     }
 
     @Test
