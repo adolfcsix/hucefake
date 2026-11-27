@@ -67,3 +67,9 @@ for (const name of ['Planning','PatternEditor','Published','SessionEditor','Chan
   assert.ok(frontendSource.includes(sourceRoot + 'features/timetable/' + name + '.jsx'), 'Missing timetable feature ' + name)
 }
 console.log('PASS: timetable screens and editors are separate modules')
+
+assert.ok(!frontendSource.includes(sourceRoot + 'features/workflow/Workflow.jsx'), 'Do not restore monolithic workflow component')
+for (const name of ['Automatic','RunPlan','CostChart','Approvals','SubmissionReadiness','Availability']) {
+  assert.ok(frontendSource.includes(sourceRoot + 'features/workflow/' + name + '.jsx'), 'Missing workflow feature ' + name)
+}
+console.log('PASS: scheduling, approval and availability workflow modules are separate')

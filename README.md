@@ -332,3 +332,8 @@ Backend Spring Boot sử dụng các package controller, service, repository, dt
 ### Tổ chức phân hệ thời khóa biểu ReactJS
 
 Các màn hình trong `frontend/src/features/timetable/` được tách theo nghiệp vụ: `Planning.jsx` xếp lịch thủ công, `PatternEditor.jsx` chỉnh sửa lịch định kỳ và xem trước xung đột, `Published.jsx` lịch đã công bố và xuất CSV/ICS, `SessionEditor.jsx` chi tiết/điều chỉnh buổi học, `ChangeRequests.jsx` xử lý đề nghị đổi lịch. `timetableFilters.js` dùng chung lọc đối tượng và so sánh ID. Không còn file Timetable.jsx cũ. Giữ nguyên JSX, CSS, URL API và luồng xử lý; kiểm thử build và trình duyệt trên commit mới vẫn bắt buộc.
+
+
+### Tổ chức phân hệ Workflow ReactJS
+
+Trong `frontend/src/features/workflow/`, `Automatic.jsx` quản lý tham số GA, theo dõi tiến độ và thao tác lần chạy; `RunPlan.jsx` hiển thị phương án; `CostChart.jsx` vẽ chi phí theo thế hệ; `Approvals.jsx` quản lý phiên bản và duyệt/công bố; `SubmissionReadiness.jsx` hiển thị điều kiện gửi duyệt; `Availability.jsx` quản lý thời gian bận/ưu tiên tránh xếp lịch. File Workflow.jsx cũ đã được loại bỏ, giữ nguyên logic component, CSS, API, quyền và chu kỳ polling. Cần kiểm thử CI trên commit mới.
