@@ -94,3 +94,8 @@ Kiểm thử source-integrity rà cả import trong mã frontend, unit test và 
 
 
 `GeneticEvolution` thực hiện lấy mẫu miền, khởi tạo tham lam, tournament ba cá thể, lai ghép theo lớp học phần, đột biến và sửa vi phạm cứng cục bộ. Một Random theo seed được truyền vào để bảo toàn thứ tự lấy số ngẫu nhiên. GeneticScheduler duy trì elitism hai cá thể, giới hạn thế hệ/thời gian, báo tiến độ và ghi chú vi phạm. Bổ sung kiểm thử trực tiếp các toán tử; benchmark tích hợp phải được xác minh trên commit mới.
+
+
+### Giao dịch và chống thực thi lặp
+
+`MutationRepository` tập trung khóa advisory PostgreSQL dùng chung với RunWorker, đọc/ghi và dọn bản ghi chống lặp. `IdempotencyRecord` định kiểu fingerprint và JSON phản hồi. `MutationService` giữ giao dịch Spring, kiểm tra khóa yêu cầu, tạo SHA-256 theo thứ tự trường và cấu hình JSON cũ, gọi nghiệp vụ và lưu phản hồi. Không đổi bảng, mã khóa, HTTP contract hoặc thứ tự kiểm tra. Kiểm thử độc lập kiểm tra replay, xung đột khóa, yêu cầu lỗi và tương thích fingerprint cũ; rollback thực tế vẫn phải xác minh qua CI tích hợp.

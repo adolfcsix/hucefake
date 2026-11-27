@@ -11,6 +11,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
 import vn.huce.repository.RunRepository;
+import vn.huce.repository.MutationRepository;
 
 import static vn.huce.validation.Inputs.*;
 import static vn.huce.service.SchedulingService.nullableId;
@@ -19,13 +20,15 @@ import static vn.huce.service.SchedulingService.nullableId;
 class RunWorker {
     private static final Logger LOGGER = LoggerFactory.getLogger(RunWorker.class);
     private final RunRepository repository;
+    private final MutationRepository mutations;
     private final GeneticScheduler genetic;
     private final ObjectMapper json;
     private final TransactionTemplate tx;
 
-    RunWorker(RunRepository repository, GeneticScheduler genetic, ObjectMapper json,
+    RunWorker(RunRepository repository, MutationRepository mutations, GeneticScheduler genetic, ObjectMapper json,
               PlatformTransactionManager manager) {
         this.repository = repository;
+        this.mutations = mutations;
         this.genetic = genetic;
         this.json = json;
         this.tx = new TransactionTemplate(manager);
@@ -36,7 +39,7 @@ class RunWorker {
         Long claimedId = null;
         try {
             Map<String, Object> run = tx.execute(status -> {
-                repository.lockMutations();
+                mutations.lock();
                 repository.failInterrupted();
                 return repository.claimNext();
             });
@@ -47,7 +50,7 @@ class RunWorker {
             final long runId = claimedId;
             GeneticScheduler.Parameters settings = json.readValue(s(run, "parameters_json"), GeneticScheduler.Parameters.class);
             GeneticScheduler.Input input = tx.execute(status -> {
-                repository.lockMutations();
+                mutations.lock();
                 Map<String, Object> user = repository.activeRequester(n(run, "requested_by"));
                 Actor actor = new Actor(n(user, "id"), s(user, "username"), s(user, "role"),
                         nullableId(user.get("staff_id")), nullableId(user.get("unit_id")));
@@ -68,7 +71,7 @@ class RunWorker {
     }
 
     private void saveOutcome(long runId, GeneticScheduler.Outcome outcome) {
-        repository.lockMutations();
+        mutations.lock();
         if (!repository.running(runId)) {
             return;
         }

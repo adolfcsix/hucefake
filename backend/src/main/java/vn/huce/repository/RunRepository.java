@@ -85,9 +85,6 @@ public class RunRepository {
                 """, runId);
     }
 
-    public void lockMutations() {
-        store.jdbc().execute("SELECT pg_advisory_xact_lock(5060505)");
-    }
 
     public void failInterrupted() {
         store.jdbc().update("""
