@@ -86,3 +86,8 @@ Kiểm thử source-integrity rà cả import trong mã frontend, unit test và 
 ### Vòng đời lần chạy xếp lịch
 
 `RunRepository` sở hữu truy vấn trạng thái, phạm vi truy cập, phương án, tiến độ và kết quả. `RunService` kiểm tra quyền, điều kiện đưa vào hàng đợi, tính hợp lệ trước khi áp dụng và điều kiện hủy. `RunWorker` điều phối các giao dịch nhận việc, nạp đầu vào, lưu tiến độ và kết quả; thuật toán tiếp tục nằm trong GeneticScheduler. Khóa advisory, FOR UPDATE SKIP LOCKED, xử lý gián đoạn, trạng thái và công thức fitness không thay đổi. Phần đánh giá fitness, dữ liệu đầu vào và phân chia các thành phần nội bộ GeneticScheduler vẫn cần cải tổ riêng.
+
+
+### Genetic Algorithm
+
+`GeneticInputBuilder` chọn lớp thuộc phạm vi, đọc lịch công bố qua SchedulingRepository và xây dựng miền ứng viên theo các ràng buộc hiện có. `GeneticFitnessEvaluator` đánh giá vi phạm cứng/mềm và giữ cache cục bộ từng lần giải. `GeneticScheduler` điều phối tiến hóa và báo tiến độ. Không thay đổi trọng số, mặc định, thứ tự lấy số ngẫu nhiên, giới hạn thời gian hoặc công thức fitness. Bài kiểm thử seed cố định và trọng số được bổ sung; benchmark tích hợp hiện có vẫn cần chạy trên HEAD mới. Các thao tác tiến hóa và record nội bộ tiếp tục được chuẩn hóa ở đợt sau.

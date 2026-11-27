@@ -122,3 +122,9 @@ for (const name of ['RunService', 'RunWorker']) {
 }
 assert.ok(existsSync(new URL('repository/RunRepository.java', root)))
 console.log('PASS: run lifecycle persistence boundaries')
+
+for (const name of ['GeneticScheduler', 'GeneticInputBuilder', 'GeneticFitnessEvaluator']) {
+  const source = readFileSync(new URL('service/' + name + '.java', root), 'utf8')
+  assert.doesNotMatch(source, /\b(?:SqlStore|JdbcTemplate|SELECT|INSERT\s+INTO|DELETE\s+FROM|UPDATE\s+\w+\s+SET)\b/)
+}
+console.log('PASS: genetic input and fitness boundaries')

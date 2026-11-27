@@ -1,6 +1,8 @@
 package vn.huce.repository;
 
 import java.sql.Timestamp;
+import java.sql.Date;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -78,5 +80,14 @@ public class SchedulingRepository {
               ORDER BY x.id
               """, sectionId, roomId, staffArray, excludedSessionId,
                 Timestamp.valueOf(end), Timestamp.valueOf(start), roomId, staffArray, sectionId, sectionId);
+    }
+
+    public List<Map<String, Object>> publishedSessions(LocalDate from, LocalDate to) {
+        return store.rows("""
+          SELECT x.section_id,x.room_id,x.start_at,x.end_at,
+          ARRAY[x.staff_id] || ARRAY(SELECT a.staff_id FROM section_assignments a WHERE a.section_id=x.section_id AND a.role='ASSISTANT' AND a.valid_to IS NULL) AS staff_ids,
+          ARRAY(SELECT g.group_id FROM section_target_groups g WHERE g.section_id=x.section_id) AS group_ids
+          FROM class_sessions x WHERE x.start_at<?::date+1 AND x.end_at>=?::date AND x.status<>'CANCELLED'
+          """, Date.valueOf(to), Date.valueOf(from));
     }
 }
