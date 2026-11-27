@@ -152,7 +152,7 @@ Lặp lệnh setup account cho ba vai trò còn lại với tham số tương �
 
 **Cách không sửa code:** đặt DEMO=false, dùng database riêng. Bốn nút không được render; API demo-login cũng từ chối. Đây là cách khuyến nghị.
 
-**Cách xóa hẳn giao diện:** mở VS Code → frontend → src → app → App.jsx. Tìm `const demoRoles = [` và xóa toàn bộ khai báo mảng kết thúc tại dấu `]`. Trong function Login, tìm đoạn:
+**Cách xóa hẳn giao diện:** mở VS Code → frontend → src → features → auth → Login.jsx. Tìm `const demoRoles = [` và xóa toàn bộ khai báo mảng kết thúc tại dấu `]`. Trong function Login, tìm đoạn:
 ```jsx
 {mode?.demo === true && <section className="demo-accounts" aria-label="Tài khoản dùng thử">
 ```

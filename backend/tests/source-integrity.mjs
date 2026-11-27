@@ -52,3 +52,12 @@ for (const path of frontendSource) {
     path + ' belongs in a named source folder')
 }
 console.log('PASS: frontend source folder organization')
+
+const appSource = read('frontend/src/app/App.jsx')
+assert.doesNotMatch(appSource, /function\s+(Login|Workspace|Statistics|Notifications)\s*\(/)
+for (const path of ['app/Workspace.jsx','app/destinations.js','features/auth/Login.jsx',
+  'features/statistics/Statistics.jsx','features/notifications/Notifications.jsx',
+  'components/common/Icon.jsx','components/common/Brand.jsx']) {
+  assert.ok(frontendSource.includes(sourceRoot + path), 'Missing separated frontend module ' + path)
+}
+console.log('PASS: React entry component stays separate from workspace and feature views')
