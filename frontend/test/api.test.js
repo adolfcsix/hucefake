@@ -75,3 +75,41 @@ test('successful logout clears CSRF cache', async t => {
   await api('/course-sections','POST',{code:'A'})
   assert.equal(tokens,2)
 })
+
+
+test('concurrent stale CSRF responses reuse the same replacement token', async t => {
+  const { api } = await import('../src/services/api.js?concurrent-csrf')
+  let tokens=0
+  const attempts=[]
+  let releaseOldResponse
+  const oldResponse = new Promise(resolve=>{ releaseOldResponse=resolve })
+  let secondRequestStarted
+  const bothStarted = new Promise(resolve=>{ secondRequestStarted=resolve })
+  t.mock.method(globalThis,'fetch',async (path,options) => {
+    if(path==='/api/csrf') return csrf(String(++tokens))
+    const body=JSON.parse(options.body)
+    const token=options.headers['X-CSRF-Token']
+    attempts.push({code:body.code,token,key:options.headers['Idempotency-Key']})
+    if(token==='1') {
+      if(body.code==='B') {
+        secondRequestStarted()
+        return oldResponse
+      }
+      await bothStarted
+      return json({code:'CSRF_INVALID'},403)
+    }
+    if(body.code==='A') releaseOldResponse(json({code:'CSRF_INVALID'},403))
+    return json({code:body.code})
+  })
+  const results=await Promise.all([
+    api('/course-sections','POST',{code:'A'}),
+    api('/course-sections','POST',{code:'B'})
+  ])
+  assert.deepEqual(results,[{code:'A'},{code:'B'}])
+  assert.equal(tokens,2)
+  for(const code of ['A','B']) {
+    const pair=attempts.filter(attempt=>attempt.code===code)
+    assert.deepEqual(pair.map(attempt=>attempt.token),['1','2'])
+    assert.equal(pair[0].key,pair[1].key)
+  }
+})

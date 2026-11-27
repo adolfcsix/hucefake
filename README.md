@@ -352,3 +352,8 @@ Trong `frontend/src/features/sections/`, `Sections.jsx` quản lý danh sách, l
 ### Danh mục và kiểm thử lớp API ReactJS
 
 `Catalog.jsx` hiển thị danh mục; `CatalogEditor.jsx` xử lý biểu mẫu phòng, khung tiết và ngày nghỉ; `catalogFields.js` chứa nhãn và xây dựng payload đúng từng nghiệp vụ. Ba test kiểm tra kiểu số, trường gửi API và campusId null cho ngày nghỉ toàn trường. Năm test API dùng fetch giả lập kiểm tra CSRF retry, idempotency khi lỗi 5xx/4xx, preview xung đột và xóa token khi logout; không gọi backend thật. Giữ nguyên useFetch/usePagedQuery và cơ chế API hiện tại trong đợt này, không thêm dependency.
+
+
+### Ổn định Hooks và CSRF đồng thời
+
+useFetch bắt cả lỗi đồng bộ từ loader và lỗi Promise, vẫn bỏ kết quả của effect đã cleanup. API giữ tham chiếu Promise CSRF đã dùng cho mỗi yêu cầu: một phản hồi CSRF_INVALID muộn không xóa token mới đang được yêu cầu khác sử dụng. Khi Promise tải token thất bại chỉ xóa cache nếu chính Promise đó còn hiện hành. Giữ nguyên giới hạn retry một lần, idempotency key và hợp đồng API. Bổ sung test hai mutation nhận lỗi CSRF cũ lệch thời điểm, cùng sử dụng token thay thế. Không đổi giao diện hay thêm dependency.

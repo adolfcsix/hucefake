@@ -4,18 +4,25 @@ const backendUnavailable = 'Không thể kết nối với máy chủ. Vui lòng
 
 function token() {
   if (!csrfRequest) {
-    csrfRequest = request('/csrf', 'GET').catch(error => {
-      csrfRequest = null
+    const pending = request('/csrf', 'GET').catch(error => {
+      if (csrfRequest === pending) csrfRequest = null
       throw error
     })
+    csrfRequest = pending
   }
   return csrfRequest
 }
 
+function invalidateToken(usedToken) {
+  if (csrfRequest === usedToken) csrfRequest = null
+}
+
 async function request(path, method, data, retry = true, key) {
   const headers = { Accept: 'application/json' }
+  let usedToken
   if (method !== 'GET') {
-    const csrf = await token()
+    usedToken = token()
+    const csrf = await usedToken
     headers[csrf.header] = csrf.token
     if (key) headers['Idempotency-Key'] = key
     if (data !== undefined) headers['Content-Type'] = 'application/json'
@@ -34,7 +41,7 @@ async function request(path, method, data, retry = true, key) {
   }
   const result = await response.json().catch(() => null)
   if (result?.code === 'CSRF_INVALID' && retry) {
-    csrfRequest = null
+    invalidateToken(usedToken)
     return request(path, method, data, false, key)
   }
   if (!response.ok || result === null) {
