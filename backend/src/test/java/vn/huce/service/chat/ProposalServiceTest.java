@@ -11,6 +11,7 @@ import vn.huce.dto.SectionIdResponse;
 import vn.huce.dto.ScheduleRunIdResponse;
 import vn.huce.dto.ScheduleRunApplyResponse;
 import vn.huce.model.ScheduleRunStatus;
+import vn.huce.model.ScheduleRunSnapshot;
 import vn.huce.model.SectionSubject;
 import vn.huce.model.UnreadNotificationSummary;
 import org.mockito.ArgumentCaptor;
@@ -126,7 +127,8 @@ class ProposalServiceTest {
     @Test
     void applyPreviewCannotUseRunFromAnotherSemester() {
         Actor staff = new Actor(2L, "staff", "STAFF", 3L, 4L);
-        when(runs.get(staff, 9L)).thenReturn(Map.of("id", 9L, "semester_id", 8L));
+        when(runs.snapshot(staff, 9L)).thenReturn(new ScheduleRunSnapshot(
+                9L, 8L, 2L, ScheduleRunStatus.COMPLETED, 0));
         assertEquals(403, assertThrows(ApiFailure.class, () -> service.prepare(staff, "APPLY",
                 Map.of("id", 7L), Map.of("runId", 9L))).status());
         verifyNoInteractions(repository, audit, sections, notifications);
@@ -178,7 +180,8 @@ class ProposalServiceTest {
         when(repository.lock(11L)).thenAnswer(call -> new LinkedHashMap<>(Map.of(
                 "requested_by", 2L, "action", "APPLY", "expired", false,
                 "semester_id", 7L, "run_id", 9L)));
-        when(runs.get(staff, 9L)).thenReturn(Map.of("id", 9L, "semester_id", 7L));
+        when(runs.snapshot(staff, 9L)).thenReturn(new ScheduleRunSnapshot(
+                9L, 7L, 2L, ScheduleRunStatus.COMPLETED, 0));
         when(runs.apply(staff, 9L)).thenReturn(
                 new ScheduleRunApplyResponse(ScheduleRunStatus.APPLIED, 3),
                 new ScheduleRunApplyResponse(ScheduleRunStatus.APPLIED, null));

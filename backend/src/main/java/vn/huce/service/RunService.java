@@ -19,6 +19,7 @@ import vn.huce.dto.ScheduleRunIdResponse;
 import vn.huce.dto.ScheduleRunApplyResponse;
 import vn.huce.model.ScheduleRunItem;
 import vn.huce.model.ScheduleRunStatus;
+import vn.huce.model.ScheduleRunSnapshot;
 import vn.huce.repository.ApprovalRepository;
 import vn.huce.repository.AuditRepository;
 import vn.huce.repository.RunRepository;
@@ -48,11 +49,8 @@ public class RunService {
     public Map<String, Object> get(Actor actor, long runId) {
         role(actor, "STAFF", "MANAGER");
         Map<String, Object> row = repository.find(runId);
-        if ("STAFF".equals(actor.role()) && n(row, "requested_by") != actor.id()
-                && (!ScheduleRunStatus.valueOf(s(row, "status")).visibleToOtherStaff()
-                    || !repository.visibleManagerRun(runId, actor.unitId()))) {
-            throw forbidden();
-        }
+        requireVisible(actor, runId, n(row, "requested_by"),
+                ScheduleRunStatus.valueOf(s(row, "status")));
         Object raw = row.remove("parameters_json");
         try {
             row.put("parameters", json.readValue(raw.toString(), Object.class));
@@ -60,6 +58,20 @@ public class RunService {
             throw new IllegalStateException(error);
         }
         return row;
+    }
+
+    public ScheduleRunSnapshot snapshot(Actor actor, long runId) {
+        role(actor, "STAFF", "MANAGER");
+        ScheduleRunSnapshot run = repository.findSnapshot(runId);
+        requireVisible(actor, runId, run.requestedBy(), run.status());
+        return run;
+    }
+
+    private void requireVisible(Actor actor, long runId, long requester, ScheduleRunStatus status) {
+        if ("STAFF".equals(actor.role()) && requester != actor.id()
+                && (!status.visibleToOtherStaff() || !repository.visibleManagerRun(runId, actor.unitId()))) {
+            throw forbidden();
+        }
     }
 
     public void unlocked(long semesterId) {
@@ -88,15 +100,15 @@ public class RunService {
     }
 
     public ScheduleRunApplyResponse apply(Actor actor, long runId) {
-        Map<String, Object> run = get(actor, runId);
-        ScheduleRunStatus status = ScheduleRunStatus.valueOf(s(run, "status"));
+        ScheduleRunSnapshot run = snapshot(actor, runId);
+        ScheduleRunStatus status = run.status();
         if (status == ScheduleRunStatus.APPLIED) {
             return new ScheduleRunApplyResponse(ScheduleRunStatus.APPLIED, null);
         }
-        if (status != ScheduleRunStatus.COMPLETED || n(run, "hard_violations") != 0) {
+        if (!run.applicable()) {
             throw state("Chỉ áp dụng được phương án hoàn tất với 0 vi phạm cứng.");
         }
-        long semesterId = n(run, "semester_id");
+        long semesterId = run.semesterId();
         unlocked(semesterId);
         Context context = scheduling.context();
         var expected = genetic.targets(context, actor, semesterId);
@@ -152,11 +164,11 @@ public class RunService {
     }
 
     public void discard(Actor actor, long runId) {
-        Map<String, Object> run = get(actor, runId);
-        if ("STAFF".equals(actor.role()) && n(run, "requested_by") != actor.id()) {
+        ScheduleRunSnapshot run = snapshot(actor, runId);
+        if ("STAFF".equals(actor.role()) && run.requestedBy() != actor.id()) {
             throw forbidden();
         }
-        if (!ScheduleRunStatus.valueOf(s(run, "status")).discardable()) {
+        if (!run.status().discardable()) {
             throw state("Lần chạy không thể bỏ ở trạng thái hiện tại.");
         }
         repository.discard(runId);

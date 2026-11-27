@@ -9,7 +9,6 @@ import org.springframework.stereotype.Service;
 import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
 import vn.huce.model.ProposalAction;
-import vn.huce.model.ScheduleRunStatus;
 import vn.huce.repository.AuditRepository;
 import vn.huce.repository.ChatRepository;
 import vn.huce.repository.NotificationRepository;
@@ -110,12 +109,12 @@ public class ProposalService {
     }
 
     private Preview previewApply(Actor actor, Map<String, Object> semester, Map<String, Object> input) {
-        var run = runs.get(actor, id(input.get("runId")));
-        long runId = n(run, "id");
-        if (n(run, "semester_id") != n(semester, "id")) {
+        var run = runs.snapshot(actor, id(input.get("runId")));
+        long runId = run.id();
+        if (run.semesterId() != n(semester, "id")) {
             throw forbidden();
         }
-        if (!ScheduleRunStatus.COMPLETED.name().equals(run.get("status")) || n(run, "hard_violations") != 0) {
+        if (!run.applicable()) {
             throw state("Chọn phương án đã hoàn tất với 0 vi phạm cứng.");
         }
         long count = repository.countRunItems(runId);
@@ -178,8 +177,8 @@ public class ProposalService {
         switch (action) {
             case GENERATE -> result.put("id", runs.enqueue(actor, n(proposal, "semester_id"), parameters).id());
             case APPLY -> {
-                var run = runs.get(actor, n(proposal, "run_id"));
-                if (n(run, "semester_id") != n(proposal, "semester_id")) {
+                var run = runs.snapshot(actor, n(proposal, "run_id"));
+                if (run.semesterId() != n(proposal, "semester_id")) {
                     throw forbidden();
                 }
                 var applied = runs.apply(actor, n(proposal, "run_id"));
