@@ -50,3 +50,12 @@ Lịch sử chi tiết các mốc sửa runner Ubuntu, Docker mirror, Maven 429,
 Commit fc282f8 chỉ đổi tài liệu. [CI](https://github.com/adolfcsix/hucefake/actions/runs/45865316425): smoke và dependency-audit PASS; container thất bại tại bước build vì Maven Central HTTP 429 sau ba lần thử (chưa khởi động app). Cách sửa: chuyển repository Maven đã tải thành công trong job smoke qua artifact cùng workflow, kiểm tra SHA-256 rồi đóng gói Java trong Docker ở chế độ offline; vẫn build React và Java, chạy toàn bộ Chromium và private Docker. Artifact tạm giữ một ngày, không commit vào Git, không đưa vào runtime image. Build local không có artifact vẫn dùng Maven trực tuyến có cache/retry. Chưa xác nhận PASS cho đến khi CI mới kết thúc. PR #2 đã đóng vì nội dung README đã có trên main; giữ lịch sử các nhánh cũ.
 
 Mốc 2016d49: [CI](https://github.com/adolfcsix/hucefake/actions/runs/45866266991) smoke và dependency-audit PASS nhưng Maven offline trong container không nhận repository ID của POM đã có. Thay thế hoàn toàn cách truyền cache bằng JAR đóng gói trên chính runner smoke sau build React. So sánh SHA-256 toàn bộ class/resource Java (trừ static) và dependency nhúng với JAR đã qua kiểm thử; đối chiếu từng asset React với dist. Docker target ci kiểm tra commit và checksum, chạy đúng artifact, vẫn thực hiện đầy đủ Chromium demo/private và recovery. Target local mặc định vẫn build trực tiếp từ source. Chưa có kết quả CI bản sửa mới.
+
+
+## PR #4 — Kiểm toán kiến trúc Spring Boot và ReactJS
+
+Mốc 000f45a: [CI 3/3 PASS](https://github.com/adolfcsix/hucefake/actions/runs/45968189635), gồm kiểm thử phân quyền và cấu trúc CSS/module.
+Mốc 5d7834a: [CI 3/3 PASS](https://github.com/adolfcsix/hucefake/actions/runs/45969423750), gồm kiểm thử mutation đồng thời, rollback nhập lớp, công bố và tiến độ GA.
+Mốc 69edb3e: đã đưa vào PR #4, đang nghiệm thu; bổ sung kiểm tra Gemini và cách ly phiên demo/private. Chỉ xác nhận PASS trên đúng SHA sau khi đủ ba job.
+
+Kiểm toán cấu trúc: 9 Controller, 30 file Service, 20 Repository trước tách CLI; DTO/model, config, security, validation và exception riêng; 63 module JS/JSX/CSS. Giữ Accounts.Actor ở binary name cũ để tương thích phiên JDBC. SetupRepository tiếp nhận SQL của CLI, giữ TransactionTemplate, runtime-mode guard, tham số SQL và thứ tự ghi; cần kiểm thử private CLI và restore trên commit mới. Không đổi schema, API hay thiết kế UI. Chưa có nghiệm thu Gemini thật hoặc pentest độc lập, chưa merge main.

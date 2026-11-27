@@ -173,3 +173,7 @@ console.log('PASS: CLI shares runtime-mode protection and mutation lock')
 const sqlAdapterSource = readFileSync(new URL('repository/SqlStore.java', root), 'utf8')
 assert.doesNotMatch(sqlAdapterSource, /\bAuditRepository\b|\bvoid\s+audit\s*\(/)
 console.log('PASS: SqlStore no longer owns audit dependencies')
+
+assert.doesNotMatch(setupSource, /\b(?:SELECT\s|INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM)\b/)
+assert.ok(existsSync(new URL('repository/SetupRepository.java', root)))
+console.log('PASS: local setup SQL belongs to SetupRepository')
