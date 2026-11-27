@@ -4,6 +4,9 @@ import org.junit.jupiter.api.Test;
 import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
 import vn.huce.repository.SqlStore;
+import vn.huce.repository.SectionRepository;
+import vn.huce.repository.SchedulePatternRepository;
+import vn.huce.repository.AuditRepository;
 
 import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
@@ -17,7 +20,10 @@ class MutationServiceAccessTest {
         SectionService sections = mock(SectionService.class);
         Actor student = new Actor(1L, "student", "STUDENT", null, null);
         CatalogMutationService catalog = new CatalogMutationService(store, scheduling);
-        SectionMutationService section = new SectionMutationService(store, sections, scheduling);
+        SectionRepository repository = mock(SectionRepository.class);
+        SchedulePatternRepository patterns = mock(SchedulePatternRepository.class);
+        AuditRepository audit = mock(AuditRepository.class);
+        SectionMutationService section = new SectionMutationService(repository, patterns, audit, sections, scheduling);
         assertEquals(403, assertThrows(ApiFailure.class,
                 () -> catalog.room(student, Map.of(), null)).status());
         assertEquals(403, assertThrows(ApiFailure.class,
@@ -26,6 +32,6 @@ class MutationServiceAccessTest {
                 () -> section.importSections(student, Map.of())).status());
         assertEquals(403, assertThrows(ApiFailure.class,
                 () -> section.deletePattern(student, 1L, "0")).status());
-        verifyNoInteractions(store, scheduling, sections);
+        verifyNoInteractions(store, scheduling, sections, repository, patterns, audit);
     }
 }

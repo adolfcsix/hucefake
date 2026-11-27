@@ -4,7 +4,7 @@ const root = new URL('../src/main/java/vn/huce/', import.meta.url)
 const expected = readFileSync(new URL('./expected-routes.txt', import.meta.url), 'utf8').trim().split(/\r?\n/).sort()
 const actual = []
 for (const name of readdirSync(root, { recursive: true }).filter(x => x.endsWith('.java'))) {
-  const code = readFileSync(new URL(name.replaceAll('\\\\', '/'), root), 'utf8')
+  const code = readFileSync(new URL(name.replaceAll('\\', '/'), root), 'utf8')
   const prefix = code.match(/@RequestMapping\("([^"]+)"\)/)?.[1] || ''
   for (const [,verb,path] of code.matchAll(/@(Get|Post|Put|Patch|Delete)Mapping(?:\("([^"]+)"\))?/g))
     actual.push(verb.toUpperCase()+' '+prefix+(path||''))
@@ -55,3 +55,9 @@ assert.doesNotMatch(sectionService, /\b(?:SqlStore|JdbcTemplate|SELECT|INSERT\s+
 assert.ok(existsSync(new URL('repository/SectionRepository.java', root)))
 assert.ok(existsSync(new URL('model/SectionDraft.java', root)))
 console.log('PASS: section domain repository and typed draft model')
+
+const sectionMutationService = readFileSync(new URL('service/SectionMutationService.java', root), 'utf8')
+assert.doesNotMatch(sectionMutationService, /\b(?:SqlStore|JdbcTemplate|SELECT|INSERT\s+INTO|DELETE\s+FROM|UPDATE\s+\w+\s+SET)\b/)
+assert.ok(existsSync(new URL('repository/SchedulePatternRepository.java', root)))
+assert.ok(existsSync(new URL('model/PatternDraft.java', root)))
+console.log('PASS: section mutation persistence boundaries')

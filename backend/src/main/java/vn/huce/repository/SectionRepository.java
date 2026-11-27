@@ -1,6 +1,8 @@
 package vn.huce.repository;
 
 import java.sql.Date;
+import java.time.LocalDate;
+import java.util.Locale;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -63,5 +65,85 @@ public class SectionRepository {
                 """, draft.semesterId(), draft.subjectId(), draft.code(), draft.capacity(),
                 draft.sessionsPerWeek(), draft.periodsPerSession(), draft.requiredRoomType(),
                 Date.valueOf(draft.startDate()), Date.valueOf(draft.endDate()), creatorId);
+    }
+
+    public Map<String, Object> findActiveSubjectByCode(Long unitId, String code) {
+        return store.one("""
+                SELECT * FROM subjects WHERE managing_unit_id=? AND status='ACTIVE'
+                AND (code=? OR code=?) ORDER BY CASE WHEN code=? THEN 0 ELSE 1 END LIMIT 1
+                """, unitId, code, code.toUpperCase(Locale.ROOT), code);
+    }
+
+    public boolean hasIncompatiblePatterns(long sectionId, SectionDraft draft) {
+        return store.exists("""
+                SELECT 1 FROM section_schedule_patterns p JOIN teaching_rooms r ON r.id=p.room_id
+                WHERE p.section_id=? AND (p.period_count<>? OR p.effective_from<?
+                    OR p.effective_to>? OR r.capacity<? OR r.type<>?)
+                """, sectionId, draft.periodsPerSession(), Date.valueOf(draft.startDate()),
+                Date.valueOf(draft.endDate()), draft.capacity(), draft.requiredRoomType());
+    }
+
+    public void updateDraft(long sectionId, SectionDraft draft) {
+        store.jdbc().update("""
+                UPDATE course_sections SET subject_id=?,code=?,capacity=?,sessions_per_week=?,
+                    periods_per_session=?,required_room_type=?,start_date=?,end_date=?,
+                    version=version+1,updated_at=now() WHERE id=?
+                """, draft.subjectId(), draft.code(), draft.capacity(), draft.sessionsPerWeek(),
+                draft.periodsPerSession(), draft.requiredRoomType(), Date.valueOf(draft.startDate()),
+                Date.valueOf(draft.endDate()), sectionId);
+    }
+
+    public void cancelDraft(long sectionId) {
+        store.jdbc().update("DELETE FROM section_schedule_patterns WHERE section_id=?", sectionId);
+        store.jdbc().update("""
+                UPDATE course_sections SET status='CANCELLED',version=version+1,updated_at=now() WHERE id=?
+                """, sectionId);
+    }
+
+    public boolean isActiveLecturer(long staffId) {
+        return store.exists("""
+                SELECT 1 FROM staff_profiles p JOIN users u ON u.id=p.user_id JOIN roles r ON r.role_id=u.role_id
+                WHERE p.id=? AND p.status='ACTIVE' AND u.status='ACTIVE' AND r.code='LECTURER'
+                """, staffId);
+    }
+
+    public record Assignment(long id, long staffId, String role) {
+    }
+
+    public List<Assignment> activeAssignments(long sectionId) {
+        return store.jdbc().query("""
+                SELECT id,staff_id,role FROM section_assignments WHERE section_id=? AND valid_to IS NULL
+                """, (rs, row) -> new Assignment(rs.getLong("id"), rs.getLong("staff_id"), rs.getString("role")),
+                sectionId);
+    }
+
+    public void closeAssignment(long assignmentId) {
+        store.jdbc().update("""
+                UPDATE section_assignments SET valid_to=GREATEST(valid_from,CURRENT_DATE) WHERE id=?
+                """, assignmentId);
+    }
+
+    public void addAssignment(long sectionId, long staffId, String role, LocalDate validFrom, long actorId) {
+        store.jdbc().update("""
+                INSERT INTO section_assignments(section_id,staff_id,role,valid_from,assigned_by) VALUES (?,?,?,?,?)
+                """, sectionId, staffId, role, Date.valueOf(validFrom), actorId);
+    }
+
+    public void replacePatternLecturer(long sectionId, long staffId) {
+        store.jdbc().update("""
+                UPDATE section_schedule_patterns SET staff_id=?,version=version+1 WHERE section_id=?
+                """, staffId, sectionId);
+    }
+
+    public void touch(long sectionId) {
+        store.jdbc().update("UPDATE course_sections SET version=version+1,updated_at=now() WHERE id=?", sectionId);
+    }
+
+    public void replaceTargetGroups(long sectionId, Iterable<Long> groupIds) {
+        store.jdbc().update("DELETE FROM section_target_groups WHERE section_id=?", sectionId);
+        for (long groupId : groupIds) {
+            store.jdbc().update("INSERT INTO section_target_groups(section_id,group_id) VALUES (?,?)",
+                    sectionId, groupId);
+        }
     }
 }

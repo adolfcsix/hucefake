@@ -41,6 +41,8 @@ Nhóm nghiệp vụ HUCEChat nằm trong `service/chat/` (nhận diện intent, 
 - `repository/SectionRepository.java`: truy vấn lớp, lịch định kỳ, học kỳ, học phần, kiểm tra trùng mã và tạo bản ghi.
 - `service/SectionService.java`: kiểm tra quyền, trạng thái, ngày hiệu lực và quy tắc lớp nháp; không trực tiếp thực thi SQL.
 - `repository/AuditRepository.java`: ghi nhật ký thay đổi; adapter SqlStore cũ gọi chung repository này để tránh trùng câu lệnh.
-- `service/SectionMutationService.java`: các thao tác sửa lớp và lịch; còn SQL cần chuyển tiếp sang repository chuyên biệt.
+- `service/SectionMutationService.java`: các thao tác sửa lớp và lịch; không thực thi SQL trực tiếp; gọi SectionRepository và SchedulePatternRepository.
 
 Kiểm thử source-integrity rà cả import trong mã frontend, unit test và E2E để phát hiện đường dẫn cũ khi đổi thư mục.
+
+`PatternDraft` định kiểu dữ liệu lịch định kỳ; `SchedulePatternRepository` phụ trách đọc, ghi, xóa lịch. Các thao tác ghi tiếp tục tham gia giao dịch và khóa của MutationService; không thay đổi hợp đồng HTTP hoặc schema.
