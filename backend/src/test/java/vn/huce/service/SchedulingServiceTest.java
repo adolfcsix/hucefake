@@ -34,4 +34,53 @@ class SchedulingServiceTest {
         when(repository.allowedCampuses(staff)).thenReturn(Set.of(5L));
         assertEquals(403, assertThrows(ApiFailure.class, () -> service.requireCampus(staff, 6L)).status());
     }
+
+    private final LocalDate monday = LocalDate.of(2026, 11, 30);
+    private final Actor staff = new Actor(1L, "staff", "STAFF", 2L, 3L);
+
+    private Map<String, Object> section() {
+        return Map.of("id", 2L, "staff_id", 3L, "start_date", monday.toString(),
+                "end_date", monday.plusWeeks(2).toString(), "periods_per_session", 2);
+    }
+
+    private Context candidateContext(List<Slot> patterns) {
+        return new Context(Map.of(2L, section()),
+                Map.of(4L, Map.of("campus_id", 5L), 6L, Map.of("campus_id", 7L)),
+                List.of(), List.of(), List.of(), patterns);
+    }
+
+    @Test
+    void newCandidateDefaultsToSectionDates() {
+        when(repository.allowedCampuses(staff)).thenReturn(Set.of(5L));
+        Slot slot = service.candidate(staff, candidateContext(List.of()),
+                Map.of("roomId", 4L, "dayOfWeek", 1, "periodFrom", 2, "effectiveFrom", ""),
+                null, section());
+        assertEquals(new Slot(0L, 2L, 3L, 4L, 1, 2, 2, monday, monday.plusWeeks(2)), slot);
+    }
+
+    @Test
+    void movingPatternRequiresAccessToBothCampuses() {
+        when(repository.allowedCampuses(staff)).thenReturn(Set.of(5L));
+        Slot prior = new Slot(9L, 2L, 3L, 6L, 1, 1, 2, monday, monday);
+        assertEquals(403, assertThrows(ApiFailure.class, () -> service.candidate(staff,
+                candidateContext(List.of(prior)), Map.of("roomId", 4L), 9L, section())).status());
+    }
+
+    @Test
+    void existingPatternCannotBeMovedToAnotherSection() {
+        Slot prior = new Slot(9L, 8L, 3L, 4L, 1, 1, 2, monday, monday);
+        assertEquals(400, assertThrows(ApiFailure.class, () -> service.candidate(staff,
+                candidateContext(List.of(prior)), Map.of("roomId", 4L), 9L, section())).status());
+        verifyNoInteractions(repository);
+    }
+
+    @Test
+    void allHolidayOccurrencesReturnBr14WithoutQueryingPublishedSessions() {
+        Context context = new Context(Map.of(2L, section()), Map.of(4L, Map.of("campus_id", 5L)),
+                List.of(), List.of(), List.of(Map.of("campus_id", 5L,
+                        "start_date", monday.toString(), "end_date", monday.plusWeeks(2).toString())), List.of());
+        Slot slot = new Slot(1L, 2L, 3L, 4L, 1, 1, 2, monday, monday.plusWeeks(2));
+        assertEquals("BR14", service.actual(context, slot).getFirst().get("rule"));
+        verifyNoInteractions(repository);
+    }
 }

@@ -139,3 +139,8 @@ GeminiAdvisor giữ cấu hình, gửi yêu cầu HTTP và phân tích phản h�
 ### Ràng buộc xếp lịch trong bộ nhớ
 
 ScheduleConstraints tập trung kiểm tra phòng, giảng viên và trợ giảng, nhóm lớp, lịch định kỳ, ngày nghỉ và giờ bận. SchedulingService giữ các phương thức công khai hiện có để các caller không đổi; truy vấn lịch thực tế vẫn qua SchedulingRepository. Giữ nguyên thứ tự mã BR, cấu trúc lỗi, quy tắc ngày/ca và trọng số GA; hợp nhất điều kiện giờ bận trùng lặp. Bốn kiểm thử bổ sung xác minh thứ tự lỗi, mã nhóm, cùng lớp trong ngày, ngày nghỉ và giờ tránh/bận.
+
+
+### Hoàn thiện điều phối xếp lịch
+
+SchedulingService chuẩn hóa khai báo record, ánh xạ dữ liệu, kiểm tra phạm vi cơ sở, xây dựng Slot và tìm tối đa năm phương án thay thế. Tách effectiveDate và suggestAlternatives, giữ nguyên thứ tự duyệt phòng/ngày/tiết, điều kiện truy vấn lịch công bố và cấu trúc lỗi. Không đổi tên thành phần record công khai để tránh ảnh hưởng GA, các service và dữ liệu JSON. Bổ sung bốn kiểm thử về ngày mặc định, quyền hai cơ sở, không chuyển lớp và BR14 khi toàn bộ ngày nghỉ.
