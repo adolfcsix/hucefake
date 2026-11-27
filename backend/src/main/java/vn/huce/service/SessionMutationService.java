@@ -2,7 +2,6 @@ package vn.huce.service;
 
 import vn.huce.model.SchedulingRoom;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -18,6 +17,7 @@ import vn.huce.model.SessionChangeAction;
 import vn.huce.model.SessionRequestStatus;
 import vn.huce.model.SessionRequestSnapshot;
 import vn.huce.model.SessionRequestResolution;
+import vn.huce.model.SessionAdjustmentSnapshot;
 import vn.huce.repository.AuditRepository;
 import vn.huce.repository.SectionRepository;
 import vn.huce.repository.SessionChangeRepository;
@@ -67,13 +67,13 @@ public class SessionMutationService {
         return room;
     }
 
-    private boolean unchanged(Slot slot, Span time, Map<String, Object> original) {
-        return Objects.equals(nullableId(original.get("room_id")), slot.room())
-                && time.start().equals(LocalDateTime.parse(s(original, "start_at")));
+    private boolean unchanged(Slot slot, Span time, SessionAdjustmentSnapshot original) {
+        return Objects.equals(original.roomId(), slot.room())
+                && time.start().equals(original.startAt());
     }
 
     private List<Map<String, Object>> alternatives(Actor actor, Context context, Slot slot,
-            Map<String, Object> section, Map<String, Object> original, SessionChangeAction action, long exclude) {
+            Map<String, Object> section, SessionAdjustmentSnapshot original, SessionChangeAction action, long exclude) {
         var allowed = scheduling.campuses(actor);
         List<Map<String, Object>> result = new ArrayList<>();
         boolean roomChange = action == SessionChangeAction.ROOM_CHANGE;
@@ -85,7 +85,7 @@ public class SessionMutationService {
                 long roomId = room.id();
                 if (!allowed.contains(campusId) || !scheduling.fits(room, section)
                         || scheduling.holiday(context, campusId, slot.from())
-                        || (roomChange && Objects.equals(nullableId(original.get("room_id")), roomId))) {
+                        || (roomChange && Objects.equals(original.roomId(), roomId))) {
                     continue;
                 }
                 Slot proposed = slot.move(roomId, slot.day(), period);
@@ -107,40 +107,40 @@ public class SessionMutationService {
 
     public Object change(Actor actor, long sessionId, Map<String, Object> body, Long requestId) {
         role(actor, "STAFF");
-        Map<String, Object> original = repository.findSession(sessionId);
-        Map<String, Object> section = sectionRepository.findSection(n(original, "section_id"));
+        SessionAdjustmentSnapshot original = repository.findSession(sessionId);
+        Map<String, Object> section = sectionRepository.findSection(original.sectionId());
         unit(actor, section.get("managing_unit_id"));
         if (repository.hasException(sessionId)) {
             throw new ApiFailure(409, "DUPLICATE_REQUEST", "Buổi học đã có ngoại lệ.");
         }
-        if (!"PLANNED".equals(original.get("status")) || !"OPEN".equals(section.get("status"))) {
+        if (!"PLANNED".equals(original.status()) || !"OPEN".equals(section.get("status"))) {
             throw state("Chỉ điều chỉnh buổi học đang lên lịch của lớp đã mở.");
         }
-        campus(actor, original.get("campus_id"));
+        campus(actor, original.campusId());
         Context context = scheduling.context();
         SessionChangeRequest request = SessionChangeRequest.adjustment(body);
-        LocalDate originalDate = LocalDateTime.parse(s(original, "start_at")).toLocalDate();
+        LocalDate originalDate = original.startAt().toLocalDate();
         Long replacementId = null;
         if (request.action() != SessionChangeAction.CANCEL) {
             replacementId = createReplacement(actor, sessionId, context, original, section, originalDate, request.action(), body);
         }
 
-        Map<String, Object> result = repository.insertException(sessionId, originalDate, request.action(),
+        long exceptionId = repository.insertException(sessionId, originalDate, request.action(),
                 replacementId, request.reason(), actor.id());
         repository.cancelSession(sessionId);
-        audit.record(actor, request.action().name(), "session_exceptions", n(result, "id"));
+        audit.record(actor, request.action().name(), "session_exceptions", exceptionId);
         if (requestId == null) {
             closePendingRequests(actor, sessionId, request.action());
         }
         notifications.notifySection(n(section, "id"), "Lớp " + section.get("code")
                 + " thay đổi lịch ngày " + originalDate + ". " + request.reason());
         Map<String, Object> response = new LinkedHashMap<>();
-        response.put("id", result.get("id"));
+        response.put("id", exceptionId);
         response.put("replacementId", replacementId);
         return response;
     }
 
-    private long createReplacement(Actor actor, long sessionId, Context context, Map<String, Object> original,
+    private long createReplacement(Actor actor, long sessionId, Context context, SessionAdjustmentSnapshot original,
             Map<String, Object> section, LocalDate originalDate, SessionChangeAction action, Map<String, Object> body) {
         SchedulingRoom room = room(context, id(body.get("roomId")));
         long roomId = room.id();
@@ -156,15 +156,15 @@ public class SessionMutationService {
         if (scheduling.holiday(context, campusId, replacementDate)) {
             throw invalid("Ngày đã chọn là ngày không học tại cơ sở.");
         }
-        int period = roomChange ? (int) n(original, "period_from") : (int) number(body.get("periodFrom"), 1, 15);
+        int period = roomChange ? original.periodFrom() : (int) number(body.get("periodFrom"), 1, 15);
         if (!scheduling.fits(room, section)) {
             throw invalid("Phòng thay thế phải đủ chỗ và phù hợp học phần.");
         }
-        if (roomChange && Objects.equals(nullableId(original.get("room_id")), roomId)) {
+        if (roomChange && Objects.equals(original.roomId(), roomId)) {
             throw invalid("Cần chọn phòng khác.");
         }
-        Slot slot = new Slot(0, n(section, "id"), nullableId(original.get("staff_id")), roomId,
-                replacementDate.getDayOfWeek().getValue(), period, (int) n(original, "period_count"),
+        Slot slot = new Slot(0, n(section, "id"), original.staffId(), roomId,
+                replacementDate.getDayOfWeek().getValue(), period, original.periodCount(),
                 replacementDate, replacementDate);
         Span time = scheduling.interval(context, slot, replacementDate);
         if (time == null || scheduling.busy(context, slot, Kind.BUSY)) {
@@ -179,7 +179,7 @@ public class SessionMutationService {
                     alternatives(actor, context, slot, section, original, action, sessionId)));
         }
         return repository.insertReplacement(slot.section(), slot.staff(), slot.room(), slot.first(), slot.count(),
-                time.start(), time.end(), original.get("timetable_version_id"), sessionId);
+                time.start(), time.end(), original.timetableVersionId(), sessionId);
     }
 
     private void closePendingRequests(Actor actor, long sessionId, SessionChangeAction action) {

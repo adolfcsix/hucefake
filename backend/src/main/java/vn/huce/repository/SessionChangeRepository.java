@@ -12,6 +12,7 @@ import vn.huce.model.SessionChangeAction;
 import vn.huce.model.SessionRequestStatus;
 import vn.huce.model.SessionRequestSnapshot;
 import vn.huce.model.SessionRequestResolution;
+import vn.huce.model.SessionAdjustmentSnapshot;
 import vn.huce.exception.ApiFailure;
 
 import static vn.huce.repository.SessionQueries.STAFF_IDS;
@@ -24,11 +25,23 @@ public class SessionChangeRepository {
         this.store = store;
     }
 
-    public Map<String, Object> findSession(long sessionId) {
-        return store.need("""
-                SELECT x.*,r.campus_id FROM class_sessions x
-                LEFT JOIN teaching_rooms r ON r.id=x.room_id WHERE x.id=?
-                """, sessionId);
+    public SessionAdjustmentSnapshot findSession(long sessionId) {
+        return require(store.jdbc().query("""
+                SELECT x.section_id,x.staff_id,x.room_id,r.campus_id,x.status,x.start_at,
+                       x.period_from,x.period_count,x.timetable_version_id
+                FROM class_sessions x LEFT JOIN teaching_rooms r ON r.id=x.room_id WHERE x.id=?
+                """, (rs, row) -> new SessionAdjustmentSnapshot(rs.getLong("section_id"),
+                rs.getLong("staff_id"), rs.getObject("room_id", Long.class),
+                rs.getObject("campus_id", Long.class), rs.getString("status"),
+                rs.getObject("start_at", LocalDateTime.class), rs.getInt("period_from"),
+                rs.getInt("period_count"), rs.getObject("timetable_version_id", Long.class)), sessionId));
+    }
+
+    private static <T> T require(List<T> rows) {
+        if (rows.isEmpty()) {
+            throw new ApiFailure(404, "NOT_FOUND", "Không tìm thấy dữ liệu.");
+        }
+        return rows.getFirst();
     }
 
     public boolean hasException(long sessionId) {
@@ -40,21 +53,22 @@ public class SessionChangeRepository {
     }
 
     public long insertReplacement(long sectionId, Long staffId, long roomId, int periodFrom, int periodCount,
-                                  LocalDateTime start, LocalDateTime end, Object versionId, long sourceId) {
-        return ((Number) store.need("""
+                                  LocalDateTime start, LocalDateTime end, Long versionId, long sourceId) {
+        return require(store.jdbc().query("""
                 INSERT INTO class_sessions(section_id,staff_id,room_id,period_from,period_count,start_at,end_at,
                     timetable_version_id,source_session_id)
                 VALUES (?,?,?,?,?,?,?,?,?) RETURNING id
-                """, sectionId, staffId, roomId, periodFrom, periodCount, Timestamp.valueOf(start),
-                Timestamp.valueOf(end), versionId, sourceId).get("id")).longValue();
+                """, (rs, row) -> rs.getLong("id"), sectionId, staffId, roomId, periodFrom, periodCount,
+                Timestamp.valueOf(start), Timestamp.valueOf(end), versionId, sourceId));
     }
 
-    public Map<String, Object> insertException(long sessionId, LocalDate occurrenceDate, SessionChangeAction action,
-                                                Long replacementId, String reason, long actorId) {
-        return store.need("""
+    public long insertException(long sessionId, LocalDate occurrenceDate, SessionChangeAction action,
+                                Long replacementId, String reason, long actorId) {
+        return require(store.jdbc().query("""
                 INSERT INTO session_exceptions(session_id,occurrence_date,action,replacement_id,reason,created_by)
                 VALUES (?,?,?,?,?,?) RETURNING id
-                """, sessionId, Date.valueOf(occurrenceDate), action.name(), replacementId, reason, actorId);
+                """, (rs, row) -> rs.getLong("id"), sessionId, Date.valueOf(occurrenceDate),
+                action.name(), replacementId, reason, actorId));
     }
 
     public void cancelSession(long sessionId) {
@@ -122,10 +136,7 @@ public class SessionChangeRepository {
                 rs.getLong("staff_id"), rs.getObject("managing_unit_id", Long.class),
                 rs.getObject("campus_id", Long.class), SessionRequestStatus.valueOf(rs.getString("status")),
                 SessionChangeAction.valueOf(rs.getString("action"))), requestId);
-        if (rows.isEmpty()) {
-            throw new ApiFailure(404, "NOT_FOUND", "Không tìm thấy dữ liệu.");
-        }
-        return rows.getFirst();
+        return require(rows);
     }
 
     public void decideRequest(long requestId, SessionRequestStatus status, String reason) {

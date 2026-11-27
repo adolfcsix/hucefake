@@ -1,6 +1,8 @@
 package vn.huce.service;
 
 import java.util.Map;
+import java.time.LocalDateTime;
+import vn.huce.model.SessionAdjustmentSnapshot;
 import org.junit.jupiter.api.Test;
 import vn.huce.Accounts.Actor;
 import vn.huce.exception.ApiFailure;
@@ -91,13 +93,29 @@ class SessionMutationServiceTest {
     }
 
     @Test
+    void adjustmentChecksOriginalCampusBeforeAnyWrite() {
+        when(repository.findSession(9L)).thenReturn(new SessionAdjustmentSnapshot(
+                10L, 8L, 4L, 5L, "PLANNED", LocalDateTime.of(2026, 11, 30, 7, 0),
+                1, 2, 6L));
+        when(sections.findSection(10L)).thenReturn(Map.of("id", 10L, "status", "OPEN",
+                "managing_unit_id", 3L, "code", "HP01"));
+        doThrow(new ApiFailure(403, "FORBIDDEN", "Bạn không có quyền trong phạm vi này."))
+                .when(scheduling).requireCampus(staff, 5L);
+        assertEquals(403, assertThrows(ApiFailure.class, () -> service.change(staff, 9L,
+                Map.of("action", "CANCEL", "reason", "Nghỉ học"), null)).status());
+        verify(repository, never()).cancelSession(anyLong());
+        verifyNoInteractions(audit, notifications);
+    }
+
+    @Test
     void directCancellationKeepsNullReplacementAndClosesPendingRequests() {
-        when(repository.findSession(9L)).thenReturn(Map.of("section_id", 10L, "status", "PLANNED",
-                "start_at", "2026-11-30T07:00:00"));
+        when(repository.findSession(9L)).thenReturn(new SessionAdjustmentSnapshot(
+                10L, 8L, null, null, "PLANNED", LocalDateTime.of(2026, 11, 30, 7, 0),
+                1, 2, null));
         when(sections.findSection(10L)).thenReturn(Map.of("id", 10L, "status", "OPEN",
                 "managing_unit_id", 3L, "code", "HP01"));
         when(repository.insertException(eq(9L), any(), eq(SessionChangeAction.CANCEL),
-                isNull(), eq("Nghỉ học"), eq(1L))).thenReturn(Map.of("id", 11L));
+                isNull(), eq("Nghỉ học"), eq(1L))).thenReturn(11L);
         when(repository.closePendingRequests(9L, SessionChangeAction.CANCEL)).thenReturn(java.util.List.of(
                 new SessionRequestResolution(13L, 8L, SessionRequestStatus.APPROVED, "Đã xử lý"),
                 new SessionRequestResolution(14L, 9L, SessionRequestStatus.RETURNED, "Đã điều chỉnh khác")));
