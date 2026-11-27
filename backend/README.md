@@ -51,3 +51,8 @@ Kiểm thử source-integrity rà cả import trong mã frontend, unit test và 
 ### Danh mục phòng học, ngày nghỉ và khung tiết
 
 `CatalogMutationService` xử lý quyền theo cơ sở, dữ liệu đầu vào, ngày giờ hiệu lực và kiểm tra xung đột; không thực thi SQL trực tiếp. `CatalogMutationRepository` phụ trách các truy vấn và thao tác ghi. Ba model `RoomDraft`, `HolidayDraft`, `PeriodDraft` mô tả dữ liệu đã kiểm tra, trong đó ngày giờ sử dụng LocalDate và LocalTime. Việc ghi dữ liệu và nhật ký vẫn nằm trong giao dịch hiện có của MutationService.
+
+
+### Phê duyệt và công bố thời khóa biểu
+
+`ApprovalService` xử lý điều kiện gửi duyệt, quyền quyết định, đối chiếu phương án và sinh buổi học. `ApprovalRepository` sở hữu SQL của quy trình, `ApprovalSnapshot` giữ cấu trúc dữ liệu phương án đã gửi tương thích payload cũ. `NotificationService` và `NotificationRepository` phụ trách thông báo cho quản lý, người gửi và thành viên lớp; nghiệp vụ đổi lịch gọi trực tiếp NotificationService thay vì phụ thuộc ApprovalService. Các thao tác ghi vẫn dùng giao dịch và khóa chống lặp của MutationService. Một số projection Map và cấu trúc payload cũ được giữ để không phá vỡ hợp đồng API.

@@ -17,8 +17,8 @@ import org.springframework.stereotype.Service;
 public class SessionMutationService {
     private final SqlStore db;
     private final SchedulingService scheduling;
-    private final ApprovalService approvals;
-    SessionMutationService(SqlStore db,SchedulingService scheduling,ApprovalService approvals){this.db=db;this.scheduling=scheduling;this.approvals=approvals;}
+    private final NotificationService notifications;
+    SessionMutationService(SqlStore db,SchedulingService scheduling,NotificationService notifications){this.db=db;this.scheduling=scheduling;this.notifications=notifications;}
     private void forbidden(){throw new ApiFailure(403,"FORBIDDEN","Bạn không có quyền trong phạm vi này.");}
     private ApiFailure conflict(Object details){return new ApiFailure(409,"SCHEDULE_CONFLICT","Lịch dự kiến có xung đột.",details);}
     private Map<String,Object> section(long id){return db.need(SectionQueries.SECTION_SQL+" WHERE c.id=?",id);}
@@ -88,7 +88,7 @@ public class SessionMutationService {
                 db.jdbc().update("INSERT INTO notifications(user_id,message) SELECT user_id,? FROM staff_profiles WHERE id=?",request.get("decision_reason"),request.get("staff_id"));
             }
         }
-        approvals.notifySection(n(section,"id"),"Lớp "+section.get("code")+" thay đổi lịch ngày "+originalDate+". "+reason);
+        notifications.notifySection(n(section,"id"),"Lớp "+section.get("code")+" thay đổi lịch ngày "+originalDate+". "+reason);
         var out=new LinkedHashMap<String,Object>();out.put("id",result.get("id"));out.put("replacementId",replacement);return out;
     }
     public List<Map<String,Object>> availability(Accounts.Actor a,long sem){
