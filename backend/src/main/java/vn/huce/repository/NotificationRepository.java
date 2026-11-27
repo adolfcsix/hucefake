@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
+import vn.huce.model.UnreadNotificationSummary;
 
 @Repository
 public class NotificationRepository {
@@ -70,8 +71,12 @@ public class NotificationRepository {
                 notificationId, userId);
     }
 
-    public Map<String, Object> unreadSummary(long userId) {
-        return store.need("SELECT count(*) AS count,max(id) AS last_id FROM notifications WHERE user_id=? AND read_at IS NULL", userId);
+    public UnreadNotificationSummary unreadSummary(long userId) {
+        return jdbc.queryForObject("""
+                SELECT count(*) AS count,max(id) AS last_id FROM notifications
+                WHERE user_id=? AND read_at IS NULL
+                """, (rs, row) -> new UnreadNotificationSummary(rs.getLong("count"),
+                rs.getObject("last_id", Long.class)), userId);
     }
 
     public int markThrough(long userId, long lastId) {

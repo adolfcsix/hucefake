@@ -9,6 +9,7 @@ import vn.huce.exception.ApiFailure;
 import vn.huce.dto.SectionDraftPreview;
 import vn.huce.dto.SectionIdResponse;
 import vn.huce.model.SectionSubject;
+import vn.huce.model.UnreadNotificationSummary;
 import org.mockito.ArgumentCaptor;
 import vn.huce.repository.AuditRepository;
 import vn.huce.repository.ChatRepository;
@@ -99,9 +100,24 @@ class ProposalServiceTest {
 
     @Test
     void noUnreadNotificationsDoesNotCreateProposal() {
-        when(notifications.unreadSummary(1L)).thenReturn(Map.of("count", 0L));
+        when(notifications.unreadSummary(1L)).thenReturn(new UnreadNotificationSummary(0L, null));
         assertNull(service.prepare(student, "READ_NOTICES", null, Map.of()));
         verifyNoInteractions(repository, audit, runs, sections);
+    }
+
+    @Test
+    void unreadPreviewPreservesCountAndStoresOnlyThePreviewedLastId() throws Exception {
+        when(notifications.unreadSummary(1L)).thenReturn(new UnreadNotificationSummary(3L, 12L));
+        when(repository.insert(eq(1L), isNull(), eq("READ_NOTICES"), isNull(), anyString()))
+                .thenReturn(new LinkedHashMap<>(Map.of("id", 7L)));
+        var result = service.prepare(student, "READ_NOTICES", null, Map.of());
+        assertEquals(Map.of("count", 3L), result.get("preview"));
+        var stored = ArgumentCaptor.forClass(String.class);
+        verify(repository).insert(eq(1L), isNull(), eq("READ_NOTICES"), isNull(), stored.capture());
+        var json = new ObjectMapper();
+        assertEquals(json.readTree("{\"lastId\":12}"), json.readTree(stored.getValue()));
+        verify(notifications, never()).markThrough(anyLong(), anyLong());
+        verifyNoInteractions(audit);
     }
 
     @Test

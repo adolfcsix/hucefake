@@ -139,10 +139,10 @@ public class ProposalService {
 
     private Preview previewNotifications(Actor actor) {
         var summary = notifications.unreadSummary(actor.id());
-        if (n(summary, "count") == 0) {
+        if (summary.count() == 0) {
             return null;
         }
-        return new Preview(Map.of("lastId", summary.get("last_id")), null, Map.of("count", summary.get("count")));
+        return new Preview(Map.of("lastId", summary.lastId()), null, Map.of("count", summary.count()));
     }
 
     public Map<String, Object> owned(Actor actor, long proposalId) {
