@@ -9,9 +9,10 @@ import java.util.Map;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 import vn.huce.exception.ApiFailure;
+import vn.huce.model.AssignmentRole;
+import vn.huce.model.SectionDraft;
 import vn.huce.model.SectionSemester;
 import vn.huce.model.SectionSubject;
-import vn.huce.model.SectionDraft;
 
 import static vn.huce.repository.SectionQueries.PATTERN_SQL;
 import static vn.huce.repository.SectionQueries.SECTION_SQL;
@@ -130,13 +131,14 @@ public class SectionRepository {
                 """, staffId);
     }
 
-    public record Assignment(long id, long staffId, String role) {
+    public record Assignment(long id, long staffId, AssignmentRole role) {
     }
 
     public List<Assignment> activeAssignments(long sectionId) {
         return store.jdbc().query("""
                 SELECT id,staff_id,role FROM section_assignments WHERE section_id=? AND valid_to IS NULL
-                """, (rs, row) -> new Assignment(rs.getLong("id"), rs.getLong("staff_id"), rs.getString("role")),
+                """, (rs, row) -> new Assignment(rs.getLong("id"), rs.getLong("staff_id"),
+                        AssignmentRole.valueOf(rs.getString("role"))),
                 sectionId);
     }
 
@@ -146,10 +148,10 @@ public class SectionRepository {
                 """, assignmentId);
     }
 
-    public void addAssignment(long sectionId, long staffId, String role, LocalDate validFrom, long actorId) {
+    public void addAssignment(long sectionId, long staffId, AssignmentRole role, LocalDate validFrom, long actorId) {
         store.jdbc().update("""
                 INSERT INTO section_assignments(section_id,staff_id,role,valid_from,assigned_by) VALUES (?,?,?,?,?)
-                """, sectionId, staffId, role, Date.valueOf(validFrom), actorId);
+                """, sectionId, staffId, role.name(), Date.valueOf(validFrom), actorId);
     }
 
     public void replacePatternLecturer(long sectionId, long staffId) {

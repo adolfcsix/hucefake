@@ -9,11 +9,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import vn.huce.Accounts.Actor;
+import vn.huce.dto.SchedulePatternIdResponse;
 import vn.huce.dto.SectionAssignmentRequest;
 import vn.huce.dto.SectionIdResponse;
 import vn.huce.dto.SectionImportResponse;
 import vn.huce.dto.SectionTargetGroupsRequest;
 import vn.huce.exception.ApiFailure;
+import vn.huce.model.AssignmentRole;
 import vn.huce.model.PatternDraft;
 import vn.huce.model.SectionDraft;
 import vn.huce.model.SectionSemester;
@@ -113,10 +115,10 @@ public class SectionMutationService {
     private void applyAssignment(Actor actor, long sectionId, Map<String, Object> section,
                                  SectionAssignmentRequest request) {
         long mainLecturer = request.staffId();
-        Map<Long, String> desired = new LinkedHashMap<>();
-        desired.put(mainLecturer, "MAIN");
+        Map<Long, AssignmentRole> desired = new LinkedHashMap<>();
+        desired.put(mainLecturer, AssignmentRole.MAIN);
         for (long assistant : request.assistantIds()) {
-            desired.put(assistant, "ASSISTANT");
+            desired.put(assistant, AssignmentRole.ASSISTANT);
         }
         for (long staffId : desired.keySet()) {
             if (!repository.isActiveLecturer(staffId)) {
@@ -131,7 +133,7 @@ public class SectionMutationService {
             }
         }
         LocalDate startDate = LocalDate.parse(s(section, "start_date"));
-        for (Map.Entry<Long, String> entry : desired.entrySet()) {
+        for (Map.Entry<Long, AssignmentRole> entry : desired.entrySet()) {
             repository.addAssignment(sectionId, entry.getKey(), entry.getValue(), startDate, actor.id());
         }
         if (!Objects.equals(SchedulingService.nullableId(section.get("staff_id")), mainLecturer)) {
@@ -178,7 +180,7 @@ public class SectionMutationService {
         return scheduling.check(context, slot, actor, true);
     }
 
-    public Object savePattern(Actor actor, Map<String, Object> input, Long patternId) {
+    public SchedulePatternIdResponse savePattern(Actor actor, Map<String, Object> input, Long patternId) {
         role(actor, "STAFF");
         Map<String, Object> section = sections.editable(actor, id(input.get("sectionId")));
         SchedulingService.Context context = scheduling.context();
@@ -195,10 +197,10 @@ public class SectionMutationService {
         }
         PatternDraft draft = new PatternDraft(slot.section(), slot.staff(), slot.room(), slot.day(),
                 slot.first(), slot.count(), slot.from(), slot.to());
-        Map<String, Object> row = patternId == null ? patterns.insert(draft, actor.id())
+        long savedId = patternId == null ? patterns.insert(draft, actor.id())
                 : patterns.update(patternId, draft);
-        audit.record(actor, "SAVE", "section_schedule_patterns", n(row, "id"));
-        return row;
+        audit.record(actor, "SAVE", "section_schedule_patterns", savedId);
+        return new SchedulePatternIdResponse(savedId);
     }
 
     private void checkOptionalVersion(Map<String, Object> input, Map<String, Object> row) {

@@ -17,4 +17,10 @@ class SectionResponseTest {
     void importResponsePreservesExistingJson() throws Exception {
         assertEquals(json.readTree("{\"imported\":2}"), json.readTree(json.writeValueAsString(new SectionImportResponse(2))));
     }
+
+    @Test
+    void patternIdResponsePreservesExistingJson() throws Exception {
+        assertEquals(json.readTree("{\"id\":42}"),
+                json.readTree(json.writeValueAsString(new SchedulePatternIdResponse(42L))));
+    }
 }

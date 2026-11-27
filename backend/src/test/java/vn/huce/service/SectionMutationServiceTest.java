@@ -5,7 +5,10 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import vn.huce.Accounts.Actor;
+import vn.huce.dto.SchedulePatternIdResponse;
 import vn.huce.exception.ApiFailure;
+import vn.huce.model.AssignmentRole;
+import vn.huce.model.PatternDraft;
 import vn.huce.model.SectionSemester;
 import vn.huce.repository.AuditRepository;
 import vn.huce.repository.SchedulePatternRepository;
@@ -70,5 +73,45 @@ class SectionMutationServiceTest {
                 service.groups(staff, 7L, Map.of("groupIds", List.of(1, 1.5))));
         assertEquals(400, error.status());
         verifyNoInteractions(repository, patterns, audit, scheduling);
+    }
+
+    @Test
+    void assignmentRetainsMainAndReplacesOnlyChangedAssistants() {
+        LocalDate start = LocalDate.of(2026, 9, 1);
+        when(sections.editable(staff, 7L)).thenReturn(Map.of(
+                "version", 1L, "start_date", start.toString(), "staff_id", 12L));
+        when(repository.isActiveLecturer(12L)).thenReturn(true);
+        when(repository.isActiveLecturer(13L)).thenReturn(true);
+        when(repository.activeAssignments(7L)).thenReturn(List.of(
+                new SectionRepository.Assignment(21L, 12L, AssignmentRole.MAIN),
+                new SectionRepository.Assignment(22L, 14L, AssignmentRole.ASSISTANT)));
+        service.assign(staff, 7L, Map.of("staffId", 12L, "assistantIds", List.of(13L)));
+        verify(repository, never()).closeAssignment(21L);
+        var ordered = inOrder(repository, scheduling, audit);
+        ordered.verify(repository).closeAssignment(22L);
+        ordered.verify(repository).addAssignment(7L, 13L, AssignmentRole.ASSISTANT, start, 1L);
+        ordered.verify(scheduling).recheck(7L, staff);
+        ordered.verify(repository).touch(7L);
+        ordered.verify(audit).record(staff, "ASSIGN", "course_sections", 7L);
+        verify(repository, never()).replacePatternLecturer(anyLong(), anyLong());
+    }
+
+    @Test
+    void schedulePatternWriteReturnsTypedIdAndPreservesAudit() {
+        var section = Map.<String, Object>of("scheduled", 0L, "sessions_per_week", 2L);
+        var input = Map.<String, Object>of("sectionId", 7L);
+        var context = new SchedulingService.Context(Map.of(), Map.of(), List.of(), List.of(), List.of(), List.of());
+        var from = LocalDate.of(2026, 9, 1);
+        var to = LocalDate.of(2026, 12, 1);
+        var slot = new SchedulingService.Slot(0L, 7L, 12L, 4L, 2, 1, 3, from, to);
+        var draft = new PatternDraft(7L, 12L, 4L, 2, 1, 3, from, to);
+        when(sections.editable(staff, 7L)).thenReturn(section);
+        when(scheduling.context()).thenReturn(context);
+        when(scheduling.candidate(staff, context, input, null, section)).thenReturn(slot);
+        when(scheduling.check(context, slot, staff, true))
+                .thenReturn(new SchedulingService.Result(true, List.of(), List.of()));
+        when(patterns.insert(draft, 1L)).thenReturn(42L);
+        assertEquals(new SchedulePatternIdResponse(42L), service.savePattern(staff, input, null));
+        verify(audit).record(staff, "SAVE", "section_schedule_patterns", 42L);
     }
 }
